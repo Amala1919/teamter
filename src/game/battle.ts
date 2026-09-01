@@ -19,7 +19,8 @@ import { Effects } from '../render/effects';
 import { Hud } from '../ui/hud';
 import { CLASS_THEME, TIMING, UI } from '../art/theme';
 import { Audio } from '../audio/audio';
-import { chooseAiTurn } from './ai';
+import { chooseAiMulligan, chooseAiTurn } from './ai';
+import { MulliganOverlay } from '../ui/mulligan';
 
 const HAND_CARD_W = 1.34;
 const BOARD_CARD_W = 1.06;
@@ -39,6 +40,8 @@ export interface BattleOptions {
   /** Which seat the human occupies. */
   human?: PlayerId;
   seed?: number;
+  /** Skips the redraw step — used by the screenshot tooling. */
+  skipMulligan?: boolean;
   onExit?: () => void;
 }
 
@@ -66,7 +69,11 @@ export class Battle {
 
   constructor(private readonly opts: BattleOptions) {
     this.human = opts.human ?? 0;
-    this.game = new Game(opts.decks, { seed: opts.seed, first: 0, skipMulligan: true });
+    this.game = new Game(opts.decks, {
+      seed: opts.seed,
+      first: 0,
+      skipMulligan: opts.skipMulligan ?? false,
+    });
 
     this.stage = new Stage({ container: opts.container });
     this.board = new Board(opts.decks[this.human].leaderClass, opts.decks[other(this.human)].leaderClass);
@@ -101,7 +108,33 @@ export class Battle {
     // Drain the events the constructor already produced (draws, first turn).
     this.queue.push(...this.game.drainEvents());
     this.syncAll(true);
-    this.hud.showTurnBanner(this.game.state.active === this.human);
+
+    if (this.game.state.phase === 'mulligan') this.startMulligan();
+    else this.hud.showTurnBanner(this.game.state.active === this.human);
+  }
+
+  /**
+   * Both players redraw simultaneously, so the AI's choice is applied at the
+   * same moment the player confirms theirs.
+   */
+  private startMulligan(): void {
+    const hand = this.game
+      .player(this.human)
+      .hand.map((uid) => ({ uid, def: this.game.def(uid) }));
+
+    new MulliganOverlay({
+      container: this.opts.container,
+      cards: hand,
+      onConfirm: (replace) => {
+        const foe = other(this.human);
+        this.game.mulligan(this.human, replace);
+        this.game.mulligan(foe, chooseAiMulligan(this.game, foe));
+        this.queue.push(...this.game.drainEvents());
+        this.syncAll(true);
+        this.hud.showTurnBanner(this.game.state.active === this.human);
+        this.audio.play('turnMine');
+      },
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -225,13 +258,15 @@ export class Battle {
         obj.target.scale = 1.02;
         obj.setGlow(0.7, this.canAffordGlow(uid));
       } else {
-        obj.target.position.set(
+        // A focused card lifts and tilts toward the camera but stays over the
+      // hand — pulling it onto the board would hide the thing being played to.
+      obj.target.position.set(
         BOARD.ROW_X * (mine ? 0.7 : 1) + x,
-        focused ? y + 1.35 : y,
-        focused ? z - 1.1 : z,
+        focused ? y + 0.85 : y,
+        focused ? z - 0.35 : z,
       );
         obj.target.rotation.set(mine ? (focused ? -0.78 : -0.92) : -0.42, 0, mine ? -off * arc : 0);
-        obj.target.scale = focused ? 1.32 : 1;
+        obj.target.scale = focused ? 1.45 : 1;
         obj.setGlow(mine && this.game.canPlay(uid, p) && this.game.state.active === p ? 0.34 : 0, UI.gold);
       }
       obj.group.renderOrder = i;

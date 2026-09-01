@@ -49,6 +49,8 @@ if (params.has('battle') || params.has('demo')) {
     decks: [buildStarterDeck(allyClass, seed), buildStarterDeck(enemyClass, seed + 7)],
     human: 0,
     seed,
+    // The demo fast-forward needs the match already underway.
+    skipMulligan: params.has('demo'),
   });
 
   const demoTurn = Number(params.get('demo') ?? 0);

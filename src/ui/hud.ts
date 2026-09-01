@@ -258,7 +258,7 @@ export class Hud {
     this.result.className = 'hud-result';
     this.result.innerHTML = '<h1></h1><p></p>';
     const done = document.createElement('button');
-    done.className = 'hud-endturn';
+    done.className = 'hud-endturn hud-exit';
     done.style.cssText = 'position:static;margin-top:10px;';
     done.textContent = 'Back to menu';
     done.addEventListener('click', () => this.cb.onExit?.());

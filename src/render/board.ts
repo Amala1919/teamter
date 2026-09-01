@@ -26,7 +26,7 @@ export const BOARD = {
   /** Where the leaders stand. */
   LEADER_X: -5.1,
   /** Hand fan centre. */
-  HAND_Z: 4.15,
+  HAND_Z: 3.95,
   HAND_Y: 0.62,
 } as const;
 
