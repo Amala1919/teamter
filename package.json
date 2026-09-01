@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "cards:build": "node tools/build-cards.mjs",
+    "cards:report": "vite-node tools/report-coverage.ts"
   },
   "dependencies": {
     "three": "^0.169.0"

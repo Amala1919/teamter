@@ -252,11 +252,30 @@ export class Game {
       }
     }
 
+    // Ambush is shorthand for "cannot be attacked or targeted", so the derived
+    // keywords are added here rather than repeated on every card.
+    if (e.ambushed && keywords.has('ambush')) {
+      keywords.add('cantBeAttacked');
+      keywords.add('untargetable');
+    } else {
+      keywords.delete('ambush');
+    }
+
     for (const k of e.removedKeywords) keywords.delete(k);
 
     atk = Math.max(0, atk);
     maxDef = Math.max(0, maxDef);
     return { atk, def: maxDef - e.damage, maxDef, keywords };
+  }
+
+  /** Total flat damage reduction applying to an entity from active auras. */
+  damageReduction(e: Entity): number {
+    let n = 0;
+    for (const a of this.activeAuras()) {
+      if (!a.aura.damageReduce) continue;
+      if (this.matchesAura(a, e)) n += a.aura.damageReduce;
+    }
+    return n;
   }
 
   private activeAuras(): { src: Entity; aura: AuraDef }[] {
@@ -394,7 +413,7 @@ export class Game {
     // 4. Countdown amulets tick, then start-of-turn abilities resolve.
     this.tickCountdowns(s.active);
     this.fireTriggers('turnStart', s.active);
-    this.fireTriggers('enemyTurnEnd', other(s.active), { onlyOpponentOf: s.active });
+    this.fireTriggers('enemyTurnEnd', other(s.active));
 
     this.checkState();
     if (s.winner === null) s.phase = 'main';
@@ -532,6 +551,7 @@ export class Game {
     // it in the original game, so it is returned as-is.
     if (enhance !== undefined && (d.enhance ?? []).some((m) => m.cost === enhance)) return enhance;
     let cost = d.cost + e.costMod;
+    if (d.spellboostCost) cost -= d.spellboostCost * e.spellboost;
     for (const { src, aura } of this.activeAuras()) {
       if (aura.costDelta === undefined) continue;
       const sel = aura.target;
@@ -611,7 +631,9 @@ export class Game {
       }
     } else {
       this.putOnField(e, slot);
-      if (d.type === 'follower') this.fireTriggers('onAllyFollowerPlayed', e.owner, { exclude: e.uid });
+      if (d.type === 'follower') {
+        this.fireTriggers('onAllyFollowerPlayed', e.owner, { exclude: e.uid, subject: e });
+      }
       if (enhanceMode) this.runEffects(enhanceMode.effects, ctx);
       else this.runAbilities(e, 'fanfare', ctx);
       this.fireEntityTriggers(e, 'onSummon');
@@ -630,17 +652,9 @@ export class Game {
   }
 
   private onSpellPlayed(p: PlayerId): void {
-    for (const uid of this.player(p).hand) {
-      const e = this.ent(uid);
-      const d = this.def(e);
-      if ((d.abilities ?? []).some((a) => a.on === 'fanfare') || d.text.includes('Spellboost')) {
-        // Spellboost counters live on every card in hand; only cards that read
-        // Spellboost actually consume them.
-        e.spellboost++;
-      } else {
-        e.spellboost++;
-      }
-    }
+    // Spellboost counters accumulate on every card in hand; only cards that
+    // print Spellboost actually read them.
+    for (const uid of this.player(p).hand) this.ent(uid).spellboost++;
     this.emit({ t: 'spellboost', player: p });
     this.fireTriggers('onAllySpellPlayed', p);
   }
@@ -662,7 +676,12 @@ export class Game {
     if (ps.field.length >= RULES.BOARD_LIMIT) return null;
     const e = this.createEntity(defId, owner, 'limbo');
     this.putOnField(e);
-    if (fromEffect) this.fireEntityTriggers(e, 'onSummon');
+    if (fromEffect) {
+      this.fireEntityTriggers(e, 'onSummon');
+      if (this.def(e).type === 'follower') {
+        this.fireTriggers('onAllyFollowerPlayed', owner, { exclude: e.uid, subject: e });
+      }
+    }
     return e;
   }
 
@@ -729,8 +748,9 @@ export class Game {
     return this.player(p).field.filter((u) => {
       const e = this.ent(u);
       if (this.def(e).type !== 'follower') return false;
-      if (e.ambushed) return false;
-      return this.stats(e).keywords.has('ward');
+      const st = this.stats(e);
+      if (st.keywords.has('cantBeAttacked')) return false;
+      return st.keywords.has('ward');
     });
   }
 
@@ -763,18 +783,22 @@ export class Game {
       // follower to have been on board since last turn (it has), which is fine.
     }
 
+    if (target === 'leader' && st.keywords.has('cantAttackLeader')) return false;
+
     const enemy = other(s.active);
-    const wards = this.wardsOf(enemy);
-    if (wards.length > 0) {
-      if (target === 'leader') return false;
-      if (!wards.includes(target)) return false;
+    if (!st.keywords.has('ignoreWard')) {
+      const wards = this.wardsOf(enemy);
+      if (wards.length > 0) {
+        if (target === 'leader') return false;
+        if (!wards.includes(target)) return false;
+      }
     }
 
     if (target !== 'leader') {
       const d = this.state.entities.get(target);
       if (!d || d.zone !== 'field' || d.owner !== enemy) return false;
       if (this.def(d).type !== 'follower') return false;
-      if (d.ambushed) return false;
+      if (this.stats(d).keywords.has('cantBeAttacked')) return false;
     }
     return true;
   }
@@ -838,8 +862,11 @@ export class Game {
   // -------------------------------------------------------------------------
 
   /** Applies damage to a follower or amulet; returns damage actually dealt. */
-  dealDamage(e: Entity, amount: number, source: Entity | null): number {
+  dealDamage(e: Entity, amount: number, source: Entity | null, fromEffect = false): number {
     if (amount <= 0 || e.zone !== 'field') return 0;
+    if (fromEffect && this.stats(e).keywords.has('effectImmune')) return 0;
+    amount = Math.max(0, amount - this.damageReduction(e));
+    if (amount === 0) return 0;
     if (e.barrierCharges > 0) {
       e.barrierCharges--;
       this.emit({ t: 'log', text: `${this.def(e).name} barrier absorbed the damage` });
@@ -848,7 +875,7 @@ export class Game {
     e.damage += amount;
     this.emit({ t: 'damage', target: e.uid, amount, source: source ? source.uid : null });
     this.fireEntityTriggers(e, 'onDamaged', source);
-    if (this.stats(e).def <= 0) this.markDeath(e);
+    if (this.isDead(e)) this.markDeath(e);
     return amount;
   }
 
@@ -880,8 +907,19 @@ export class Game {
     return healed;
   }
 
+  /**
+   * Only followers die from having no defense left. Amulets have no defense
+   * stat at all and leave play through their Countdown or an explicit effect.
+   */
+  private isDead(e: Entity): boolean {
+    if (e.zone !== 'field') return false;
+    if (this.def(e).type !== 'follower') return false;
+    return this.stats(e).def <= 0;
+  }
+
   private markDeath(e: Entity): void {
     if (e.dying || e.zone !== 'field') return;
+    if (this.stats(e).keywords.has('indestructible') && this.stats(e).def > 0) return;
     e.dying = true;
     this.pendingDeaths.push(e.uid);
   }
@@ -951,8 +989,8 @@ export class Game {
         e.dying = false;
         const kind = this.def(e).type;
         if (kind === 'follower') {
-          this.fireTriggers('onAllyFollowerDestroyed', e.owner);
-          this.fireTriggers('onEnemyFollowerDestroyed', other(e.owner));
+          this.fireTriggers('onAllyFollowerDestroyed', e.owner, { subject: e });
+          this.fireTriggers('onEnemyFollowerDestroyed', other(e.owner), { subject: e });
         }
       }
     }
@@ -963,7 +1001,7 @@ export class Game {
     for (const p of [0, 1] as PlayerId[]) {
       for (const uid of [...this.player(p).field]) {
         const e = this.state.entities.get(uid);
-        if (e && e.zone === 'field' && this.stats(e).def <= 0) this.markDeath(e);
+        if (e && this.isDead(e)) this.markDeath(e);
       }
     }
     this.resolveDeaths();
@@ -1002,13 +1040,15 @@ export class Game {
   private fireTriggers(
     kind: TriggerKind,
     p: PlayerId,
-    opts: { exclude?: number; onlyOpponentOf?: PlayerId } = {},
+    opts: { exclude?: number; subject?: Entity | null } = {},
   ): void {
     for (const uid of [...this.player(p).field]) {
       if (uid === opts.exclude) continue;
       const e = this.state.entities.get(uid);
       if (!e || e.zone !== 'field') continue;
-      this.fireEntityTriggers(e, kind);
+      // `subject` is the card the trigger is *about* — the follower that just
+      // arrived, say — which card text refers to as "it".
+      this.fireEntityTriggers(e, kind, opts.subject ?? null);
     }
   }
 
@@ -1090,7 +1130,7 @@ export class Game {
         for (const t of targets) {
           if (t === 'leader0') total += this.damageLeader(0, amt, ctx.source);
           else if (t === 'leader1') total += this.damageLeader(1, amt, ctx.source);
-          else total += this.dealDamage(t, amt, ctx.source);
+          else total += this.dealDamage(t, amt, ctx.source, true);
         }
         if (eff.drain && total > 0) this.healLeader(ctx.controller, total);
         return;
@@ -1107,7 +1147,9 @@ export class Game {
       }
 
       case 'destroy': {
-        const list = this.resolveSelector(eff.target, ctx).filter(isEntity);
+        const list = this.resolveSelector(eff.target, ctx)
+          .filter(isEntity)
+          .filter((t) => !this.stats(t).keywords.has('indestructible'));
         for (const t of list) this.markDeath(t);
         this.resolveDeaths();
         return;
@@ -1480,8 +1522,7 @@ export class Game {
         if (!e) continue;
         if (zone === 'field' && e.zone !== 'field') continue;
         if (!this.matchesKind(e, sel.kind ?? 'follower')) continue;
-        // Ambushed followers cannot be selected by the opponent's effects.
-        if (zone === 'field' && e.ambushed && e.owner !== ctrl) continue;
+        // Ambush and Untargetable both hide a follower from enemy effects.
         if (zone === 'field' && e.owner !== ctrl && this.stats(e).keywords.has('untargetable')) continue;
         if (sel.filter && !this.matchesFilter(e, sel.filter, source)) continue;
         out.push(e);
@@ -1527,6 +1568,8 @@ export class Game {
         return this.player(ctx.controller).shadows;
       case 'spellboost':
         return ctx.source ? ctx.source.spellboost : 0;
+      case 'cardsPlayed':
+        return this.player(ctx.controller).cardsPlayedThisTurn;
       case 'handSize':
         return this.player(this.sideToPlayer(a.side ?? 'ally', ctx.controller)).hand.length;
       case 'deckSize':
@@ -1579,6 +1622,8 @@ export class Game {
         return this.earthSigils(ctx.controller).length > 0;
       case 'cardsPlayed':
         return this.player(ctx.controller).cardsPlayedThisTurn >= c.n;
+      case 'opponentTurn':
+        return this.state.active !== ctx.controller;
       case 'hasShadows':
         return this.player(ctx.controller).shadows >= c.n;
       case 'atLeast':

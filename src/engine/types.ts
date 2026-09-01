@@ -83,6 +83,16 @@ export type Keyword =
   | 'barrier'
   /** Cannot attack at all. */
   | 'cantAttack'
+  /** Cannot attack the enemy leader, only followers. */
+  | 'cantAttackLeader'
+  /** Cannot be chosen as the target of an attack. */
+  | 'cantBeAttacked'
+  /** Attacks are not stopped by enemy Ward followers. */
+  | 'ignoreWard'
+  /** Cannot be destroyed by effects (damage still applies). */
+  | 'indestructible'
+  /** Damage from effects is reduced to 0; combat damage still applies. */
+  | 'effectImmune'
   /** May attack twice per turn. */
   | 'doubleAttack';
 
@@ -96,6 +106,11 @@ export const KEYWORD_LABEL: Record<Keyword, string> = {
   untargetable: 'Untargetable',
   barrier: 'Barrier',
   cantAttack: "Can't Attack",
+  cantAttackLeader: "Can't Attack Leader",
+  cantBeAttacked: "Can't Be Attacked",
+  ignoreWard: 'Ignore Ward',
+  indestructible: 'Indestructible',
+  effectImmune: 'Effect Immune',
   doubleAttack: 'Double Attack',
 };
 
@@ -109,6 +124,11 @@ export const KEYWORD_LABEL_JA: Record<Keyword, string> = {
   untargetable: '対象不可',
   barrier: 'バリア',
   cantAttack: '攻撃不能',
+  cantAttackLeader: 'リーダー攻撃不可',
+  cantBeAttacked: '攻撃されない',
+  ignoreWard: '守護無視',
+  indestructible: '破壊されない',
+  effectImmune: '効果ダメージ無効',
   doubleAttack: '連続攻撃',
 };
 
@@ -180,6 +200,7 @@ export type Amount =
   | { k: 'count'; of: Selector }
   | { k: 'shadows' }
   | { k: 'spellboost' }
+  | { k: 'cardsPlayed' }
   | { k: 'handSize'; side?: Side }
   | { k: 'deckSize'; side?: Side }
   | { k: 'maxPP'; side?: Side }
@@ -208,6 +229,8 @@ export type Condition =
   | { k: 'hasEarthSigil' }
   /** Cards played by the controller earlier this turn. */
   | { k: 'cardsPlayed'; n: number }
+  /** True while it is not the controller's turn. */
+  | { k: 'opponentTurn' }
   /** Shadowcraft: you have at least N shadows (does NOT spend them). */
   | { k: 'hasShadows'; n: number }
   | { k: 'atLeast'; a: Amount; b: Amount }
@@ -335,6 +358,8 @@ export interface AuraDef {
   atk?: number;
   def?: number;
   keywords?: Keyword[];
+  /** Flat reduction applied to every instance of damage taken. */
+  damageReduce?: number;
   /** Applies to cards in hand rather than on the field (cost reduction auras). */
   costDelta?: number;
   cond?: Condition;
@@ -386,8 +411,19 @@ export interface CardDef {
    */
   enhance?: EnhanceMode[];
 
+  /** Spellboost: each spell played reduces this card's cost by this much. */
+  spellboostCost?: number;
+
   /** Tokens are not collectible and cannot be added to a deck. */
   token?: boolean;
+  /**
+   * False when part of the card's printed text has no engine implementation.
+   * The deck builder flags these so a player is never silently handed a card
+   * that does less than it says.
+   */
+  implemented?: boolean;
+  /** Printed lines with no implementation, for the card detail view. */
+  missingText?: string[];
   /** Cards this one can create — used by the collection screen and by tests. */
   creates?: string[];
 
