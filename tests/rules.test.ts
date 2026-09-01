@@ -8,11 +8,21 @@ import { advanceToTurn, deck, newGame, place, setupTestCards, toHand } from './h
 // ---------------------------------------------------------------------------
 
 describe('match setup', () => {
-  it('deals 3 cards to the first player and 4 to the second', () => {
+  it('deals both players a 3-card mulligan hand', () => {
     setupTestCards();
     const g = new Game([deck('neutral'), deck('neutral')], { seed: 1, first: 0 });
     expect(g.player(0).hand.length).toBe(RULES.MULLIGAN_HAND);
-    expect(g.player(1).hand.length).toBe(RULES.MULLIGAN_HAND + 1);
+    expect(g.player(1).hand.length).toBe(RULES.MULLIGAN_HAND);
+  });
+
+  it('draws two cards on the second player’s first turn and one thereafter', () => {
+    const g = newGame();
+    // Player 0 went first: 3 + 1 drawn on turn 1.
+    expect(g.player(0).hand.length).toBe(RULES.MULLIGAN_HAND + 1);
+    g.endTurn();
+    expect(g.player(1).hand.length).toBe(RULES.MULLIGAN_HAND + 2);
+    advanceToTurn(g, 4);
+    expect(g.player(1).hand.length).toBe(RULES.MULLIGAN_HAND + 3);
   });
 
   it('starts both leaders at 20 defense', () => {
@@ -235,6 +245,15 @@ describe('attacking', () => {
     const big = place(g, 1, 't_big');
     g.attack(bane, big);
     expect(g.player(1).field).not.toContain(big);
+  });
+
+  it('does not heal when a Drain follower is the defender', () => {
+    const g = newGame();
+    g.player(1).defense = 10;
+    const drainer = place(g, 1, 't_drain');
+    const attacker = place(g, 0, 't_big');
+    g.attack(attacker, drainer);
+    expect(g.player(1).defense).toBe(10);
   });
 
   it('restores defense equal to damage dealt when it has Drain', () => {
@@ -485,13 +504,14 @@ describe('win conditions', () => {
     expect(g.state.winner).toBe('draw');
   });
 
-  it('deals escalating fatigue damage once the deck is empty', () => {
+  it('loses immediately when a draw is attempted from an empty deck', () => {
     const g = newGame();
     g.player(0).deck = [];
     const before = g.player(0).defense;
     g.drawCard(0);
-    g.drawCard(0);
-    expect(g.player(0).defense).toBe(before - 1 - 2);
+    // Deck-out is an outright loss, not fatigue damage.
+    expect(g.player(0).defense).toBe(before);
+    expect(g.state.winner).toBe(1);
   });
 
   it('cannot act after the game is over', () => {

@@ -531,8 +531,11 @@ export const RULES = {
   BOARD_LIMIT: 5,
   MAX_PP: 10,
   MULLIGAN_HAND: 3,
-  /** The player going second draws one extra card on their first turn. */
-  SECOND_PLAYER_BONUS_DRAW: 1,
+  /**
+   * Both players mulligan three cards; the player going second draws two on
+   * their first turn instead of one. See docs/RULES.md R-9 / R-12.
+   */
+  SECOND_PLAYER_FIRST_TURN_DRAW: 2,
   EP_FIRST: 2,
   EP_SECOND: 3,
   EVOLVE_TURN_FIRST: 5,
@@ -558,7 +561,8 @@ export type GameEvent =
   | { t: 'epChange'; player: PlayerId; ep: number }
   | { t: 'draw'; player: PlayerId; uid: number; defId: string }
   | { t: 'burn'; player: PlayerId; defId: string }
-  | { t: 'fatigue'; player: PlayerId; amount: number }
+  /** A draw was attempted from an empty deck, which loses the game outright. */
+  | { t: 'deckOut'; player: PlayerId }
   | { t: 'play'; player: PlayerId; uid: number; defId: string; targets: number[] }
   | { t: 'summon'; player: PlayerId; uid: number; defId: string; slot: number }
   | { t: 'ability'; uid: number; kind: TriggerKind; label?: string }

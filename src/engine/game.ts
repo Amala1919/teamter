@@ -116,11 +116,10 @@ export class Game {
 
     this.emit({ t: 'gameStart', first, seed: this.seed });
 
-    // Opening hands. The player going second gets one extra card, which is the
-    // engine's only structural first/second asymmetry besides EP.
+    // Both players mulligan exactly three cards. The going-second package is
+    // paid out later: two cards on their first turn, and more EP sooner.
     for (const p of [0, 1] as PlayerId[]) {
-      const n = RULES.MULLIGAN_HAND + (p === first ? 0 : RULES.SECOND_PLAYER_BONUS_DRAW);
-      for (let i = 0; i < n; i++) this.drawCard(p, true);
+      for (let i = 0; i < RULES.MULLIGAN_HAND; i++) this.drawCard(p, true);
     }
 
     if (opts.skipMulligan) {
@@ -408,13 +407,19 @@ export class Game {
     // 2. Evolution points become available on turn 5 (first) / turn 4 (second).
     this.grantEpIfDue(s.active);
 
-    // 3. Draw for turn. Turn 1 of the player going first still draws.
-    this.drawCard(s.active);
-
-    // 4. Countdown amulets tick, then start-of-turn abilities resolve.
-    this.tickCountdowns(s.active);
+    // 3. Start-of-turn abilities, turn player first, then the opponent's.
     this.fireTriggers('turnStart', s.active);
     this.fireTriggers('enemyTurnEnd', other(s.active));
+
+    // 4. Countdown amulets tick and any that reach zero break here.
+    this.tickCountdowns(s.active);
+
+    // 5. Draw last, so a Last Words draw resolves before the turn draw.
+    const draws = s.active !== this.firstPlayer && this.turnsTaken[s.active] === 0
+      ? RULES.SECOND_PLAYER_FIRST_TURN_DRAW
+      : 1;
+    for (let i = 0; i < draws && s.winner === null; i++) this.drawCard(s.active);
+    this.turnsTaken[s.active]++;
 
     this.checkState();
     if (s.winner === null) s.phase = 'main';
@@ -435,6 +440,8 @@ export class Game {
   }
 
   private epGranted = new Set<PlayerId>();
+  /** Turns each player has begun, used for the going-second extra draw. */
+  private turnsTaken: [number, number] = [0, 0];
 
   /** The player who took the first turn. Fixed for the life of the match. */
   get firstPlayer(): PlayerId {
@@ -506,10 +513,11 @@ export class Game {
     const ps = this.player(p);
     const uid = ps.deck.shift();
     if (uid === undefined) {
-      // Deck-out: the leader takes escalating damage instead of losing outright.
+      // Attempting to draw from an empty deck loses the game immediately.
+      // Shadowverse has no fatigue damage.
       ps.fatigue++;
-      this.damageLeader(p, ps.fatigue, null);
-      this.emit({ t: 'fatigue', player: p, amount: ps.fatigue });
+      this.emit({ t: 'deckOut', player: p });
+      this.finish(other(p));
       return null;
     }
     const e = this.ent(uid);
@@ -843,8 +851,9 @@ export class Game {
     const aDealt = this.dealDamage(def, as.atk, atk);
     const dDealt = this.dealDamage(atk, ds.atk, def);
 
+    // Drain heals only when its follower is the attacker; a Drain follower
+    // that is attacked and strikes back does not heal.
     if (as.keywords.has('drain') && aDealt > 0) this.healLeader(atk.owner, aDealt);
-    if (ds.keywords.has('drain') && dDealt > 0) this.healLeader(def.owner, dDealt);
 
     // Bane destroys any follower it damages, regardless of remaining defense.
     if (as.keywords.has('bane') && aDealt > 0 && def.zone === 'field') this.markDeath(def);
