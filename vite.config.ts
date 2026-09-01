@@ -7,5 +7,14 @@ export default defineConfig({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   server: { host: '127.0.0.1', port: 5173 },
-  build: { target: 'es2022', chunkSizeWarningLimit: 2000 },
+  build: {
+    target: 'es2022',
+    chunkSizeWarningLimit: 2000,
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        gallery: fileURLToPath(new URL('./gallery.html', import.meta.url)),
+      },
+    },
+  },
 });
