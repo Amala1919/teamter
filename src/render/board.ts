@@ -357,33 +357,33 @@ export class Board {
     const n = Math.min(count + 1, BOARD.SLOTS);
     this.sockets.ally.forEach((m, i) => {
       const mat = m.material as THREE.MeshBasicMaterial;
-      const visible = active && i < n;
-      m.visible = true;
-      mat.opacity = visible ? 0.85 : 0.22;
-      mat.color.set(visible ? color : '#FFFFFF');
-      if (active && i < n) {
-        const p = slotPosition('ally', i, n);
-        m.position.x = p.x;
-      } else {
-        const p = slotPosition('ally', i, BOARD.SLOTS);
-        m.position.x = p.x;
-      }
+      m.visible = i < n;
+      if (!m.visible) return;
+      mat.opacity = active ? 0.85 : i < count ? 0.42 : 0.2;
+      mat.color.set(active ? color : '#FFFFFF');
+      m.position.x = slotPosition('ally', i, n).x;
     });
   }
 
-  /** Re-seats the idle sockets under however many cards each row holds. */
+  /**
+   * Re-seats the sockets under however many cards each row holds. A row of two
+   * followers shows two sockets centred under them plus one dim socket for the
+   * next card — showing all five would imply fixed positions the game does not
+   * actually have.
+   */
   layoutSockets(allyCount: number, enemyCount: number): void {
     for (const [side, count] of [
       ['ally', allyCount],
       ['enemy', enemyCount],
     ] as const) {
-      const n = Math.max(count, 1);
+      const shown = Math.min(Math.max(count + 1, 1), BOARD.SLOTS);
       this.sockets[side].forEach((m, i) => {
-        m.visible = i < Math.max(count, BOARD.SLOTS);
-        const p = slotPosition(side, i, count > 0 ? n : BOARD.SLOTS);
+        m.visible = i < shown;
+        if (!m.visible) return;
+        const p = slotPosition(side, i, shown);
         m.position.x = p.x;
         const mat = m.material as THREE.MeshBasicMaterial;
-        mat.opacity = i < count ? 0.5 : 0.3;
+        mat.opacity = i < count ? 0.42 : 0.2;
       });
     }
   }

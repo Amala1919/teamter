@@ -117,7 +117,7 @@ const CSS = `
 }
 .hud-banner.show { animation: hud-banner-in 1.4s cubic-bezier(.2,.8,.2,1) forwards; }
 .hud-topbar {
-  position: absolute; left: 50%; top: 14px; transform: translateX(-50%);
+  position: absolute; left: 18px; top: 14px;
   display: flex; gap: 10px; align-items: center;
 }
 .hud-chip {
@@ -130,11 +130,11 @@ const CSS = `
 }
 .hud-chip:hover { color: ${UI.goldBright}; border-color: rgba(216,184,101,.6); }
 .hud-turn {
-  position: absolute; left: 50%; top: 14px; transform: translateX(-50%);
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
   font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: ${UI.textDim};
 }
 .hud-log {
-  position: absolute; left: 18px; top: 96px; width: 268px; max-height: 46%;
+  position: absolute; left: 18px; top: 58px; width: 268px; max-height: 46%;
   overflow: hidden; display: none; flex-direction: column-reverse; gap: 4px;
   padding: 12px; border-radius: 10px;
   background: rgba(6,9,15,.88); border: 1px solid rgba(216,184,101,.24);
@@ -233,7 +233,7 @@ export class Hud {
 
     const bar = document.createElement('div');
     bar.className = 'hud-topbar';
-    bar.style.top = '44px';
+  
     const logChip = document.createElement('button');
     logChip.className = 'hud-chip';
     logChip.textContent = 'Log';

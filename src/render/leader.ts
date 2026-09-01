@@ -215,10 +215,10 @@ export class LeaderObject {
     // Shadow counter, only shown once the player has any.
     if (this.shadows > 0) {
       ctx.save();
-      const sx = W - 52;
-      const sy = H * 0.875;
+      const sx = W * 0.5 + 96;
+      const sy = H * 0.845;
       ctx.beginPath();
-      ctx.arc(sx, sy, 26, 0, Math.PI * 2);
+      ctx.arc(sx, sy, 24, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(20,10,32,0.95)';
       ctx.fill();
       ctx.lineWidth = 3;

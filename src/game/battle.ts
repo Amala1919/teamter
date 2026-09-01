@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import { Game, type Action, type DeckList } from '../engine/game';
 import type { GameEvent, PlayerId } from '../engine/types';
-import { LEADER_UID, leaderOfUid, other } from '../engine/types';
+import { LEADER_UID, RULES, leaderOfUid, other } from '../engine/types';
 import { tryGetCard } from '../engine/registry';
 import { Stage } from '../render/stage';
 import { BOARD, Board, slotPosition } from '../render/board';
@@ -22,7 +22,7 @@ import { Audio } from '../audio/audio';
 import { chooseAiTurn } from './ai';
 
 const HAND_CARD_W = 1.34;
-const BOARD_CARD_W = 1.4;
+const BOARD_CARD_W = 1.06;
 
 type Pointer = { x: number; y: number };
 
@@ -163,9 +163,9 @@ export class Battle {
         });
 
         const pos = slotPosition(side, i, ps.field.length);
-        obj.target.position.set(pos.x, 0.96, pos.z);
+        obj.target.position.set(pos.x, 0.7, pos.z);
         // Board cards lean back slightly so the camera sees their faces.
-        obj.target.rotation.set(-0.42, 0, 0);
+        obj.target.rotation.set(-0.5, 0, 0);
         obj.target.scale = 1;
         obj.setGlowPulse(canAct ? 0.5 : 0);
         if (!canAct) obj.setGlow(0);
@@ -214,8 +214,8 @@ export class Battle {
       const x = off * spread;
       // A shallow arc: cards rise toward the middle and tilt outward.
       // The fan rises toward the middle and the ends tuck back a little.
-      const y = (mine ? BOARD.HAND_Y : 1.9) + (mine ? -Math.abs(off) * rise * 0.16 : 0);
-      const z = (mine ? BOARD.HAND_Z : -5.0) + Math.abs(off) * (mine ? 0.13 : 0.04);
+      const y = (mine ? BOARD.HAND_Y : 1.55) + (mine ? -Math.abs(off) * rise * 0.16 : 0);
+      const z = (mine ? BOARD.HAND_Z : -4.55) + Math.abs(off) * (mine ? 0.13 : 0.04);
 
       const focused = mine && this.hovered === uid && this.interaction.kind === 'idle';
       const dragging = this.interaction.kind === 'dragCard' && this.interaction.uid === uid;
@@ -252,10 +252,13 @@ export class Battle {
     const me = g.player(this.human);
     const foe = g.player(other(this.human));
     this.hud.setPlayPoints(me.pp, me.maxPp);
+    const epCapacity = g.state.turn >= g.evolveTurnFor(this.human)
+      ? (g.firstPlayer === this.human ? RULES.EP_FIRST : RULES.EP_SECOND)
+      : 0;
     this.hud.setEvolutionPoints(
       me.ep,
-      me.ep,
-      g.state.active === this.human && !me.hasEvolvedThisTurn && g.state.turn >= g.evolveTurnFor(this.human),
+      epCapacity,
+      g.state.active === this.human && !me.hasEvolvedThisTurn && me.ep > 0,
     );
     this.hud.setDeckCounts(me.deck.length, foe.deck.length, me.hand.length, foe.hand.length);
     this.hud.setTurn(g.state.turn, g.state.active === this.human && !this.animating);
@@ -753,6 +756,24 @@ export class Battle {
 
   private defName(defId: string): string {
     return tryGetCard(defId)?.name ?? defId;
+  }
+
+  /**
+   * Runs both sides with the AI until the given turn, then hands control back.
+   * Development aid only — used by the screenshot tooling to reach a mid-game
+   * board without playing one by hand.
+   */
+  fastForward(untilTurn: number): void {
+    let guard = 0;
+    while (this.game.state.turn < untilTurn && this.game.state.winner === null && guard++ < 600) {
+      const action = chooseAiTurn(this.game, this.game.state.active);
+      if (!this.game.apply(action)) this.game.apply({ a: 'endTurn' });
+    }
+    this.game.drainEvents();
+    this.queue.length = 0;
+    this.holdUntil = 0;
+    this.animating = false;
+    this.syncAll(true);
   }
 
   dispose(): void {

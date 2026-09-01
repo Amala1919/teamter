@@ -45,6 +45,9 @@ const battle = new Battle({
   seed,
 });
 
+const demoTurn = Number(params.get('demo') ?? 0);
+if (demoTurn > 0) battle.fastForward(demoTurn);
+
 // Audio may only start after a gesture, so arm it on the first interaction.
 const armAudio = () => {
   battle.audio.startMusic();
