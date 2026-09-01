@@ -873,7 +873,7 @@ export function drawIllustration(
     card.type === 'spell'
       ? 'arcane'
       : card.type === 'amulet'
-        ? rng.pick(['arcane', 'vista'] as const)
+        ? rng.pick(['vista', 'vista', 'portrait', 'arcane'] as const)
         : rng.pick(['portrait', 'portrait', 'close', 'vista'] as const);
 
   ctx.save();
@@ -1081,10 +1081,25 @@ function scratch(w: number, h: number): HTMLCanvasElement {
   return c;
 }
 
-/** Spells and some amulets are drawn as pure light: a sigil, not a body. */
+/**
+ * Spells and some amulets are drawn as pure light rather than a body. Three
+ * shapes share the same lighting so a screen of spells does not read as one
+ * repeated ring: an inscribed sigil, a vertical pillar of light, and a
+ * shockwave of concentric arcs.
+ */
 function drawArcaneSigil(s: Scene, cx: number, cy: number, r: number, card: CardDef, evolved: boolean): void {
   const { ctx, rng } = s;
   const color = evolved ? '#FFB070' : s.accent;
+  const shape = rng.pick(['sigil', 'pillar', 'shockwave', 'sigil'] as const);
+
+  if (shape === 'pillar') {
+    drawPillar(s, cx, cy, r, color, card);
+    return;
+  }
+  if (shape === 'shockwave') {
+    drawShockwave(s, cx, cy, r, color, card);
+    return;
+  }
 
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
@@ -1154,6 +1169,111 @@ function drawArcaneSigil(s: Scene, cx: number, cy: number, r: number, card: Card
     ctx.stroke();
   }
   ctx.restore();
+}
+
+/** A column of light striking the ground, with a rune ring at its base. */
+function drawPillar(s: Scene, cx: number, cy: number, r: number, color: string, card: CardDef): void {
+  const { ctx, rng, h } = s;
+  const groundY = cy + r * 1.15;
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+
+  // The shaft, widening slightly toward the top.
+  const shaft = ctx.createLinearGradient(cx, 0, cx, groundY);
+  shaft.addColorStop(0, rgba(color, 0));
+  shaft.addColorStop(0.35, rgba(color, 0.4));
+  shaft.addColorStop(1, rgba(color, 0.85));
+  ctx.fillStyle = shaft;
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.5, 0);
+  ctx.lineTo(cx + r * 0.5, 0);
+  ctx.lineTo(cx + r * 0.3, groundY);
+  ctx.lineTo(cx - r * 0.3, groundY);
+  ctx.closePath();
+  ctx.fill();
+
+  // Inner core.
+  ctx.fillStyle = rgba('#FFFFFF', 0.5);
+  ctx.fillRect(cx - r * 0.08, 0, r * 0.16, groundY);
+
+  // Rune ring at the base.
+  ctx.strokeStyle = rgba(color, 0.75);
+  ctx.lineWidth = Math.max(1.5, r * 0.03);
+  for (const k of [1, 0.72]) {
+    ctx.beginPath();
+    ctx.ellipse(cx, groundY, r * k, r * k * 0.28, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  const ticks = 10 + rng.int(10);
+  for (let i = 0; i < ticks; i++) {
+    const a = (i / ticks) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a) * r * 0.75, groundY + Math.sin(a) * r * 0.21);
+    ctx.lineTo(cx + Math.cos(a) * r * 1.02, groundY + Math.sin(a) * r * 0.29);
+    ctx.stroke();
+  }
+
+  // Motes rising along the shaft.
+  for (let i = 0; i < 22 + card.cost * 2; i++) {
+    const y = rng.range(0, groundY);
+    const x = cx + rng.range(-r * 0.45, r * 0.45);
+    const rr = r * rng.range(0.015, 0.05);
+    ctx.fillStyle = rgba('#FFFFFF', rng.range(0.15, 0.6));
+    ctx.beginPath();
+    ctx.arc(x, y, rr, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  glow(s, cx, groundY, r * 2, color, 0.6);
+  glow(s, cx, h * 0.1, r * 1.2, color, 0.35);
+}
+
+/** Concentric arcs blasting outward from a bright core. */
+function drawShockwave(s: Scene, cx: number, cy: number, r: number, color: string, card: CardDef): void {
+  const { ctx, rng } = s;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+
+  const rings = 4 + rng.int(4);
+  for (let i = 0; i < rings; i++) {
+    const t = i / rings;
+    const rr = r * (0.5 + t * 1.5);
+    ctx.strokeStyle = rgba(color, 0.55 * (1 - t));
+    ctx.lineWidth = Math.max(1.5, r * 0.06 * (1 - t * 0.6));
+    const start = rng.range(0, Math.PI * 2);
+    const sweep = rng.range(Math.PI * 0.7, Math.PI * 1.9);
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rr, rr * rng.range(0.7, 1), 0, start, start + sweep);
+    ctx.stroke();
+  }
+
+  // Radiating shards, more of them on an expensive spell.
+  const shards = 10 + Math.min(card.cost, 10) * 2;
+  for (let i = 0; i < shards; i++) {
+    const a = rng.range(0, Math.PI * 2);
+    const d0 = r * rng.range(0.35, 0.9);
+    const len = r * rng.range(0.3, 1.1);
+    const grad = ctx.createLinearGradient(
+      cx + Math.cos(a) * d0,
+      cy + Math.sin(a) * d0,
+      cx + Math.cos(a) * (d0 + len),
+      cy + Math.sin(a) * (d0 + len),
+    );
+    grad.addColorStop(0, rgba(color, 0.7));
+    grad.addColorStop(1, rgba(color, 0));
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = Math.max(1, r * rng.range(0.015, 0.05));
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a) * d0, cy + Math.sin(a) * d0);
+    ctx.lineTo(cx + Math.cos(a) * (d0 + len), cy + Math.sin(a) * (d0 + len));
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  glow(s, cx, cy, r * 1.8, color, 0.6);
+  glow(s, cx, cy, r * 0.45, '#FFFFFF', 0.75);
 }
 
 /** Renders an illustration to a standalone canvas — used by tools and tests. */

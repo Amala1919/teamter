@@ -15,6 +15,7 @@ import '@fontsource/noto-serif-jp/japanese-700.css';
 import { loadCards } from './data/index';
 import { buildStarterDeck } from './data/decks';
 import { Battle } from './game/battle';
+import { App } from './app';
 import type { ClassId } from './engine/types';
 import { UI } from './art/theme';
 
@@ -31,30 +32,36 @@ const app = document.getElementById('app');
 if (!app) throw new Error('#app missing');
 app.style.cssText = 'position:fixed;inset:0;overflow:hidden;';
 
-// Debug/deep-link parameters, used by the screenshot tooling and for quick
-// manual testing of a specific matchup.
 const params = new URLSearchParams(location.search);
-const allyClass = (params.get('me') as ClassId) ?? 'sword';
-const enemyClass = (params.get('foe') as ClassId) ?? 'shadow';
-const seed = Number(params.get('seed') ?? 20170622);
 
-const battle = new Battle({
-  container: app,
-  decks: [buildStarterDeck(allyClass, seed), buildStarterDeck(enemyClass, seed + 7)],
-  human: 0,
-  seed,
-});
+/**
+ * `?battle=1` jumps straight into a match, which is how the screenshot tooling
+ * and quick manual testing reach a board without going through the menu.
+ * `?demo=<turn>` then fast-forwards both sides with the AI.
+ */
+if (params.has('battle') || params.has('demo')) {
+  const allyClass = (params.get('me') as ClassId) ?? 'sword';
+  const enemyClass = (params.get('foe') as ClassId) ?? 'shadow';
+  const seed = Number(params.get('seed') ?? 20170622);
 
-const demoTurn = Number(params.get('demo') ?? 0);
-if (demoTurn > 0) battle.fastForward(demoTurn);
+  const battle = new Battle({
+    container: app,
+    decks: [buildStarterDeck(allyClass, seed), buildStarterDeck(enemyClass, seed + 7)],
+    human: 0,
+    seed,
+  });
 
-// Audio may only start after a gesture, so arm it on the first interaction.
-const armAudio = () => {
-  battle.audio.startMusic();
-  window.removeEventListener('pointerdown', armAudio);
-};
-window.addEventListener('pointerdown', armAudio);
+  const demoTurn = Number(params.get('demo') ?? 0);
+  if (demoTurn > 0) battle.fastForward(demoTurn);
 
-if (import.meta.env.DEV) {
-  (window as unknown as { battle: Battle }).battle = battle;
+  const armAudio = () => {
+    battle.audio.startMusic();
+    window.removeEventListener('pointerdown', armAudio);
+  };
+  window.addEventListener('pointerdown', armAudio);
+
+  if (import.meta.env.DEV) (window as unknown as { battle: Battle }).battle = battle;
+} else {
+  const shell = new App(app);
+  if (import.meta.env.DEV) (window as unknown as { shell: App }).shell = shell;
 }

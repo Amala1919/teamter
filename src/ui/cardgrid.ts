@@ -1,0 +1,300 @@
+/**
+ * The card grid shared by the collection and the deck builder.
+ *
+ * Card faces are painted on demand: rendering 800 canvases up front would cost
+ * several seconds and hundreds of megabytes, so slots start as empty plates and
+ * an IntersectionObserver fills them as they scroll into view.
+ */
+import type { CardDef, ClassId, Rarity, SetId } from '../engine/types';
+import { CRAFT_CLASSES, SET_ORDER } from '../engine/types';
+import { cardFaceCanvas } from '../art/cardface';
+import { CLASS_THEME, RARITY_THEME } from '../art/theme';
+import { el } from './style';
+
+export interface GridFilters {
+  text: string;
+  cardClass: ClassId | 'all';
+  set: SetId | 'all';
+  rarity: Rarity | 'all';
+  type: CardDef['type'] | 'all';
+  cost: number | 'all';
+  /** Hides cards with unimplemented rules text. */
+  playableOnly: boolean;
+}
+
+export const DEFAULT_FILTERS: GridFilters = {
+  text: '',
+  cardClass: 'all',
+  set: 'all',
+  rarity: 'all',
+  type: 'all',
+  cost: 'all',
+  playableOnly: false,
+};
+
+export function applyFilters(cards: CardDef[], f: GridFilters): CardDef[] {
+  const needle = f.text.trim().toLowerCase();
+  return cards.filter((c) => {
+    if (f.cardClass !== 'all' && c.cardClass !== f.cardClass) return false;
+    if (f.set !== 'all' && c.set !== f.set) return false;
+    if (f.rarity !== 'all' && c.rarity !== f.rarity) return false;
+    if (f.type !== 'all' && c.type !== f.type) return false;
+    if (f.cost !== 'all') {
+      // The top bucket is "7 or more", as in the original's filter row.
+      if (f.cost >= 7 ? c.cost < 7 : c.cost !== f.cost) return false;
+    }
+    if (f.playableOnly && c.implemented === false) return false;
+    if (needle) {
+      const hay = `${c.name} ${c.nameJa ?? ''} ${c.text} ${c.traits?.join(' ') ?? ''}`.toLowerCase();
+      if (!hay.includes(needle)) return false;
+    }
+    return true;
+  });
+}
+
+export interface CardGridOptions {
+  /** Copies already in the deck, shown as a count badge. */
+  counts?: Map<string, number>;
+  onPick?: (card: CardDef, ev: MouseEvent) => void;
+  onInspect?: (card: CardDef) => void;
+  /** Renders a card that cannot currently be added as dimmed. */
+  isDimmed?: (card: CardDef) => boolean;
+}
+
+export class CardGrid {
+  readonly root: HTMLDivElement;
+  private readonly observer: IntersectionObserver;
+  private cards: CardDef[] = [];
+  private opts: CardGridOptions;
+
+  constructor(opts: CardGridOptions = {}) {
+    this.opts = opts;
+    this.root = el('div', { class: 'sv-grid sv-scroll' });
+    this.root.style.flex = '1';
+
+    // Painting a card face is a few milliseconds; doing it only for visible
+    // slots keeps scrolling smooth over the whole 825-card collection.
+    this.observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const slot = entry.target as HTMLElement;
+          this.paint(slot);
+          this.observer.unobserve(slot);
+        }
+      },
+      { root: this.root, rootMargin: '400px 0px' },
+    );
+  }
+
+  setCards(cards: CardDef[]): void {
+    this.cards = cards;
+    this.render();
+  }
+
+  setOptions(opts: CardGridOptions): void {
+    this.opts = { ...this.opts, ...opts };
+    this.refreshBadges();
+  }
+
+  private render(): void {
+    this.observer.disconnect();
+    this.root.replaceChildren();
+
+    if (this.cards.length === 0) {
+      this.root.append(el('div', { class: 'sv-empty' }, 'No cards match these filters.'));
+      return;
+    }
+
+    for (const card of this.cards) {
+      const slot = el('div', { class: 'sv-cardslot' });
+      slot.dataset.id = card.id;
+      slot.append(el('div', { class: 'placeholder' }));
+
+      slot.addEventListener('click', (e) => this.opts.onPick?.(card, e));
+      slot.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        this.opts.onInspect?.(card);
+      });
+      // Long-press opens the detail view on touch, where there is no right
+      // click and no hover.
+      let timer = 0;
+      slot.addEventListener('pointerdown', () => {
+        timer = window.setTimeout(() => this.opts.onInspect?.(card), 480);
+      });
+      for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) {
+        slot.addEventListener(ev, () => window.clearTimeout(timer));
+      }
+
+      this.root.append(slot);
+      this.observer.observe(slot);
+    }
+    this.refreshBadges();
+  }
+
+  private paint(slot: HTMLElement): void {
+    const card = this.cards.find((c) => c.id === slot.dataset.id);
+    if (!card || slot.querySelector('canvas')) return;
+    const canvas = cardFaceCanvas(card, { scale: 0.42 });
+    // The cache hands back one canvas per card; the grid needs its own copy so
+    // the same card can appear in more than one place.
+    const copy = document.createElement('canvas');
+    copy.width = canvas.width;
+    copy.height = canvas.height;
+    copy.getContext('2d')?.drawImage(canvas, 0, 0);
+    slot.querySelector('.placeholder')?.remove();
+    slot.prepend(copy);
+  }
+
+  /** Updates count badges and dimming without repainting any card face. */
+  refreshBadges(): void {
+    for (const slot of Array.from(this.root.children) as HTMLElement[]) {
+      const id = slot.dataset.id;
+      if (!id) continue;
+      const card = this.cards.find((c) => c.id === id);
+      if (!card) continue;
+
+      slot.querySelector('.sv-count')?.remove();
+      slot.querySelector('.sv-badge')?.remove();
+
+      const n = this.opts.counts?.get(id) ?? 0;
+      if (n > 0) slot.append(el('div', { class: 'sv-count' }, `×${n}`));
+      if (card.implemented === false) slot.append(el('div', { class: 'sv-badge' }, 'Partial'));
+      slot.classList.toggle('dim', !!this.opts.isDimmed?.(card));
+    }
+  }
+
+  dispose(): void {
+    this.observer.disconnect();
+    this.root.remove();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Filter bar
+// ---------------------------------------------------------------------------
+
+export function buildFilterBar(
+  filters: GridFilters,
+  onChange: (next: GridFilters) => void,
+  opts: { showPlayableToggle?: boolean } = {},
+): HTMLElement {
+  const bar = el('div', {
+    class: 'sv-chiprow',
+    style: 'padding:12px 22px;gap:14px;border-bottom:1px solid rgba(216,184,101,.16);',
+  });
+
+  const state = { ...filters };
+  const emit = () => onChange({ ...state });
+
+  const search = el('input', {
+    class: 'sv-input',
+    placeholder: 'Search name or text…',
+    value: state.text,
+    style: 'width:200px;',
+  }) as HTMLInputElement;
+  search.addEventListener('input', () => {
+    state.text = search.value;
+    emit();
+  });
+  bar.append(search);
+
+  const group = (label: string, items: { key: string; label: string; color?: string }[], get: () => string, set: (k: string) => void) => {
+    const wrap = el('div', { class: 'sv-chiprow', style: 'gap:5px;' });
+    wrap.append(
+      el('span', { style: 'font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6B7386;margin-right:2px;' }, label),
+    );
+    for (const item of items) {
+      const chip = el('div', { class: 'sv-chip' }, item.label);
+      if (item.color) {
+        chip.setAttribute('data-class', '1');
+        chip.style.setProperty('--chip-color', item.color);
+      }
+      chip.addEventListener('click', () => {
+        set(item.key);
+        for (const c of Array.from(wrap.querySelectorAll('.sv-chip'))) c.classList.remove('on');
+        chip.classList.add('on');
+        emit();
+      });
+      if (get() === item.key) chip.classList.add('on');
+      wrap.append(chip);
+    }
+    bar.append(wrap);
+  };
+
+  group(
+    'Class',
+    [
+      { key: 'all', label: 'All' },
+      ...CRAFT_CLASSES.map((c) => ({ key: c, label: CLASS_THEME[c].label.replace('craft', ''), color: CLASS_THEME[c].primary })),
+      { key: 'neutral', label: 'Neutral', color: CLASS_THEME.neutral.primary },
+    ],
+    () => state.cardClass,
+    (k) => (state.cardClass = k as GridFilters['cardClass']),
+  );
+
+  group(
+    'Cost',
+    [{ key: 'all', label: 'All' }, ...[1, 2, 3, 4, 5, 6, 7].map((n) => ({ key: String(n), label: n === 7 ? '7+' : String(n) }))],
+    () => String(state.cost),
+    (k) => (state.cost = k === 'all' ? 'all' : Number(k)),
+  );
+
+  group(
+    'Type',
+    [
+      { key: 'all', label: 'All' },
+      { key: 'follower', label: 'Follower' },
+      { key: 'spell', label: 'Spell' },
+      { key: 'amulet', label: 'Amulet' },
+    ],
+    () => state.type,
+    (k) => (state.type = k as GridFilters['type']),
+  );
+
+  group(
+    'Rarity',
+    [
+      { key: 'all', label: 'All' },
+      ...(['bronze', 'silver', 'gold', 'legendary'] as Rarity[]).map((r) => ({
+        key: r,
+        label: RARITY_THEME[r].label,
+        color: RARITY_THEME[r].gem,
+      })),
+    ],
+    () => state.rarity,
+    (k) => (state.rarity = k as GridFilters['rarity']),
+  );
+
+  group(
+    'Set',
+    [
+      { key: 'all', label: 'All' },
+      ...SET_ORDER.map((s) => ({ key: s, label: SET_LABEL[s] })),
+    ],
+    () => state.set,
+    (k) => (state.set = k as GridFilters['set']),
+  );
+
+  if (opts.showPlayableToggle) {
+    const chip = el('div', { class: 'sv-chip' + (state.playableOnly ? ' on' : '') }, 'Fully implemented');
+    chip.title = 'Hide cards whose printed text is not fully implemented yet';
+    chip.addEventListener('click', () => {
+      state.playableOnly = !state.playableOnly;
+      chip.classList.toggle('on', state.playableOnly);
+      emit();
+    });
+    bar.append(chip);
+  }
+
+  return bar;
+}
+
+export const SET_LABEL: Record<SetId, string> = {
+  basic: 'Basic',
+  standard: 'Standard',
+  darkness: 'Darkness Evolved',
+  bahamut: 'Rise of Bahamut',
+  tempest: 'Tempest of the Gods',
+  wonderland: 'Wonderland Dreams',
+};

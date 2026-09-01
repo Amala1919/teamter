@@ -12,6 +12,8 @@ export interface HudCallbacks {
   onEndTurn: () => void;
   onSurrender?: () => void;
   onToggleLog?: () => void;
+  /** Leaves the battle — shown on the result overlay. */
+  onExit?: () => void;
 }
 
 const CSS = `
@@ -255,6 +257,12 @@ export class Hud {
     this.result = document.createElement('div');
     this.result.className = 'hud-result';
     this.result.innerHTML = '<h1></h1><p></p>';
+    const done = document.createElement('button');
+    done.className = 'hud-endturn';
+    done.style.cssText = 'position:static;margin-top:10px;';
+    done.textContent = 'Back to menu';
+    done.addEventListener('click', () => this.cb.onExit?.());
+    this.result.appendChild(done);
     this.root.appendChild(this.result);
 
     container.appendChild(this.root);

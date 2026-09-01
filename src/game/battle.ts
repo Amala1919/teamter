@@ -90,6 +90,7 @@ export class Battle {
     this.hud = new Hud(opts.container, {
       onEndTurn: () => this.requestEndTurn(),
       onSurrender: () => this.concede(),
+      onExit: () => this.dispose(),
     });
     this.hud.applyClassTheme(opts.decks[this.human].leaderClass, this.human);
 
@@ -538,8 +539,11 @@ export class Battle {
   }
 
   private concede(): void {
+    if (this.game.state.winner !== null) return;
     this.game.state.winner = other(this.human);
     this.game.state.phase = 'over';
+    this.queue.length = 0;
+    this.audio.play('defeat');
     this.hud.showResult('lose', 'You conceded.');
   }
 
