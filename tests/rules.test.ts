@@ -71,6 +71,26 @@ describe('turn structure', () => {
     expect(g.player(0).ep).toBe(RULES.EP_FIRST);
   });
 
+  it('remembers who went first even after the event log is drained', () => {
+    setupTestCards();
+    const g = new Game([deck('neutral'), deck('neutral')], { seed: 5, first: 1, skipMulligan: true });
+    g.drainEvents();
+    expect(g.firstPlayer).toBe(1);
+    expect(g.evolveTurnFor(1)).toBe(RULES.EVOLVE_TURN_FIRST);
+    expect(g.evolveTurnFor(0)).toBe(RULES.EVOLVE_TURN_SECOND);
+  });
+
+  it('gives evolution points to the right seat when player 1 goes first', () => {
+    setupTestCards();
+    const g = new Game([deck('neutral'), deck('neutral')], { seed: 5, first: 1, skipMulligan: true });
+    advanceToTurn(g, 4);
+    // Player 0 is going second here, so they unlock first with 3 EP.
+    expect(g.player(0).ep).toBe(RULES.EP_SECOND);
+    expect(g.player(1).ep).toBe(0);
+    advanceToTurn(g, 5);
+    expect(g.player(1).ep).toBe(RULES.EP_FIRST);
+  });
+
   it('draws one card at the start of every turn', () => {
     const g = newGame();
     const n = g.player(0).hand.length;

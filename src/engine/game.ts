@@ -90,6 +90,7 @@ export class Game {
     this.rng = new Rng(this.seed);
 
     const first: PlayerId = opts.first ?? ((this.rng.int(2) as PlayerId) || 0);
+    this._first = first;
 
     this.state = {
       turn: 0,
@@ -419,24 +420,25 @@ export class Game {
     if (s.winner === null) s.phase = 'main';
   }
 
+  /**
+   * Evolution points arrive all at once on the turn evolution unlocks: two for
+   * the player going first (on turn 5), three for the player going second (on
+   * turn 4).
+   */
   private grantEpIfDue(p: PlayerId): void {
+    if (this.epGranted.has(p)) return;
+    if (this.state.turn < this.evolveTurnFor(p)) return;
     const ps = this.player(p);
-    const isFirst = this.firstPlayer === p;
-    const due = isFirst ? RULES.EVOLVE_TURN_FIRST : RULES.EVOLVE_TURN_SECOND;
-    const ownTurnIndex = Math.ceil(this.state.turn / 2);
-    const startTurn = isFirst ? Math.ceil(due / 2) : Math.ceil(due / 2);
-    if (ownTurnIndex === startTurn && ps.ep === 0 && !this.epGranted.has(p)) {
-      ps.ep = isFirst ? RULES.EP_FIRST : RULES.EP_SECOND;
-      this.epGranted.add(p);
-      this.emit({ t: 'epChange', player: p, ep: ps.ep });
-    }
+    ps.ep = this.firstPlayer === p ? RULES.EP_FIRST : RULES.EP_SECOND;
+    this.epGranted.add(p);
+    this.emit({ t: 'epChange', player: p, ep: ps.ep });
   }
 
   private epGranted = new Set<PlayerId>();
 
+  /** The player who took the first turn. Fixed for the life of the match. */
   get firstPlayer(): PlayerId {
-    const ev = this.events.find((e) => e.t === 'gameStart');
-    return (ev && ev.t === 'gameStart' ? ev.first : this._first) as PlayerId;
+    return this._first;
   }
 
   private _first: PlayerId = 0;

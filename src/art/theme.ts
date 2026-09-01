@@ -70,7 +70,7 @@ export const UI = {
   heal: '#7BE86A',
   evolve: '#FF4A3D',
   evolveGold: '#FFD86B',
-} as const;
+};
 
 /** Card geometry, in texture pixels. The 0.715 aspect matches the original. */
 export const CARD = {

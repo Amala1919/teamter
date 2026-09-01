@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "cards:build": "node tools/build-cards.mjs",
-    "cards:report": "vite-node tools/report-coverage.ts"
+    "cards:report": "vite-node tools/report-coverage.ts",
+    "sim": "vite-node tools/simulate.ts"
   },
   "dependencies": {
     "@fontsource/cinzel": "^5.3.0",
