@@ -170,6 +170,57 @@ describe('new trigger kinds fire on the right event', () => {
   });
 });
 
+describe('sentence forms the printed text keeps using', () => {
+  const ctx = () => ({ names: new Map<string, string>(), selfType: 'follower' as const, selfId: 'x' });
+
+  it('reads a stat change in either word order, and either sign', () => {
+    const a = compileCardText('Fanfare: Give all other allied followers +0/+1.', ctx());
+    const b = compileCardText('Fanfare: Give +0/+1 to all other allied followers.', ctx());
+    expect(a.unparsed).toEqual([]);
+    expect(a.abilities[0].effects).toEqual(b.abilities[0].effects);
+
+    const debuff = compileCardText('Fanfare: Give an enemy follower -2/-0.', ctx());
+    expect(debuff.abilities[0].effects[0]).toMatchObject({ k: 'buff', atk: -2, def: 0 });
+  });
+
+  it('folds a "Select ..." sentence into the one that acts on it', () => {
+    // Fen Sprite prints the selection and the effect as two sentences.
+    const r = compileCardText("Fanfare: Select an enemy follower. It can't attack next turn.", ctx());
+    expect(r.unparsed).toEqual([]);
+    expect(r.abilities[0].effects[0]).toMatchObject({
+      k: 'freeze',
+      target: { scope: 'target', side: 'enemy', kind: 'follower' },
+    });
+  });
+
+  it('points "that follower" at the follower the condition named', () => {
+    // Necroassassin: "If another allied follower is in play, destroy that
+    // follower ..." — the player picks which. Compiling this to the trigger's
+    // `other` binding would destroy nothing at all in a Fanfare.
+    const destroy = flatten(abilityEffects('necroassassin')).find((e) => e.k === 'destroy');
+    expect(destroy).toMatchObject({
+      target: { scope: 'target', side: 'ally', kind: 'follower', filter: { notSelf: true } },
+    });
+    expect(getCard('necroassassin').targeting?.selector).toMatchObject({ scope: 'target', side: 'ally' });
+  });
+
+  it('narrows a "lowest-cost" discard to the cheapest cards', () => {
+    const eff = flatten(abilityEffects('golden_dragons_den')).find((e) => e.k === 'discard');
+    expect(eff).toMatchObject({ pick: 'lowestCost', random: true });
+  });
+
+  it('compares the two leaders for "if their defense is higher than yours"', () => {
+    const [eff] = abilityEffects('succubus');
+    expect(eff.k).toBe('if');
+    if (eff.k !== 'if') return;
+    expect(eff.cond).toEqual({
+      k: 'greater',
+      a: { k: 'leaderDefense', side: 'enemy' },
+      b: { k: 'leaderDefense', side: 'ally' },
+    });
+  });
+});
+
 describe('the compiled cards actually run', () => {
   const ids = [
     'blood_rage',
@@ -186,6 +237,16 @@ describe('the compiled cards actually run', () => {
     'calamitous_curse',
     'secrets_of_erasmus',
     'fangblade_slayer',
+    'necroassassin',
+    'dolorblade_warrior',
+    'mad_hatter',
+    'fen_sprite',
+    'cybele',
+    'golden_dragons_den',
+    'succubus',
+    'rahab',
+    'sky_sprite',
+    'elder_tortoise',
   ];
 
   for (const id of ids) {

@@ -1313,7 +1313,16 @@ export class Game {
         const ps = this.player(who);
         let discarded = 0;
         for (let i = 0; i < n && ps.hand.length > 0; i++) {
-          const idx = eff.random ? this.rng.int(ps.hand.length) : ps.hand.length - 1;
+          let idx: number;
+          if (eff.pick) {
+            // Narrow to the cheapest (or dearest) cards, then pick among them.
+            const costs = ps.hand.map((u) => this.def(this.ent(u)).cost);
+            const want = eff.pick === 'lowestCost' ? Math.min(...costs) : Math.max(...costs);
+            const pool = ps.hand.filter((_, j) => costs[j] === want);
+            idx = ps.hand.indexOf(this.rng.pick(pool) ?? pool[0]);
+          } else {
+            idx = eff.random ? this.rng.int(ps.hand.length) : ps.hand.length - 1;
+          }
           const uid = ps.hand.splice(idx, 1)[0];
           const e = this.ent(uid);
           e.zone = 'cemetery';
@@ -1745,6 +1754,8 @@ export class Game {
         return this.player(this.sideToPlayer(a.side ?? 'ally', ctx.controller)).hand.length;
       case 'deckSize':
         return this.player(this.sideToPlayer(a.side ?? 'ally', ctx.controller)).deck.length;
+      case 'pp':
+        return this.player(ctx.controller).pp;
       case 'maxPP':
         return this.player(this.sideToPlayer(a.side ?? 'ally', ctx.controller)).maxPp;
       case 'leaderDefenseLost': {

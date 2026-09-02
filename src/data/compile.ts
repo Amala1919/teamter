@@ -319,7 +319,7 @@ function peelCondition(sentence: string): Peeled {
   m = s.match(new RegExp(`^if ${CLASS_COND.source} is already active for you when this card is played,\\s*(.*)$`, 'i'));
   if (m) return { body: m[2], cond: classCondition(m[1], false) };
 
-  m = s.match(/^(.*?),?\s*if at least (\d+) other cards? (?:were|was|have been|has been) played this turn\.?$/i);
+  m = s.match(/^(.*?),?\s*if at least (\d+) (?:other )?cards? (?:were|was|have been|has been) played this turn\.?$/i);
   if (m) return { body: m[1], cond: { k: 'cardsPlayed', n: num(m[2]) } };
 
   m = s.match(/^if at least (\d+) (?:other )?cards? (?:were|was|have been|has been) played this turn,\s*(.*)$/i);
@@ -354,6 +354,33 @@ function peelCondition(sentence: string): Peeled {
     };
   }
 
+  // "…if their defense is higher than yours" — a comparison between leaders.
+  m = s.match(/^(.*?),?\s*if (?:their|the enemy leader's|the leader's) defense is higher than yours\.?$/i);
+  if (m) {
+    return {
+      body: m[1],
+      cond: {
+        k: 'greater',
+        a: { k: 'leaderDefense', side: 'enemy' },
+        b: { k: 'leaderDefense', side: 'ally' },
+      },
+    };
+  }
+
+  // "If another allied follower is in play, …" and its relatives. The noun
+  // phrase is parsed as a selector, so "an evolved allied follower" and
+  // "an allied Officer follower" work the same way.
+  m = s.match(/^if (?:there (?:is|are) )?(.+?) (?:is|are) in play,\s*(.*)$/i);
+  if (m) {
+    const sel = parseSelector(m[1]);
+    if (sel) return { body: m[2], cond: { k: 'exists', sel: { ...sel, scope: 'all' } } };
+  }
+  m = s.match(/^(.*?),?\s*if (?:there (?:is|are) )?(.+?) (?:is|are) in play\.?$/i);
+  if (m) {
+    const sel = parseSelector(m[2]);
+    if (sel) return { body: m[1], cond: { k: 'exists', sel: { ...sel, scope: 'all' } } };
+  }
+
   m = s.match(/^during (?:the opponent's|your opponent's) turn,\s*(.*)$/i);
   if (m) return { body: m[1], cond: { k: 'opponentTurn' } };
   m = s.match(/^(.*?),?\s*during (?:the opponent's|your opponent's) turn\.?$/i);
@@ -381,6 +408,9 @@ function parseCountPhrase(phrase: string, ctx: CompileCtx): Amount | null {
   if (m) return { k: 'cardsPlayed' };
   m = p.match(/^(?:the number of )?cards? discarded$/);
   if (m) return { k: 'ctx', name: 'discarded' };
+  m = p.match(/^(?:(?:each )?of )?your (?:remaining )?play points?$/);
+  if (m) return { k: 'pp' };
+
   // "the attack of the strongest enemy follower in play"
   m = p.match(/^the (attack|defense|cost) of the (strongest|weakest) (.+?)(?: in play)?$/);
   if (m) {
@@ -429,6 +459,16 @@ function bindX(line: string, ctx: CompileCtx): string {
   const amount = parseCountPhrase(m[1], ctx);
   if (amount) ctx.x = amount;
   return line.replace(m[0], '').trim();
+}
+
+/** A stat change token with its sign: "-2" in "Give an enemy follower -2/-0". */
+function signed(sign: string, token: string, ctx: CompileCtx): Amount | null {
+  const v = amt(token, ctx);
+  if (v === null) return null;
+  if (sign !== '-') return v;
+  // `-0` and `0` are the same stat change, but not the same value; normalise so
+  // compiled effects compare equal whichever way the text spelled it.
+  return typeof v === 'number' ? (v === 0 ? 0 : -v) : { k: 'mul', a: -1, b: v };
 }
 
 /** Resolves a numeric token that may be the literal "X". */
@@ -532,6 +572,63 @@ const RULES_TABLE: Rule[] = [
       return [
         { k: 'buff', target: t, atk: a, def: d, duration: temp ? 'turn' : 'permanent' },
         { k: 'grant', target: t, keywords: [KEYWORD_WORDS[m[3].toLowerCase()]], duration: temp ? 'turn' : 'permanent' },
+      ];
+    },
+  },
+  {
+    // The ditransitive word order, and debuffs: "Give all other allied
+    // followers +0/+1", "Give an enemy follower -10/-0".
+    re: new RegExp(
+      `^give (?![-+])(.+?) ([-+])${N}/([-+])${N}(?: until the end of (?:the|this|your) turn)?$`,
+      'i',
+    ),
+    build: (m, ctx) => {
+      const t = parseSelector(m[1], ctx);
+      const a = signed(m[2], m[3], ctx);
+      const d = signed(m[4], m[5], ctx);
+      if (!t || a === null || d === null) return null;
+      const temp = /until the end of/i.test(m[0]);
+      return [{ k: 'buff', target: t, atk: a, def: d, duration: temp ? 'turn' : 'permanent' }];
+    },
+  },
+  {
+    re: new RegExp(
+      `^give ([-+])${N}/([-+])${N} to (.+?)(?: until the end of (?:the|this|your) turn)?$`,
+      'i',
+    ),
+    build: (m, ctx) => {
+      const t = parseSelector(m[5], ctx);
+      const a = signed(m[1], m[2], ctx);
+      const d = signed(m[3], m[4], ctx);
+      if (!t || a === null || d === null) return null;
+      const temp = /until the end of/i.test(m[0]);
+      return [{ k: 'buff', target: t, atk: a, def: d, duration: temp ? 'turn' : 'permanent' }];
+    },
+  },
+  {
+    re: new RegExp(`^give (?:it|that follower) ([-+])${N}/([-+])${N}(?: until the end of (?:the|this|your) turn)?$`, 'i'),
+    build: (m, ctx) => {
+      const a = signed(m[1], m[2], ctx);
+      const d = signed(m[3], m[4], ctx);
+      if (a === null || d === null) return null;
+      const temp = /until the end of/i.test(m[0]);
+      return [{ k: 'buff', target: { scope: 'other' }, atk: a, def: d, duration: temp ? 'turn' : 'permanent' }];
+    },
+  },
+  {
+    // "Give an allied follower Rush." — the keyword grant in the same order.
+    re: new RegExp(`^give (.+?) (${KW_ALT})(?: until the end of (?:the|this|your) turn)?$`, 'i'),
+    build: (m, ctx) => {
+      const t = parseSelector(m[1], ctx);
+      if (!t) return null;
+      const temp = /until the end of/i.test(m[0]);
+      return [
+        {
+          k: 'grant',
+          target: t,
+          keywords: [KEYWORD_WORDS[m[2].toLowerCase()]],
+          duration: temp ? 'turn' : 'permanent',
+        },
       ];
     },
   },
@@ -653,6 +750,23 @@ const RULES_TABLE: Rule[] = [
     build: (m) => [{ k: 'draw', amount: num(m[1], 1), side: 'enemy' }],
   },
   {
+    // "Randomly discard 1 of the lowest-cost cards in your hand" — the pool is
+    // the cheapest cards, and the randomness only breaks ties among them.
+    re: /^randomly discard (a|\d+) (?:of the )?(lowest|highest)-cost cards? (?:in|from) your hand$/i,
+    build: (m) => [
+      {
+        k: 'discard',
+        amount: num(m[1], 1),
+        random: true,
+        pick: m[2].toLowerCase() === 'lowest' ? 'lowestCost' : 'highestCost',
+      },
+    ],
+  },
+  {
+    re: /^randomly discard (a|\d+) cards?(?: (?:in|from) your hand)?$/i,
+    build: (m) => [{ k: 'discard', amount: num(m[1], 1), random: true }],
+  },
+  {
     re: /^discard (a card|\d+ cards?|your hand)$/i,
     build: (m) =>
       /your hand/i.test(m[1])
@@ -693,6 +807,7 @@ const RULES_TABLE: Rule[] = [
     },
   },
   { re: /^gain (\d+) evolution points?$/i, build: (m) => [{ k: 'gainEP', amount: num(m[1]) }] },
+  { re: /^recover (\d+) evolution points?$/i, build: (m) => [{ k: 'gainEP', amount: num(m[1]) }] },
 
   // --- countdown / cost ----------------------------------------------------
   {
@@ -855,6 +970,27 @@ function searchFilter(phrase: string): Record<string, unknown> | null {
   return Object.keys(filter).length > 0 ? filter : null;
 }
 
+/**
+ * "If another allied follower is in play, destroy that follower …" — "that
+ * follower" is the one the condition just named, and the player picks which.
+ * Without this the effect compiles to the trigger's `other` binding, which is
+ * empty in a Fanfare and would silently destroy nothing.
+ */
+function bindOtherToCondition(effects: Effect[], cond: Condition | undefined): Effect[] {
+  if (!cond || cond.k !== 'exists') return effects;
+  const target: Selector = { ...cond.sel, scope: 'target' };
+  const walk = (list: Effect[]): Effect[] =>
+    list.map((e) => {
+      if ('target' in e && e.target && (e.target as Selector).scope === 'other') {
+        return { ...e, target } as Effect;
+      }
+      if (e.k === 'if') return { ...e, then: walk(e.then), ...(e.else ? { else: walk(e.else) } : {}) };
+      if (e.k === 'repeat') return { ...e, body: walk(e.body) };
+      return e;
+    });
+  return walk(effects);
+}
+
 function parseSentence(sentence: string, ctx: CompileCtx): Effect[] | null {
   const peeled = peelCondition(sentence);
   const body = tidy(peeled.body);
@@ -865,9 +1001,31 @@ function parseSentence(sentence: string, ctx: CompileCtx): Effect[] | null {
     if (!m) continue;
     const eff = rule.build(m, ctx);
     if (!eff) continue;
-    return peeled.cond ? [{ k: 'if', cond: peeled.cond, then: eff }] : eff;
+    const bound = bindOtherToCondition(eff, peeled.cond);
+    return peeled.cond ? [{ k: 'if', cond: peeled.cond, then: bound }] : bound;
   }
   return null;
+}
+
+/**
+ * "Select an enemy follower. It can't attack next turn." is one instruction
+ * printed as two sentences: the first names the target, the second says what
+ * happens to it. When the naming sentence has no effect of its own, it is
+ * folded into the one that follows so the pair can be read as a whole.
+ */
+function mergeSelectClauses(sentences: string[], ctx: CompileCtx): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < sentences.length; i++) {
+    const s = sentences[i];
+    const next = sentences[i + 1];
+    if (next && /^(?:select|choose) /i.test(s) && !parseSentence(s.replace(/\.$/, ''), ctx)) {
+      out.push(`${s} ${next}`);
+      i++;
+      continue;
+    }
+    out.push(s);
+  }
+  return out;
 }
 
 function splitSentences(line: string): string[] {
@@ -883,7 +1041,7 @@ function compileSentences(
   opts: { bindOther?: boolean } = {},
 ): Effect[] | null {
   const bound = bindX(text, ctx);
-  const sentences = splitSentences(bound);
+  const sentences = mergeSelectClauses(splitSentences(bound), ctx);
   if (sentences.length === 0) return null;
 
   const out: Effect[] = [];
@@ -972,7 +1130,7 @@ function splitConjunction(sentence: string, ctx: CompileCtx): Effect[] | null {
         const verb = left.match(/^(\w+)\s/);
         const b = parseSentence(right, ctx) ?? (verb ? parseSentence(`${verb[1]} ${right}`, ctx) : null);
         if (b) {
-          const both = [...a, ...b];
+          const both = bindOtherToCondition([...a, ...b], peeled.cond);
           return peeled.cond ? [{ k: 'if', cond: peeled.cond, then: both }] : both;
         }
       }

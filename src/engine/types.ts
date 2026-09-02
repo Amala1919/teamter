@@ -209,6 +209,8 @@ export type Amount =
   | { k: 'handSize'; side?: Side }
   | { k: 'deckSize'; side?: Side }
   | { k: 'maxPP'; side?: Side }
+  /** Play points the controller has left to spend this turn. */
+  | { k: 'pp' }
   | { k: 'leaderDefenseLost'; side?: Side }
   | { k: 'sourceAtk' }
   | { k: 'sourceDef' }
@@ -276,7 +278,18 @@ export type Effect =
   | { k: 'transform'; target: Selector; into: string }
   | { k: 'returnToHand'; target: Selector }
   | { k: 'draw'; amount: Amount; side?: 'ally' | 'enemy' }
-  | { k: 'discard'; amount: Amount; side?: 'ally' | 'enemy'; random?: boolean }
+  | {
+      k: 'discard';
+      amount: Amount;
+      side?: 'ally' | 'enemy';
+      random?: boolean;
+      /**
+       * Which cards go. "Randomly discard 1 of the lowest-cost cards in your
+       * hand" narrows to the cheapest cards and then picks among them at
+       * random, which is not the same as a uniform random discard.
+       */
+      pick?: 'lowestCost' | 'highestCost';
+    }
   | { k: 'toHand'; defId: string; count?: Amount }
   /** Search the deck for a matching card and put it in hand. */
   | { k: 'searchToHand'; filter: Filter; count?: Amount; random?: boolean }
