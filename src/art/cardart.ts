@@ -22,14 +22,29 @@ interface IconData {
   h: number;
 }
 
+/**
+ * What to draw for a card: a character, a creature, or — for spells, amulets
+ * and anything that is genuinely a thing rather than a being — the icon itself.
+ */
+export type CardSubject =
+  | { kind: 'character'; archetype: string; weapon?: string; headgear?: string; wings?: string; small?: boolean }
+  | { kind: 'creature'; creature: string; ornate?: number }
+  | { kind: 'emblem' };
+
 const DATA = art as unknown as {
   source: string;
   license: string;
   author: string;
   url: string;
   map: Record<string, string>;
+  subjects: Record<string, CardSubject>;
   icons: Record<string, IconData>;
 };
+
+/** The drawn subject for a card, defaulting to its icon. */
+export function subjectKindFor(cardId: string): CardSubject {
+  return DATA.subjects[cardId] ?? { kind: 'emblem' };
+}
 
 /** Credit line shown in-app and recorded in `ASSET_LICENSES.md`. */
 export const CARD_ART_CREDIT = {

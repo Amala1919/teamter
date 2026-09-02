@@ -135,7 +135,7 @@ const KEYWORDS = {
   alchemist: ['bubbling-flask', 'fire-flask'],
   scholar: ['book-cover', 'open-book'],
   sage: ['open-book', 'wisdom'],
-  priest: ['praying-mantis', 'prayer'],
+  priest: ['prayer', 'holy-symbol'],
   priestess: ['prayer', 'holy-symbol'],
   cleric: ['prayer', 'holy-symbol'],
   bishop: ['holy-symbol', 'prayer'],
@@ -505,6 +505,227 @@ const BY_NAME = {
   'wonderland dreams': ['pocket-watch'],
 };
 
+
+// ---------------------------------------------------------------------------
+// Icon -> drawn subject
+// ---------------------------------------------------------------------------
+
+/**
+ * The icon chosen above is a good classifier for *what a card is about*, so it
+ * doubles as the key to the drawn subject: which character archetype, creature,
+ * or — for genuinely inanimate cards — which emblem to fall back on.
+ *
+ * `c:` a character, `b:` a beast, `o:` an object (the icon is drawn as before).
+ */
+const SUBJECT = {
+  // --- characters -----------------------------------------------------------
+  'knight-banner': { c: 'knight', weapon: 'sword', headgear: 'none' },
+  swordman: { c: 'warrior', weapon: 'sword' },
+  spartan: { c: 'warrior', weapon: 'spear', headgear: 'helm' },
+  guards: { c: 'knight', weapon: 'spear', headgear: 'helm' },
+  gladius: { c: 'warrior', weapon: 'sword' },
+  broadsword: { c: 'knight', weapon: 'greatsword' },
+  'sword-brandish': { c: 'warrior', weapon: 'sword' },
+  'blade-fall': { c: 'warrior', weapon: 'greatsword' },
+  'sabers-choc': { c: 'knight', weapon: 'sword' },
+  'crossed-swords': { c: 'warrior', weapon: 'sword' },
+  'battle-gear': { c: 'knight', weapon: 'axe', headgear: 'helm' },
+  'battle-axe': { c: 'warrior', weapon: 'axe' },
+  'templar-shield': { c: 'knight', weapon: 'shield', headgear: 'helm' },
+  shield: { c: 'knight', weapon: 'shield' },
+  'shield-reflect': { c: 'knight', weapon: 'shield', headgear: 'helm' },
+  breastplate: { c: 'knight', weapon: 'sword', headgear: 'helm' },
+  'visored-helm': { c: 'knight', weapon: 'sword', headgear: 'helm' },
+  'crested-helmet': { c: 'knight', weapon: 'spear', headgear: 'helm' },
+  'horned-helm': { c: 'warrior', weapon: 'axe', headgear: 'helm' },
+  'viking-helmet': { c: 'warrior', weapon: 'axe', headgear: 'helm' },
+  'mounted-knight': { c: 'knight', weapon: 'spear', headgear: 'helm' },
+  'flying-flag': { c: 'knight', weapon: 'spear' },
+  'samurai-helmet': { c: 'samurai', weapon: 'sword', headgear: 'helm' },
+  katana: { c: 'samurai', weapon: 'sword' },
+  'ninja-head': { c: 'ninja', weapon: 'dagger', headgear: 'mask' },
+  'ninja-mask': { c: 'ninja', weapon: 'dagger', headgear: 'mask' },
+  hood: { c: 'rogue', weapon: 'dagger', headgear: 'hood' },
+  'hooded-figure': { c: 'rogue', weapon: 'dagger', headgear: 'hood' },
+  'executioner-hood': { c: 'rogue', weapon: 'axe', headgear: 'hood' },
+  robber: { c: 'rogue', weapon: 'dagger', headgear: 'bandana' },
+  'curly-mask': { c: 'rogue', weapon: 'dagger', headgear: 'mask' },
+  archer: { c: 'archer', weapon: 'bow' },
+  bowman: { c: 'archer', weapon: 'bow' },
+  'wizard-face': { c: 'mage', weapon: 'staff', headgear: 'hat' },
+  'witch-face': { c: 'mage', weapon: 'staff', headgear: 'hat' },
+  'pointy-hat': { c: 'mage', weapon: 'wand', headgear: 'hat' },
+  'wizard-staff': { c: 'mage', weapon: 'staff', headgear: 'hood' },
+  'orb-wand': { c: 'mage', weapon: 'wand' },
+  'magic-palm': { c: 'mage', weapon: 'none' },
+  'bubbling-flask': { c: 'mage', weapon: 'book', headgear: 'none' },
+  cauldron: { c: 'mage', weapon: 'book', headgear: 'hat' },
+  'evil-book': { c: 'necromancer', weapon: 'book', headgear: 'hood' },
+  'open-book': { c: 'mage', weapon: 'book' },
+  'book-cover': { c: 'mage', weapon: 'book' },
+  'crystal-ball': { c: 'mage', weapon: 'wand', headgear: 'hood' },
+  prayer: { c: 'priest', weapon: 'none', headgear: 'none' },
+  'holy-symbol': { c: 'priest', weapon: 'wand' },
+  'monk-face': { c: 'monk', weapon: 'staff' },
+  'winged-shield': { c: 'priest', weapon: 'shield', wings: 'feathered' },
+  'winged-sword': { c: 'angel', weapon: 'sword', wings: 'feathered' },
+  'angel-wings': { c: 'angel', weapon: 'none', headgear: 'halo', wings: 'feathered' },
+  'winged-emblem': { c: 'angel', weapon: 'wand', headgear: 'halo', wings: 'feathered' },
+  'elf-helmet': { c: 'elf', weapon: 'bow', headgear: 'elfEars' },
+  'elf-ear': { c: 'elf', weapon: 'dagger', headgear: 'elfEars' },
+  fairy: { c: 'fairy', weapon: 'wand', headgear: 'elfEars', wings: 'fairy' },
+  'fairy-wings': { c: 'fairy', weapon: 'none', headgear: 'elfEars', wings: 'fairy' },
+  'vampire-dracula': { c: 'vampire', weapon: 'dagger', wings: 'bat' },
+  'vampire-cape': { c: 'vampire', weapon: 'none', wings: 'bat' },
+  'grim-reaper': { c: 'necromancer', weapon: 'scythe', headgear: 'hood' },
+  'raise-zombie': { c: 'necromancer', weapon: 'staff', headgear: 'hood' },
+  'soul-vessel': { c: 'necromancer', weapon: 'wand', headgear: 'hood' },
+  'queen-crown': { c: 'noble', weapon: 'none', headgear: 'crown' },
+  crown: { c: 'noble', weapon: 'sword', headgear: 'crown' },
+  dress: { c: 'noble', weapon: 'none', headgear: 'tiara' },
+  'ballerina-shoes': { c: 'noble', weapon: 'none', headgear: 'tiara' },
+  rose: { c: 'noble', weapon: 'none', headgear: 'tiara' },
+  'pirate-captain': { c: 'pirate', weapon: 'sword', headgear: 'bandana' },
+  'captain-hat-profile': { c: 'pirate', weapon: 'sword', headgear: 'bandana' },
+  'pirate-flag': { c: 'pirate', weapon: 'sword', headgear: 'bandana' },
+  'dwarf-face': { c: 'dwarf', weapon: 'axe' },
+  giant: { c: 'giant', weapon: 'axe' },
+  ogre: { c: 'giant', weapon: 'axe' },
+  minotaur: { c: 'giant', weapon: 'axe', headgear: 'horns' },
+  centaur: { c: 'warrior', weapon: 'bow' },
+  'baby-face': { c: 'child', weapon: 'none' },
+  flute: { c: 'noble', weapon: 'none' },
+  lyre: { c: 'noble', weapon: 'none' },
+  'spear-hook': { c: 'warrior', weapon: 'spear' },
+  trident: { c: 'warrior', weapon: 'spear' },
+  mermaid: { c: 'noble', weapon: 'none', headgear: 'tiara' },
+  siren: { c: 'noble', weapon: 'none', headgear: 'tiara' },
+  'goblin-head': { b: 'imp' },
+  'medusa-head': { c: 'demon', weapon: 'bow', headgear: 'horns' },
+  'devil-mask': { c: 'demon', weapon: 'scythe', headgear: 'horns', wings: 'bat' },
+  'evil-wings': { c: 'demon', weapon: 'sword', headgear: 'horns', wings: 'bat' },
+  'horned-skull': { c: 'demon', weapon: 'scythe', headgear: 'horns' },
+  anvil: { c: 'dwarf', weapon: 'axe' },
+  'card-play': { c: 'rogue', weapon: 'dagger' },
+  'dripping-blade': { c: 'rogue', weapon: 'dagger' },
+  'thorny-vine': { c: 'elf', weapon: 'staff', headgear: 'elfEars' },
+  vines: { c: 'elf', weapon: 'staff', headgear: 'elfEars' },
+  'flamed-leaf': { c: 'elf', weapon: 'wand', headgear: 'elfEars' },
+  'leaf-swirl': { c: 'elf', weapon: 'staff', headgear: 'elfEars' },
+  'flower-pot': { c: 'elf', weapon: 'none', headgear: 'elfEars' },
+  daisy: { c: 'fairy', weapon: 'wand', headgear: 'elfEars', wings: 'fairy' },
+  acorn: { c: 'fairy', weapon: 'none', headgear: 'elfEars', wings: 'fairy' },
+  'mineral-heart': { c: 'noble', weapon: 'none', headgear: 'tiara' },
+  'gem-pendant': { c: 'noble', weapon: 'wand', headgear: 'tiara' },
+  screaming: { c: 'necromancer', weapon: 'none', headgear: 'hood' },
+  'chalice-drops': { c: 'vampire', weapon: 'none', wings: 'bat' },
+  blood: { c: 'vampire', weapon: 'dagger', wings: 'bat' },
+  'bleeding-heart': { c: 'vampire', weapon: 'none', wings: 'bat' },
+  'evil-moon': { c: 'vampire', weapon: 'none', wings: 'bat' },
+  'black-hole-bolas': { c: 'necromancer', weapon: 'staff', headgear: 'hood' },
+  'star-swirl': { c: 'mage', weapon: 'staff', headgear: 'hat' },
+  'magic-swirl': { c: 'mage', weapon: 'staff', headgear: 'hat' },
+  sparkles: { c: 'mage', weapon: 'wand', headgear: 'hat' },
+  'lightning-trio': { c: 'mage', weapon: 'staff', headgear: 'hood' },
+  'lightning-storm': { c: 'mage', weapon: 'staff', headgear: 'hood' },
+  'snowflake-2': { c: 'mage', weapon: 'staff', headgear: 'hood' },
+  'water-drop': { c: 'mage', weapon: 'wand', headgear: 'hood' },
+  'wind-slap': { c: 'mage', weapon: 'wand', headgear: 'hood' },
+  tornado: { c: 'mage', weapon: 'staff', headgear: 'hood' },
+  'explosion-rays': { c: 'mage', weapon: 'staff', headgear: 'hat' },
+  'fire-silhouette': { c: 'mage', weapon: 'staff', headgear: 'hood' },
+  flame: { c: 'mage', weapon: 'staff', headgear: 'hood' },
+  'burning-embers': { c: 'mage', weapon: 'staff', headgear: 'hood' },
+  'triple-scratches': { c: 'rogue', weapon: 'dagger' },
+  'flame-claws': { c: 'demon', weapon: 'none', headgear: 'horns' },
+  fangs: { c: 'vampire', weapon: 'none', wings: 'bat' },
+  'beast-eye': { c: 'demon', weapon: 'none', headgear: 'horns' },
+  sun: { c: 'priest', weapon: 'wand', headgear: 'halo' },
+  ankh: { c: 'priest', weapon: 'staff' },
+  church: { c: 'priest', weapon: 'none' },
+  'ringing-bell': { c: 'priest', weapon: 'none' },
+  'greek-temple': { c: 'priest', weapon: 'staff' },
+  'temple-gate': { c: 'priest', weapon: 'staff' },
+  'candle-flame': { c: 'priest', weapon: 'wand', headgear: 'hood' },
+  'scroll-unfurled': { c: 'mage', weapon: 'book' },
+  'rune-stone': { c: 'mage', weapon: 'staff', headgear: 'hood' },
+  'crystal-cluster': { c: 'mage', weapon: 'wand', headgear: 'hood' },
+  'stone-tablet': { c: 'monk', weapon: 'staff' },
+  'sands-of-time': { c: 'mage', weapon: 'staff', headgear: 'hood' },
+  'mirror-mirror': { c: 'noble', weapon: 'none', headgear: 'tiara' },
+  cannon: { c: 'pirate', weapon: 'none', headgear: 'bandana' },
+  'horse-head': { c: 'knight', weapon: 'spear', headgear: 'helm' },
+  pegasus: { c: 'angel', weapon: 'spear', wings: 'feathered' },
+  unicorn: { c: 'noble', weapon: 'spear', headgear: 'tiara' },
+  'griffin-symbol': { c: 'angel', weapon: 'spear', wings: 'feathered' },
+  lion: { c: 'warrior', weapon: 'axe' },
+  'boar-tusks': { c: 'warrior', weapon: 'axe' },
+  'tower-fall': { c: 'noble', weapon: 'none', headgear: 'tiara' },
+  'stone-block': { c: 'monk', weapon: 'staff' },
+  castle: { c: 'knight', weapon: 'spear', headgear: 'helm' },
+  desert: { c: 'rogue', weapon: 'dagger', headgear: 'hood' },
+  meal: { c: 'noble', weapon: 'none' },
+  chest: { c: 'rogue', weapon: 'dagger', headgear: 'bandana' },
+  cat: { c: 'rogue', weapon: 'dagger' },
+  'moon': { c: 'noble', weapon: 'wand', headgear: 'tiara' },
+  'dragon-orb': { c: 'knight', weapon: 'greatsword', headgear: 'horns' },
+
+  // --- beasts and things ----------------------------------------------------
+  'dragon-head': { b: 'dragon' },
+  'spiked-dragon-head': { b: 'dragon', ornate: 1 },
+  'dragon-breath': { b: 'dragon', ornate: 0.8 },
+  'dragon-spiral': { b: 'dragon', ornate: 0.9 },
+  'sea-dragon': { b: 'dragon', ornate: 0.7 },
+  wyvern: { b: 'dragon', ornate: 0.5 },
+  salamander: { b: 'dragon', ornate: 0.3 },
+  hydra: { b: 'dragon', ornate: 1 },
+  ouroboros: { b: 'serpent' },
+  'sea-serpent': { b: 'serpent' },
+  'wolf-head': { b: 'wolf' },
+  'wolf-howl': { b: 'wolf' },
+  'fox-head': { b: 'wolf' },
+  'tiger-head': { b: 'wolf' },
+  'deer-head': { b: 'wolf' },
+  'eagle-head': { b: 'bird' },
+  raven: { b: 'bird' },
+  'sperm-whale': { b: 'serpent' },
+  crab: { b: 'insect' },
+  frog: { b: 'slime' },
+  'praying-mantis': { b: 'insect' },
+  'scarab-beetle': { b: 'insect' },
+  bee: { b: 'insect' },
+  scorpion: { b: 'insect' },
+  fly: { b: 'insect' },
+  dragonfly: { b: 'insect' },
+  ghost: { b: 'ghost' },
+  spectre: { b: 'ghost' },
+  'crowned-skull': { b: 'skeleton' },
+  skeleton: { b: 'skeleton' },
+  'bone-knife': { b: 'skeleton' },
+  'mummy-head': { b: 'skeleton' },
+  'shambling-zombie': { b: 'skeleton' },
+  tombstone: { b: 'ghost' },
+  'daemon-skull': { b: 'demon' },
+  imp: { b: 'imp' },
+  'gooey-daemon': { b: 'slime' },
+  gargoyle: { b: 'demon' },
+  'rock-golem': { b: 'golem' },
+  bat: { b: 'imp' },
+  'bat-wing': { b: 'imp' },
+  'rabbit-head': { b: 'imp' },
+  'goblin-camp': { b: 'imp' },
+  troll: { b: 'imp' },
+
+  // --- objects: the icon is still the best drawing --------------------------
+  // A Forestcraft *follower* called "Treant" is a creature; the same icon on an
+  // amulet is scenery, which `subjectFor` sorts out by card type.
+  forest: { b: 'golem', ornate: 0.3 },
+  oak: { b: 'golem', ornate: 0.3 },
+  mountains: { o: 1 },
+  volcano: { o: 1 },
+  'crystal-shine': { o: 1 },
+};
+
 // ---------------------------------------------------------------------------
 // Matching
 // ---------------------------------------------------------------------------
@@ -643,12 +864,50 @@ for (const name of used) {
   };
 }
 
+/**
+ * Turns the icon choice into a drawn subject. Anything with no entry, and every
+ * spell and amulet, falls back to the icon itself — a spell is an event, not a
+ * person, and drawing a character for one would be a lie about the card.
+ */
+function subjectFor(card, icon) {
+  const s = SUBJECT[icon];
+  if (!s) return { kind: 'emblem' };
+  if (s.o) return { kind: 'emblem' };
+  if (s.b) return { kind: 'creature', creature: s.b, ornate: s.ornate ?? 0.6 };
+  const out = { kind: 'character', archetype: s.c };
+  if (s.weapon) out.weapon = s.weapon;
+  if (s.headgear) out.headgear = s.headgear;
+  if (s.wings) out.wings = s.wings;
+  if (s.small) out.small = true;
+  // Only followers are people. A spell showing a wizard is showing the caster,
+  // which is not what the card is.
+  if (card.type !== 'follower') return { kind: 'emblem' };
+  return out;
+}
+
+const subjects = {};
+let charCount = 0;
+let beastCount = 0;
+for (const card of cards) {
+  const sub = subjectFor(card, map[card.id]);
+  subjects[card.id] = sub;
+  if (sub.kind === 'character') charCount++;
+  else if (sub.kind === 'creature') beastCount++;
+}
+// The class banners and leader plates are always characters.
+for (const cls of ['forest', 'sword', 'rune', 'dragon', 'shadow', 'blood', 'haven', 'neutral']) {
+  const s = SUBJECT[BANNERS[`leader_${cls}`]];
+  subjects[`leader_${cls}`] = s && s.c ? { kind: 'character', archetype: s.c, weapon: s.weapon, headgear: s.headgear, wings: s.wings } : { kind: 'emblem' };
+  subjects[`banner_${cls}`] = { kind: 'emblem' };
+}
+
 const out = {
   source: 'Game Icons (game-icons.net) via @iconify-json/game-icons',
   license: 'CC BY 3.0',
   author: 'Game-icons.net contributors',
   url: 'https://game-icons.net/',
   map,
+  subjects,
   icons,
 };
 
@@ -663,6 +922,9 @@ console.log(`  by trait     ${stats.trait}`);
 console.log(`  by pool      ${stats.pool}`);
 console.log(`  by default   ${stats.default}`);
 console.log(`distinct icons ${used.size}`);
+console.log(`characters     ${charCount}`);
+console.log(`creatures      ${beastCount}`);
+console.log(`emblems        ${cards.length - charCount - beastCount}`);
 console.log(`bytes          ${(JSON.stringify(out).length / 1024).toFixed(0)} kB`);
 if (missing.size > 0) {
   console.log(`\n${missing.size} icon names in the tables do not exist:`);

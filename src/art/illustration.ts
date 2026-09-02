@@ -18,7 +18,17 @@
  */
 import type { CardDef, ClassId } from '../engine/types';
 import { CLASS_THEME, RARITY_THEME } from './theme';
-import { fillSubject, subjectFor, type Subject } from './cardart';
+import { fillSubject, subjectFor, subjectKindFor, type Subject } from './cardart';
+import {
+  drawPortrait,
+  rollPortrait,
+  type Archetype,
+  type CharacterSpec,
+  type Headgear,
+  type Weapon,
+  type Wings,
+} from './portrait';
+import { drawCreature, rollCreature, type CreatureKind, type CreatureSpec } from './creature';
 
 // ---------------------------------------------------------------------------
 // Seeded randomness
@@ -697,7 +707,39 @@ export function drawIllustration(
 
   glow(s, cx, cy, r * 2.4, s.key, 0.4);
 
-  if (framing === 'arcane') {
+  const subject = subjectKindFor(card.id);
+  const lightAngle = Math.atan2(ly - cy, lx - cx);
+
+  if (subject.kind !== 'emblem') {
+    // Framing varies per card so a row of them is not a row of passport photos.
+    const shot = rng.pick(['close', 'bust', 'bust', 'wide'] as const);
+    const beast = subject.kind === 'creature';
+    const unit =
+      h * (shot === 'close' ? 0.2 : shot === 'bust' ? 0.172 : 0.15) * (beast ? 0.82 : 1);
+    const px = w * (shot === 'wide' ? rng.range(0.4, 0.6) : rng.around(0.5, 0.03));
+    const py = h * (shot === 'close' ? 0.36 : shot === 'bust' ? 0.32 : 0.3);
+
+    // A glow behind the figure separates it from the scene. Card art almost
+    // always has one; without it a dark character sits in a dark background.
+    glow(s, px, py + unit * 0.6, unit * 3.4, s.accent, 0.5);
+    glow(s, px, py, unit * 1.6, '#FFFFFF', 0.22);
+
+    if (subject.kind === 'character') {
+      const spec: CharacterSpec = {
+        archetype: subject.archetype as Archetype,
+        weapon: subject.weapon as Weapon | undefined,
+        headgear: subject.headgear as Headgear | undefined,
+        wings: subject.wings as Wings | undefined,
+        dark: card.cardClass === 'shadow' || card.cardClass === 'blood',
+      };
+      const portrait = rollPortrait(rng, spec, card.cardClass, card.cost);
+      drawPortrait(ctx, portrait, rng, { cx: px, cy: py, unit }, lightAngle);
+    } else {
+      const cspec: CreatureSpec = { kind: subject.creature as CreatureKind, ornate: subject.ornate };
+      const beastArt = rollCreature(rng, cspec, s.accent);
+      drawCreature(ctx, beastArt, rng, { cx: px, cy: py, unit }, lightAngle);
+    }
+  } else if (framing === 'arcane') {
     drawArcaneSigil(s, cx, cy, r, card, evolved);
   } else {
     const fig = rollFigure(rng, card);
