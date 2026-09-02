@@ -61,7 +61,19 @@ function metal(ctx: CanvasRenderingContext2D, w: number, h: number, light: strin
 }
 
 /** Compact icons for the keywords that change how a follower can be attacked. */
-const ICON_KEYWORDS: Keyword[] = ['ward', 'storm', 'rush', 'bane', 'drain', 'ambush', 'cantAttack'];
+// Ordered by how much they change what the player may do this turn: a
+// follower that cannot be hurt matters as much as one that cannot be bypassed.
+const ICON_KEYWORDS: Keyword[] = [
+  'ward',
+  'damageImmune',
+  'storm',
+  'rush',
+  'bane',
+  'drain',
+  'ambush',
+  'barrier',
+  'cantAttack',
+];
 
 function drawKeywordIcon(ctx: CanvasRenderingContext2D, kw: Keyword, cx: number, cy: number, r: number): void {
   ctx.save();
@@ -75,6 +87,8 @@ function drawKeywordIcon(ctx: CanvasRenderingContext2D, kw: Keyword, cx: number,
     drain: '#FF6B7A',
     ambush: '#9AA6B8',
     cantAttack: '#7A8298',
+    damageImmune: '#FFF0B8',
+    barrier: '#B8E6FF',
   };
   const color = colors[kw] ?? UI.gold;
 
@@ -149,6 +163,20 @@ function drawKeywordIcon(ctx: CanvasRenderingContext2D, kw: Keyword, cx: number,
       ctx.beginPath();
       ctx.arc(0, 0, r * 0.45, 0.35 * Math.PI, 1.65 * Math.PI);
       ctx.stroke();
+      break;
+    case 'damageImmune':
+    case 'barrier':
+      // A shield outline with a ring inside it — protection, not a wall.
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.42, -r * 0.4);
+      ctx.lineTo(r * 0.42, -r * 0.4);
+      ctx.quadraticCurveTo(r * 0.45, r * 0.2, 0, r * 0.56);
+      ctx.quadraticCurveTo(-r * 0.45, r * 0.2, -r * 0.42, -r * 0.4);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, r * 0.02, r * 0.15, 0, Math.PI * 2);
+      ctx.fill();
       break;
     default:
       ctx.beginPath();

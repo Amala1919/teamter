@@ -183,6 +183,11 @@ between the rules and the screen, which nothing else does.
 It selects on `data-act` and `data-key` attributes rather than on text, so it
 keeps working when the copy or the interface language changes.
 
+**Do not edit `src/` while it runs.** It drives the dev server, and a save
+triggers a hot reload that unmounts the screen mid-test — which looks exactly
+like the battle screen vanishing. If a step fails with "back at menu", check
+that first.
+
 ## What is not covered yet
 
 - No unit tests for the renderer, HUD or audio. `tools/smoke.mjs` exercises
