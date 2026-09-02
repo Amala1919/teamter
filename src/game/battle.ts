@@ -322,6 +322,10 @@ export class Battle {
     this.leaders[this.human].setShadows(me.shadows);
     this.leaders[other(this.human)].setDefense(foe.defense, foe.maxDefense);
     this.leaders[other(this.human)].setShadows(foe.shadows);
+    // The active leader stands forward, so whose turn it is reads off the board
+    // itself rather than only off the HUD.
+    this.leaders[0].setActive(g.state.winner === null && g.state.active === 0);
+    this.leaders[1].setActive(g.state.winner === null && g.state.active === 1);
   }
 
   // -------------------------------------------------------------------------
@@ -1040,6 +1044,8 @@ export class Battle {
     for (const obj of this.cards.values()) obj.dispose();
     this.cards.clear();
     this.inspector.root.remove();
+    this.leaders[0].dispose();
+    this.leaders[1].dispose();
     this.hud.dispose();
     this.effects.dispose();
     this.stage.dispose();

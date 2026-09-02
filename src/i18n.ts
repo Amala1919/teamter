@@ -86,7 +86,7 @@ const STRINGS = {
     'テキストがまだ完全に実装されていないカードを隠します',
     'Hide cards whose printed text is not fully implemented yet',
   ],
-  'filter.search': ['カード名で検索', 'Search by name'],
+  'filter.search': ['カード名・テキストで検索…', 'Search name or text…'],
   'grid.noMatch': ['条件に合うカードがありません。', 'No cards match these filters.'],
   'grid.partial': ['一部未実装', 'Partial'],
 

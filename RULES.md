@@ -131,6 +131,16 @@ board.
 - Leader defense reaches 0 or less → that player loses.
 - A draw attempted from an empty deck → that player loses immediately.
 - Both leaders dying at once → draw.
+- A card that says so ends the match outright — Seraph Lapis, Glory Be's
+  "Last Words: Win the match" is the only one in this card pool.
+
+### Damage ceilings
+
+A few cards cap a *single instance* of damage rather than reducing it: "Can't
+take more than 3 damage at a time". That is not the same as a flat reduction —
+at 9 incoming damage a cap of 3 takes 3 and a reduction of 3 takes 6 — and the
+engine models them separately (`damageCap` and `damageReduce`). A ceiling can
+apply to a follower, to the leader, or to both.
 
 ## Known divergences
 
@@ -140,4 +150,4 @@ board.
 | Mulligan shuffle order | See **[R-10]** above — genuinely ambiguous in the sources. |
 | Buff expiry vs end-of-turn triggers | Triggers resolve first, then buffs expire (**[R-207]/⚠️**, unverified in the sources). |
 | Card text is modern wording | The card database mirrors the official Portal API as it stands today, so a small number of cards carry post-era rebalances and retroactively renamed keywords (`Overflow` for "if you have at least 7 play points", `Earth Rite` for "destroy an Earth Sigil"). Semantics are unchanged. |
-| 337 of 888 cards partly implemented | Their unparsed lines are listed by `npm run cards:report -- --lines`; they carry `implemented: false` and are excluded from generated decks. |
+| 185 of 888 cards partly implemented | Their unparsed lines are listed by `npm run cards:report -- --lines`; they carry `implemented: false` and are excluded from generated decks. |

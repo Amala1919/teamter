@@ -35,7 +35,9 @@ const step = async (label, fn) => {
 };
 
 console.log('menu → deck builder → collection');
-await page.goto(BASE, { waitUntil: 'networkidle' });
+// A pinned seed makes the battle reproducible, so a failure here can be
+// replayed by opening the same URL.
+await page.goto(`${BASE}/?seed=20260902`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(900);
 
 await step('menu renders decks', async () => {
@@ -104,6 +106,13 @@ await step('drag the leftmost hand card onto the board', async () => {
 await step('play several turns', async () => {
   for (let i = 0; i < 6; i++) {
     const btn = page.locator('.hud-endturn:not(.hud-exit)');
+    if ((await btn.count()) === 0) {
+      // The battle screen is gone. Say what replaced it rather than timing out
+      // on a locator and leaving no trace of why.
+      const over = await page.locator('.hud-result.show').count();
+      const menu = await page.locator('[data-act="battle"]').count();
+      throw new Error(`no End Turn button after ${i} turns (result shown: ${over}, back at menu: ${menu})`);
+    }
     if (await btn.isDisabled()) {
       await page.waitForTimeout(1200);
       continue;

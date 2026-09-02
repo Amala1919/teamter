@@ -191,7 +191,7 @@ export function buildFilterBar(
 
   const search = el('input', {
     class: 'sv-input',
-    placeholder: 'Search name or text…',
+    placeholder: t('filter.search'),
     value: state.text,
     style: 'width:200px;',
   }) as HTMLInputElement;

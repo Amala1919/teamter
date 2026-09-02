@@ -8,15 +8,16 @@ verify, it is in the wrong place.
 
 | Command | What it covers |
 |---|---|
-| `npm test` | Rules unit tests (`tests/rules.test.ts`) |
+| `npm test` | Every unit test: rules, events, the compiler, the card pool and the generated assets |
 | `npm run sim -- 300 99` | 300 AI-vs-AI matches over the real card pool, seeded |
 | `npm run cards:report -- --lines` | Card-text compiler coverage and the unparsed remainder |
 | `npm run typecheck` | `tsc --noEmit` over `src/`, `tests/` and the Vite config |
 | `node tools/shoot.mjs <path> <out.png>` | Screenshot for visual review (dev server must be running) |
+| `node tools/smoke.mjs` | End-to-end browser test through the real UI (dev server must be running) |
 
 ## Unit tests
 
-`tests/rules.test.ts` — 54 tests over the engine. They run against a small
+`tests/rules.test.ts` — 57 tests over the engine. They run against a small
 hand-written card set in `tests/helpers.ts` rather than the real card pool, so
 a rules test never breaks because a card was rebalanced upstream.
 
@@ -43,7 +44,8 @@ Covered:
   and removal, Countdown ticking and breaking, permanent vs until-end-of-turn
   buffs, transform discarding all modifiers, draws, leader targeting.
 - **Win conditions** — lethal, simultaneous death as a draw, deck-out as an
-  immediate loss, no actions after the game ends.
+  immediate loss, no actions after the game ends, the `win` effect ending a
+  match outright, and single-instance damage ceilings on followers and leaders.
 
 ### Adding a test
 
@@ -59,6 +61,46 @@ g.playCard(card, [uid]);                // targets are supplied as uids
 
 `place()` marks the entity as having entered on turn -1, so it can attack
 immediately — pass through `playCard` instead when summoning sickness matters.
+
+### Event-order tests
+
+`tests/events.test.ts` asserts the *order* of the emitted `GameEvent` stream,
+which no other test can see. The renderer animates events in the order it
+receives them, so a reordering — a death announced before the damage that
+caused it, a Fanfare before the card is on the board — passes every
+state-based test and still produces a battle that plays backwards on screen.
+
+Covered: a card is on the board before its Fanfare runs; a spell is announced
+before its damage; combat reports attack, then damage, then death; both sides'
+combat damage lands before either death is announced, so a trade reads as a
+clash rather than a corpse hitting back; Last Words runs after the destruction
+that caused it; a turn ends, then the next begins, then it draws; the stream is
+a queue that hands each event out exactly once; and nothing but log lines
+follows `gameOver`.
+
+### Compiler tests
+
+`tests/compile.test.ts` asserts the *shape* the compiler produces, not just
+whether a card ends up marked implemented. Two failure modes motivated it, both
+of which leave a card looking finished:
+
+- a conditional "instead" clause that loses its condition, so the card always
+  takes the upgraded branch;
+- a stat read like "X equals that follower's defense" that is not bound to the
+  entity it names, so it silently reads zero.
+
+It also plays every card whose text those features unlocked, on a board with
+followers on both sides, and checks the state stays consistent.
+
+### Generated-asset tests
+
+`tests/assets.test.ts` covers the two build outputs nothing else validates: the
+card-to-icon map (`cardart.json`) and the interface strings (`src/i18n.ts`).
+Neither fails loudly at runtime — a card with no subject renders a blank
+silhouette, and a missing string renders its own key — so the test checks that
+every card has a subject, every shipped icon is actually referenced, the
+licence and attribution fields are present, and every string exists in both
+languages.
 
 ### Card tests
 
@@ -100,11 +142,11 @@ the seed for match `i` is `baseSeed + i * 7919`.
 ```
 $ npm run cards:report
 cards            888
-fully compiled   514
+fully compiled   590
 vanilla          74
 hand-written     36
-incomplete       264
-coverage         70.3%
+incomplete       185
+coverage         79.2%
 ```
 
 "Incomplete" cards have at least one printed line the compiler did not
@@ -128,12 +170,23 @@ node tools/shoot.mjs "/?demo=13&me=dragon&foe=forest" screenshots/battle.png 160
 
 `gallery.html` accepts `?ids=`, `?class=`, `?n=`, `?scale=`, `?evolved=1`,
 `?premium=1` and `?lang=ja`. The battle entry accepts `?me=`, `?foe=`, `?seed=`
-and `?demo=<turn>` to fast-forward both sides with the AI.
+and `?demo=<turn>` to fast-forward both sides with the AI. Append `?lang=en` to
+any URL to review the English layout, which is roughly twice as wide.
+
+## The end-to-end test
+
+`tools/smoke.mjs` drives the real interface with real pointer events — menu,
+collection, filters, card detail, mulligan, dragging a card from hand onto the
+board, ending turns — and fails on any console error. It covers the wiring
+between the rules and the screen, which nothing else does.
+
+It selects on `data-act` and `data-key` attributes rather than on text, so it
+keeps working when the copy or the interface language changes.
 
 ## What is not covered yet
 
-- No tests for the renderer, HUD or audio.
-- No test asserts the *order* of the emitted `GameEvent` stream, only its
-  effect on state.
-- The 337 partly-implemented cards are covered only by the soak test not
-  crashing on them.
+- No unit tests for the renderer, HUD or audio. `tools/smoke.mjs` exercises
+  them end to end, but only asserts that nothing throws.
+- No automated visual assertion — no screenshot diffing, no reference images.
+- The 185 partly-implemented cards are covered only by the soak test not
+  crashing on them, and by the fact that they declare what they do not do.

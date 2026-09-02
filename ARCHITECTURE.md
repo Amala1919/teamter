@@ -24,6 +24,7 @@ flows one way back up.
 | Layer | Path | Knows about |
 |---|---|---|
 | Card data | `src/data/generated/cards.json` | nothing — plain records |
+| Illustration subjects | `src/data/generated/cardart.json` | nothing — an id-to-icon map plus path data |
 | Compiler | `src/data/compile.ts` | the effect DSL |
 | Registry | `src/engine/registry.ts` | `CardDef` |
 | Rules engine | `src/engine/game.ts` | cards, state, its own event stream |
@@ -33,6 +34,7 @@ flows one way back up.
 | Art | `src/art/*` | canvas 2D; no engine state |
 | HUD | `src/ui/*` | DOM; plain values passed in |
 | Audio | `src/audio/*` | Web Audio; cue names only |
+| Interface language | `src/i18n.ts` | nothing — a string table and the card record's own fields |
 
 ### The one-way rule
 
@@ -88,6 +90,19 @@ Text in a WebGL canvas is either blurry or expensive. Everything with a number
 or a label on it (play points, evolution points, End Turn, the log, results)
 is DOM layered over the canvas; everything spatial is Three.js.
 
+### One language switch, no language plumbing
+
+`src/i18n.ts` reads the language once from the URL and exposes `t(key)` plus
+four card accessors (`cardName`, `cardText`, `cardEvoText`, `cardFlavor`).
+Nothing threads a locale through its call chain, and no component takes a
+language parameter it then has to pass on. The card renderer is the one
+exception: `drawCardFace` accepts an explicit `lang` so the gallery tool can
+render both languages side by side, and defaults to the app's.
+
+The card database carries both languages already, so a card's name and rules
+text are never translated by this project — they are read from the field the
+current language names.
+
 ### Deterministic randomness
 
 Every random decision goes through `Rng` (`src/engine/rng.ts`), seeded per
@@ -106,6 +121,15 @@ match. A seed reproduces a match exactly, which is what makes the soak test in
 | `npm run typecheck` | `tsc --noEmit` |
 | `node tools/shoot.mjs <path> <out.png>` | Screenshot a page for visual review |
 
+| `node tools/build-cardart.mjs` | Regenerates the card-to-icon map in `src/data/generated/cardart.json` |
+| `node tools/smoke.mjs` | End-to-end browser test against a running dev server |
+
 `gallery.html` renders a grid of card faces without booting the game; the main
-entry accepts `?me=`, `?foe=`, `?seed=` and `?demo=<turn>` for reaching a
-specific board state.
+entry accepts `?me=`, `?foe=`, `?seed=`, `?lang=en` and `?demo=<turn>` for
+reaching a specific board state.
+
+### Test hooks in the interface
+
+The end-to-end test drives the real UI, so it needs handles that do not move
+when the copy or the language does. Buttons carry `data-act` and filter chips
+carry `data-key`; `tools/smoke.mjs` selects on those and never on text.

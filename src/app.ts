@@ -99,7 +99,10 @@ export class App {
     host.style.cssText = 'position:absolute;inset:0;';
     this.container.append(host);
 
-    const seed = (Math.random() * 0xffffffff) >>> 0;
+    // A seed in the URL makes a match reproducible, which the end-to-end test
+    // relies on: a failure it cannot reproduce is not a failure it can fix.
+    const pinned = new URLSearchParams(location.search).get('seed');
+    const seed = pinned !== null ? Number(pinned) >>> 0 : (Math.random() * 0xffffffff) >>> 0;
     this.battle = new Battle({
       container: host,
       decks: [toDeckList(deck), buildStarterDeck(opponentClass, seed)],

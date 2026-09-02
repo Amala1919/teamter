@@ -16,6 +16,8 @@ the engine interprets; there is no per-card branch anywhere in
                               src/data/overrides.ts ───┤  (hand-written cards)
                                                        ▼
                                                   CardDef[]  ─► registry
+
+tools/build-cardart.mjs ─► src/data/generated/cardart.json  (illustration subjects)
 ```
 
 `.cache/*.json` are mirrors of the official Shadowverse Portal card API. See
@@ -47,6 +49,8 @@ npm run cards:build
   "textJa": "…",
   "evoText": "",                 // only what the evolved side adds
   "flavor": "…",
+  "flavorJa": "…",
+  "evoTextJa": "…",
   "artSeed": 2748193042,         // deterministic seed for the generated art
   "token": false,
   "creates": ["knight"]          // cards this one can put into play or hand
@@ -55,6 +59,37 @@ npm run cards:build
 
 Tokens are pulled in transitively: anything an in-scope card can create is
 present even when the token itself is filed under the "Token" expansion.
+
+Every text field is carried in both languages. Nothing in this project
+translates card text: the interface reads whichever field the current language
+names (see `src/i18n.ts`).
+
+## The illustration subject map
+
+`src/data/generated/cardart.json` maps every card id to one Game Icons name,
+and carries the SVG path data for only the icons actually referenced:
+
+```jsonc
+{
+  "source": "Game Icons (game-icons.net) via @iconify-json/game-icons",
+  "license": "CC BY 3.0",
+  "author": "Game-icons.net contributors",
+  "url": "https://game-icons.net/",
+  "map": { "dread_dragon": "spiked-dragon-head", "banner_forest": "elf-helmet" },
+  "icons": { "spiked-dragon-head": { "d": ["M256 …"], "w": 512, "h": 512 } }
+}
+```
+
+`tools/build-cardart.mjs` chooses each subject in four passes, most specific
+first: a proper-noun table (Athena, Bahamut, Cinderella), a hand-authored
+noun table matched on whole words longest-first ("dragon knight" beats
+"dragon"), the card's tribe, then a curated pool for its class and card type.
+The choice is deterministic — a card's subject never changes between runs — and
+the script reports any icon name in the tables that does not exist upstream.
+
+The map also covers the non-card art the interface paints through the same
+generator: `banner_<class>` for the home screen and `leader_<class>` for the
+battle portraits.
 
 ## The compiled `CardDef`
 
@@ -83,7 +118,11 @@ All defined in `src/engine/types.ts`.
 `toHand`, `searchToHand`, `toDeck`, `gainPP`, `gainMaxPP`, `gainEP`,
 `gainShadows`, `spendShadows`, `costMod`, `evolveTarget`, `countdown`,
 `spellboost`, `earthRite`, `necromancy`, `if`, `repeat`, `chooseOne`, `store`,
-`noop`.
+`withTarget`, `freeze`, `untilFull`, `win`, `noop`.
+
+`withTarget` binds one entity for the effects inside it, which is how "X equals
+that follower's defense" can still be read after the follower has been
+destroyed. `win` ends the match outright, for Seraph.
 
 **Selectors** describe *what* an effect acts on:
 
@@ -99,7 +138,9 @@ All defined in `src/engine/types.ts`.
 
 **Amounts** can be dynamic: `{ k: 'count', of: Selector }`, `{ k: 'shadows' }`,
 `{ k: 'spellboost' }`, `{ k: 'handSize' }`, `{ k: 'cardsPlayed' }`,
-`{ k: 'sum' | 'mul' | 'min' | 'max' }`, …
+`{ k: 'pp' }`, `{ k: 'sum' | 'mul' | 'min' | 'max' }`, and
+`{ k: 'statOf', of: Selector, stat: 'atk' | 'def' | 'cost', pick: 'max' | 'min' | 'sum' }`
+for "the attack of the strongest enemy follower in play".
 
 **Conditions**: `vengeance`, `overflow`, `resonance`, `hasEarthSigil`,
 `hasShadows`, `cardsPlayed`, `opponentTurn`, `exists`, `atLeast`, `isEvolved`,
@@ -124,7 +165,38 @@ Modifier lines patch the line above them: `Spellboost: Deal 1 more.` rewrites
 the preceding damage amount to `base + 1 × spellboost`; `Necromancy (2): Deal 5
 damage instead.` wraps it in a conditional.
 
-Current coverage: **62% of 888 cards** compile with no unparsed line. Check it
+### "Instead"
+
+An "instead" clause varies the line before it, and comes in three shapes:
+
+1. **A new number.** "Deal 6 damage instead" rewrites the first damage amount
+   in the preceding effects and leaves everything else alone.
+2. **A new verb on the same target.** "Banish it instead" — the pronoun
+   resolves to the replaced effect's own target *selector*, not to text, so it
+   banishes exactly what the transform would have transformed.
+3. **A different effect entirely.** "Destroy an enemy follower or amulet
+   instead" is compiled as a whole sentence and replaces the base outright.
+
+A conditional instead keeps both branches: the original becomes the `else`.
+A bare `<clause> instead.` line varies the line above it, but only when it is a
+single sentence with no keyword prefix — otherwise "Necromancy (6): Deal 3
+damage instead." would lose its shadow cost.
+
+### Pronouns and "that follower"
+
+Card text refers back constantly, and each reference resolves differently:
+
+| Text | Resolves to |
+|---|---|
+| "it" in an instead clause | the replaced effect's target selector |
+| "it" after a trigger | `scope: 'other'` — the entity the trigger is about |
+| "that follower" after "If another allied follower is in play" | the condition's selector, as a target the player picks |
+| "that follower's defense" in an X binding | an entity bound by `withTarget`, so the stat survives the follower being destroyed |
+
+The third one matters: compiling it to `scope: 'other'` would have produced a
+Fanfare that destroys nothing while looking perfectly implemented.
+
+Current coverage: **79% of 888 cards** compile with no unparsed line. Check it
 with `npm run cards:report -- --lines`.
 
 ## Adding a card by hand

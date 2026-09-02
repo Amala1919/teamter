@@ -54,6 +54,14 @@ export class LeaderObject {
   private readonly material: THREE.MeshStandardMaterial;
   private readonly ring: THREE.Mesh;
   private readonly ringMaterial: THREE.MeshBasicMaterial;
+  /**
+   * The portrait lives inside its own group so animation can move it without
+   * fighting the battle screen, which owns `group`'s placement.
+   */
+  private readonly body = new THREE.Group();
+  private readonly halo: THREE.Mesh;
+  private readonly haloMaterial: THREE.MeshBasicMaterial;
+  private readonly height: number;
 
   private defense = 20;
   private maxDefense = 20;
@@ -62,9 +70,20 @@ export class LeaderObject {
   private readonly artCanvas: HTMLCanvasElement;
   /** Non-zero while the portrait is flashing from damage. */
   private flash = 0;
+  /** Recoil from a hit: decays to zero, driving a knock-back and a tilt. */
+  private recoil = 0;
+  /** Lift from being healed: decays to zero, driving a rise and a green glow. */
+  private uplift = 0;
+  /** Whether it is this leader's turn, which brings the portrait forward. */
+  private active = false;
+  /** Runs from 0 to 1 once the leader is defeated, sinking the portrait. */
+  private defeat = 0;
+  /** Phase offset so two leaders never breathe in lockstep. */
+  private readonly phase: number;
 
   constructor(cls: ClassId, seed: number, width = 2.35) {
     this.cls = cls;
+    this.phase = (seed % 1000) / 159;
 
     // The illustration is painted once and reused; only the plate on top of it
     // is repainted when defense changes.
@@ -97,8 +116,25 @@ export class LeaderObject {
     });
 
     const h = width * (PORTRAIT_H / PORTRAIT_W);
+    this.height = h;
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, h), this.material);
     mesh.castShadow = true;
+    this.body.add(mesh);
+
+    // A soft halo behind the portrait: brighter while it is this leader's turn,
+    // flaring on a hit or a heal. It is a radial gradient rather than a disc —
+    // a flat circle behind a portrait reads as a sticker, not as light.
+    this.haloMaterial = new THREE.MeshBasicMaterial({
+      map: haloTexture(),
+      color: CLASS_THEME[cls].primary,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.halo = new THREE.Mesh(new THREE.PlaneGeometry(width * 1.9, h * 1.5), this.haloMaterial);
+    this.halo.position.z = -0.05;
+    this.body.add(this.halo);
 
     // A ground ring under the plinth ties the leader to the floor.
     this.ringMaterial = new THREE.MeshBasicMaterial({
@@ -112,15 +148,27 @@ export class LeaderObject {
     this.ring.rotation.x = -Math.PI / 2;
     this.ring.position.y = -h / 2 + 0.02;
 
-    this.group.add(mesh, this.ring);
+    this.group.add(this.body, this.ring);
     this.redraw();
   }
 
   setDefense(defense: number, maxDefense: number): void {
-    if (defense < this.defense) this.flash = 1;
+    if (defense < this.defense) {
+      this.flash = 1;
+      // A bigger hit knocks the leader back further, up to a full recoil.
+      this.recoil = Math.min(1, 0.45 + (this.defense - defense) / 12);
+    } else if (defense > this.defense) {
+      this.uplift = 1;
+    }
     this.defense = defense;
     this.maxDefense = maxDefense;
+    if (defense <= 0 && this.defeat === 0) this.defeat = 0.0001;
     this.redraw();
+  }
+
+  /** Brings the portrait forward while it is this leader's turn. */
+  setActive(on: boolean): void {
+    this.active = on;
   }
 
   setShadows(n: number): void {
@@ -245,8 +293,78 @@ export class LeaderObject {
   update(dt: number, t: number): void {
     if (this.flash > 0) {
       this.flash = Math.max(0, this.flash - dt * 2.6);
-      this.material.emissiveIntensity = 0.5 + this.flash * 1.6;
     }
-    this.ring.scale.setScalar(1 + Math.sin(t * 1.8) * 0.03);
+    if (this.recoil > 0) this.recoil = Math.max(0, this.recoil - dt * 2.2);
+    if (this.uplift > 0) this.uplift = Math.max(0, this.uplift - dt * 1.6);
+    if (this.defeat > 0) this.defeat = Math.min(1, this.defeat + dt * 1.1);
+
+    // Idle: a slow breath, and a sway a third as fast so the two never line up
+    // into an obvious loop.
+    const breath = Math.sin(t * 1.15 + this.phase) * 0.5 + 0.5;
+    const sway = Math.sin(t * 0.41 + this.phase * 1.7);
+
+    // Recoil is a sharp knock that eases back, not a linear slide.
+    const knock = this.recoil * this.recoil;
+    const fallen = this.defeat > 0 ? easeOut(this.defeat) : 0;
+
+    this.body.position.y = breath * 0.035 + this.uplift * 0.09 - fallen * this.height * 0.28;
+    this.body.position.z = knock * 0.34;
+    this.body.rotation.z = sway * 0.012 - knock * 0.09 + fallen * 0.5;
+    this.body.rotation.x = -knock * 0.12;
+    this.body.scale.setScalar(1 - knock * 0.05 + this.uplift * 0.03);
+
+    // Emissive carries three things at once: the base level, the damage flash,
+    // and the lift from a heal.
+    this.material.emissiveIntensity = 0.5 + this.flash * 1.6 + this.uplift * 0.5;
+    this.material.opacity = 1 - fallen * 0.45;
+
+    // The halo marks whose turn it is, and flares on a hit or a heal.
+    const activeGlow = this.active ? 0.2 + breath * 0.08 : 0.05;
+    this.haloMaterial.opacity = Math.min(0.75, activeGlow + this.flash * 0.35 + this.uplift * 0.25);
+    this.haloMaterial.color.set(
+      this.flash > 0.05 ? UI.damage : this.uplift > 0.05 ? UI.heal : CLASS_THEME[this.cls].primary,
+    );
+    this.halo.scale.setScalar(1 + breath * 0.05 + knock * 0.14 + this.uplift * 0.1);
+
+    this.ring.scale.setScalar(1 + Math.sin(t * 1.8) * 0.03 + (this.active ? 0.06 : 0));
+    this.ringMaterial.opacity = Math.max(this.ringMaterial.opacity, this.active ? 0.55 : 0.4);
   }
+
+  dispose(): void {
+    this.material.dispose();
+    this.ringMaterial.dispose();
+    this.haloMaterial.dispose();
+    this.texture.dispose();
+  }
+}
+
+/**
+ * A soft radial falloff, shared by every leader. Built once: the halo is the
+ * same shape for all of them, only the colour differs.
+ */
+let haloTex: THREE.CanvasTexture | null = null;
+function haloTexture(): THREE.CanvasTexture {
+  if (haloTex) return haloTex;
+  const size = 256;
+  const c = document.createElement('canvas');
+  c.width = size;
+  c.height = size;
+  const ctx = c.getContext('2d');
+  if (ctx) {
+    const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.35, 'rgba(255,255,255,0.42)');
+    g.addColorStop(0.7, 'rgba(255,255,255,0.09)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, size, size);
+  }
+  haloTex = new THREE.CanvasTexture(c);
+  return haloTex;
+}
+
+/** Quadratic ease-out, for a movement that arrives rather than stops. */
+function easeOut(t: number): number {
+  const c = Math.min(1, Math.max(0, t));
+  return 1 - (1 - c) * (1 - c);
 }

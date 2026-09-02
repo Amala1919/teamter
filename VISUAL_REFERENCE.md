@@ -87,6 +87,34 @@ and ability keywords are set in gold to keep a dense card scannable at board
 size. A vanilla card shows its flavour line instead, elided with an ellipsis
 rather than cut mid-sentence.
 
+### Card illustrations
+
+The art window holds a subject in a generated scene. The **subject** is a
+hand-drawn shape from the Game Icons collection (CC BY 3.0 — see
+`ASSET_LICENSES.md`), matched to the card by name in
+`tools/build-cardart.mjs`; official Shadowverse illustrations are unreachable
+from this environment, so a real drawing beats a shape assembled from ellipses.
+
+Everything around it is generated per card, seeded from `artSeed`, so two cards
+sharing an icon never look alike:
+
+| Layer | What it does |
+|---|---|
+| Sky | Vertical gradient from a per-class palette, hue-jittered |
+| Key light | A warm bloom and a few god rays, placed randomly in the upper third |
+| Ridges | Two to four receding silhouettes, roughness by class |
+| Architecture | Pillars, arches, spires, trees, standing stones or banners |
+| Contact shadow | A blurred ellipse under the subject, tying it to the ground |
+| Subject | The icon, filled near-black, mirrored and tilted a few degrees |
+| Interior modelling | A vertical falloff plus a bounce from the key light, clipped to the silhouette |
+| Rim light | The silhouette drawn offset toward the light with the original punched out — a crescent, not an outline |
+| Foreground | One dark ridge across the bottom for depth |
+| Atmosphere | Motes, scumbling, vignette, grain |
+
+The subject is scaled to the framing (portrait, close, vista or arcane) and
+then **clamped into the visible part of the panel**: the name band covers the
+bottom, so nothing may hang below 0.76 of the art window's height.
+
 ### Card names
 
 `src/art/cardname.ts` is deliberately a standalone system, because official
@@ -169,10 +197,42 @@ ticks, a woody card thud, filtered noise for impacts, a harmonic stack with a
 delayed upper voice for evolution, and an ambient bed of a low drone with
 sparse pentatonic bells under everything.
 
+## Leaders
+
+The portrait sits in its own group inside the leader object, so animation moves
+it without fighting the battle screen, which owns the placement.
+
+| State | What it does |
+|---|---|
+| Idle | A slow breath (1.15 Hz) and a sway at a third that rate, phase-offset per leader so the two never lock into a visible loop |
+| Active turn | The halo brightens and the ground ring widens, so whose turn it is reads off the board and not only off the HUD |
+| Damaged | A recoil scaled to the size of the hit — knocked back, tilted, briefly smaller — easing back rather than sliding |
+| Healed | A short rise, a green halo, a lift in emissive |
+| Defeated | The portrait sinks, tilts and fades to 55% |
+
+The halo is a radial gradient, not a disc. A flat circle behind a portrait
+reads as a sticker; light has a falloff.
+
+## Interface language
+
+Japanese by default, matching the card database, with `?lang=en` for English.
+Card names, rules text, evolved text and flavour all come from the card record
+rather than from a translation table.
+
+Japanese typesetting differences that matter:
+
+- Names are set in Noto Serif JP with **no letterspacing** — tracking kana the
+  way Latin caps are tracked looks wrong immediately — and wrap at the midpoint
+  rather than at a word break.
+- Rules text breaks per character, and flavour text applies simplified kinsoku:
+  a line may not open with `。、）」` or a small kana.
+- Ability names are emphasised in both languages: `ファンファーレ`,
+  `ラストワード`, `進化時` alongside Fanfare, Last Words, Evolve.
+
 ## Open visual work
 
-- Mulligan, deck builder, collection, card detail and pack opening screens.
 - Premium (animated) card treatment exists as a baked sheen; it should be a
   live shader with parallax.
-- No leader animations or voice lines.
-- Bloom / post-processing is not yet wired; glows are all additive geometry.
+- No leader voice lines. (Leader *animation* is in place — see above.)
+- No side-by-side comparison against real captures of the original; the
+  reference is the written research, not screenshots.

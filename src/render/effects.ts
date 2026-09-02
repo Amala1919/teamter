@@ -55,6 +55,9 @@ interface FloatingLabel {
   material: THREE.SpriteMaterial;
 }
 
+/** How long a follower stays leaned into its attack. */
+const LUNGE_SECONDS = 0.19;
+
 export class Effects {
   private readonly group = new THREE.Group();
   private readonly bursts: Burst[] = [];
@@ -64,6 +67,12 @@ export class Effects {
   private readonly reticle: THREE.Mesh;
   private flashEl: HTMLDivElement | null = null;
   private dissolving: { obj: CardObject; t: number }[] = [];
+  /**
+   * Lunges in flight. Driven by the frame loop rather than a timer, so a lunge
+   * cannot land after the battle screen has been disposed, and so speeding the
+   * animations up speeds these up with everything else.
+   */
+  private lunges: { obj: CardObject; life: number }[] = [];
 
   constructor(private readonly stage: Stage) {
     stage.root.add(this.group);
@@ -265,10 +274,9 @@ export class Effects {
     const dir = new THREE.Vector3().subVectors(toward, attacker.group.position).normalize();
     attacker.offset.copy(dir.multiplyScalar(0.55));
     attacker.setSpeed(30);
-    setTimeout(() => {
-      attacker.offset.set(0, 0, 0);
-      attacker.setSpeed(14);
-    }, 190);
+    const existing = this.lunges.find((l) => l.obj === attacker);
+    if (existing) existing.life = 0;
+    else this.lunges.push({ obj: attacker, life: 0 });
   }
 
   // -------------------------------------------------------------------------
@@ -276,6 +284,16 @@ export class Effects {
   // -------------------------------------------------------------------------
 
   update(dt: number): void {
+    for (let i = this.lunges.length - 1; i >= 0; i--) {
+      const l = this.lunges[i];
+      l.life += dt;
+      if (l.life >= LUNGE_SECONDS) {
+        l.obj.offset.set(0, 0, 0);
+        l.obj.setSpeed(14);
+        this.lunges.splice(i, 1);
+      }
+    }
+
     for (let i = this.bursts.length - 1; i >= 0; i--) {
       const b = this.bursts[i];
       b.life += dt;
@@ -327,6 +345,8 @@ export class Effects {
   }
 
   dispose(): void {
+    this.lunges.length = 0;
+    this.dissolving.length = 0;
     this.flashEl?.remove();
     this.group.removeFromParent();
   }
