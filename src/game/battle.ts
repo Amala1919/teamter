@@ -66,6 +66,8 @@ export class Battle {
   private animating = false;
   private aiTimer = 0;
   private disposed = false;
+  /** A card dropped on the board that is waiting for an Enhance choice. */
+  private pendingEnhance: { uid: number; slot: number } | null = null;
 
   constructor(private readonly opts: BattleOptions) {
     this.human = opts.human ?? 0;
@@ -251,7 +253,10 @@ export class Battle {
       const y = (mine ? BOARD.HAND_Y : 1.55) + (mine ? -Math.abs(off) * rise * 0.16 : 0);
       const z = (mine ? BOARD.HAND_Z : -4.55) + Math.abs(off) * (mine ? 0.13 : 0.04);
 
-      const focused = mine && this.hovered === uid && this.interaction.kind === 'idle';
+      // A card waiting on an Enhance choice stays raised, so the buttons over
+      // it clearly belong to it.
+      const choosing = mine && this.pendingEnhance?.uid === uid;
+      const focused = choosing || (mine && this.hovered === uid && this.interaction.kind === 'idle');
       const dragging = this.interaction.kind === 'dragCard' && this.interaction.uid === uid;
 
       if (dragging) {
@@ -405,6 +410,12 @@ export class Battle {
 
     const it = this.interaction;
 
+    if (this.pendingEnhance && this.pick() === null) {
+      this.pendingEnhance = null;
+      this.syncAll();
+      return;
+    }
+
     // Resolving a target request.
     if (it.kind === 'chooseTarget') {
       const uid = this.pick();
@@ -461,7 +472,15 @@ export class Battle {
 
       if (dropped && this.game.canPlay(it.uid)) {
         const slot = this.slotFromX(ground.x);
-        this.beginPlay(it.uid, slot);
+        // A card with an affordable Enhance asks which cost to pay rather than
+        // guessing for the player.
+        if (this.game.availableEnhance(it.uid).length > 0) {
+          this.interaction = { kind: 'idle' };
+          this.pendingEnhance = { uid: it.uid, slot };
+          this.syncAll();
+        } else {
+          this.beginPlay(it.uid, slot);
+        }
       } else {
         this.interaction = { kind: 'idle' };
         this.syncAll();
@@ -506,20 +525,21 @@ export class Battle {
   }
 
   /** Starts playing a card, pausing for a target if the card needs one. */
-  private beginPlay(uid: number, slot: number): void {
+  private beginPlay(uid: number, slot: number, enhance?: number): void {
     const def = this.game.def(uid);
-    const spec = def.targeting;
+    const mode = enhance !== undefined ? (def.enhance ?? []).find((m) => m.cost === enhance) : undefined;
+    const spec = mode ? mode.targeting : def.targeting;
     if (spec) {
       const legal = this.game.legalTargets(spec.selector, this.human, this.game.ent(uid));
       if (legal.length > 0) {
-        this.interaction = { kind: 'chooseTarget', uid, slot, legal, from: 'play' };
+        this.interaction = { kind: 'chooseTarget', uid, slot, legal, from: 'play', enhance };
         this.highlightTargets(legal, true);
         this.hud.addLog('<b>Choose a target</b>');
         return;
       }
     }
     this.interaction = { kind: 'idle' };
-    this.apply({ a: 'play', uid, slot });
+    this.apply({ a: 'play', uid, slot, enhance });
   }
 
   private commitTargeted(it: Extract<Interaction, { kind: 'chooseTarget' }>, targets: number[]): void {
@@ -558,6 +578,7 @@ export class Battle {
   }
 
   private cancelInteraction(): void {
+    this.pendingEnhance = null;
     const it = this.interaction;
     if (it.kind === 'chooseTarget') this.highlightTargets(it.legal, false);
     if (it.kind === 'attackFrom') this.highlightAttackTargets(it.uid, false);
@@ -611,6 +632,7 @@ export class Battle {
     this.effects.update(dt);
 
     this.drainQueue(dt);
+    this.refreshAnchors();
 
     // AI takes its turn once the animation queue is quiet.
     if (
@@ -628,6 +650,79 @@ export class Battle {
     } else {
       this.aiTimer = 0;
     }
+  }
+
+  /**
+   * Evolve and Enhance need a visible affordance — they are core actions, not
+   * shortcuts. Both are surfaced as buttons pinned over the card they act on.
+   */
+  private refreshAnchors(): void {
+    const g = this.game;
+    const buttons: Parameters<Hud['setAnchoredButtons']>[0] = [];
+
+    if (g.state.winner === null && g.state.active === this.human && !this.animating) {
+      if (this.pendingEnhance) {
+        // Choosing how to play a card the player has already dropped.
+        const { uid, slot } = this.pendingEnhance;
+        const def = g.def(uid);
+        const obj = this.cards.get(uid);
+        if (obj) {
+          const p = this.toScreen(obj.group.position, 0.9);
+          buttons.push({
+            id: `play_${uid}`,
+            label: `Play · ${g.costOf(uid)}`,
+            x: p.x - 78,
+            y: p.y,
+            onClick: () => {
+              this.pendingEnhance = null;
+              this.beginPlay(uid, slot);
+            },
+          });
+          for (const cost of g.availableEnhance(uid)) {
+            buttons.push({
+              id: `enh_${uid}_${cost}`,
+              label: `Enhance · ${cost}`,
+              x: p.x + 78,
+              y: p.y,
+              kind: 'enhance',
+              onClick: () => {
+                this.pendingEnhance = null;
+                this.beginPlay(uid, slot, cost);
+              },
+            });
+          }
+          void def;
+        }
+      } else if (this.interaction.kind === 'idle') {
+        for (const uid of g.player(this.human).field) {
+          if (!g.canEvolve(uid)) continue;
+          const obj = this.cards.get(uid);
+          if (!obj) continue;
+          const p = this.toScreen(obj.group.position, 1.15);
+          buttons.push({
+            id: `evo_${uid}`,
+            label: 'Evolve',
+            x: p.x,
+            y: p.y,
+            onClick: () => this.tryEvolve(uid),
+          });
+        }
+      }
+    }
+
+    this.hud.setAnchoredButtons(buttons);
+  }
+
+  /** Projects a world point to CSS pixels within the canvas. */
+  private toScreen(world: THREE.Vector3, yOffset = 0): { x: number; y: number } {
+    const v = world.clone();
+    v.y += yOffset;
+    v.project(this.stage.camera);
+    const rect = this.stage.renderer.domElement.getBoundingClientRect();
+    return {
+      x: ((v.x + 1) / 2) * rect.width,
+      y: ((1 - v.y) / 2) * rect.height,
+    };
   }
 
   /** Plays queued engine events as animations, one beat at a time. */
@@ -721,6 +816,7 @@ export class Battle {
         if (pos) this.effects.damageNumber(pos, ev.amount, UI.damage);
         if (isLeader) {
           this.stage.shake(0.16);
+          this.stage.flashBloom(0.3);
           this.audio.play('hitLeader');
           this.effects.screenFlash(UI.damage, 0.32);
         } else {
@@ -747,6 +843,7 @@ export class Battle {
         if (obj) this.effects.evolveBurst(obj.group.position);
         this.audio.play('evolve');
         this.stage.shake(0.12);
+        this.stage.flashBloom(0.85);
         this.syncAll();
         return ms(TIMING.evolve * 0.55);
       }
@@ -807,6 +904,14 @@ export class Battle {
     while (this.game.state.turn < untilTurn && this.game.state.winner === null && guard++ < 600) {
       const action = chooseAiTurn(this.game, this.game.state.active);
       if (!this.game.apply(action)) this.game.apply({ a: 'endTurn' });
+    }
+    // Both seats were played by the AI to get here, so hand the player's
+    // evolution points back — a fast-forwarded board should look like a turn
+    // the player is about to take, not one already spent.
+    const me = this.game.player(this.human);
+    if (this.game.state.turn >= this.game.evolveTurnFor(this.human)) {
+      me.ep = this.game.firstPlayer === this.human ? RULES.EP_FIRST : RULES.EP_SECOND;
+      me.hasEvolvedThisTurn = false;
     }
     this.game.drainEvents();
     this.queue.length = 0;

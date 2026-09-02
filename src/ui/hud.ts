@@ -158,6 +158,31 @@ const CSS = `
 .hud-result.win h1 { color: ${UI.goldBright}; text-shadow: 0 0 46px rgba(216,184,101,.75); }
 .hud-result.lose h1 { color: #8794AB; text-shadow: 0 0 40px rgba(80,100,140,.6); }
 .hud-result p { margin: 0; color: ${UI.textDim}; letter-spacing: .1em; }
+
+/* Buttons pinned to a point in the 3D scene: Evolve over a follower, Enhance
+   over a card in hand. */
+.hud-anchor {
+  position: absolute; transform: translate(-50%, -50%);
+  pointer-events: auto; cursor: pointer; white-space: nowrap;
+  padding: 7px 16px; border-radius: 999px; border: none;
+  font-family: ${FONT.display}; font-size: 12px; font-weight: 700;
+  letter-spacing: .16em; text-transform: uppercase;
+  color: #2A1206;
+  background: linear-gradient(180deg, #FFD9A0, #FF7A3D 55%, #B03A10);
+  box-shadow: 0 4px 0 #6A2408, 0 8px 20px rgba(0,0,0,.65), inset 0 1px 0 rgba(255,255,255,.55);
+  animation: hud-anchor-pulse 1.7s ease-in-out infinite;
+}
+.hud-anchor:hover { filter: brightness(1.1); }
+.hud-anchor:active { transform: translate(-50%, calc(-50% + 3px)); box-shadow: 0 1px 0 #6A2408; }
+.hud-anchor.enhance {
+  color: #0C1A2A;
+  background: linear-gradient(180deg, #CFE9FF, #6FB8FF 55%, #1E4E8C);
+  box-shadow: 0 4px 0 #123A6E, 0 8px 20px rgba(0,0,0,.65), inset 0 1px 0 rgba(255,255,255,.55);
+}
+@keyframes hud-anchor-pulse {
+  0%, 100% { box-shadow: 0 4px 0 #6A2408, 0 8px 20px rgba(0,0,0,.65), 0 0 0 rgba(255,140,60,0); }
+  50%      { box-shadow: 0 4px 0 #6A2408, 0 8px 20px rgba(0,0,0,.65), 0 0 22px rgba(255,140,60,.75); }
+}
 `;
 
 export class Hud {
@@ -172,6 +197,9 @@ export class Hud {
   private readonly deckEnemy: HTMLDivElement;
   private readonly log: HTMLDivElement;
   private readonly result: HTMLDivElement;
+  private readonly anchorLayer: HTMLDivElement;
+  private readonly anchors = new Map<string, HTMLButtonElement>();
+  private anchorKey = '';
 
   constructor(container: HTMLElement, private readonly cb: HudCallbacks) {
     if (!document.getElementById('hud-style')) {
@@ -253,6 +281,10 @@ export class Hud {
     }
     this.root.appendChild(bar);
 
+    this.anchorLayer = document.createElement('div');
+    this.anchorLayer.style.cssText = 'position:absolute;inset:0;pointer-events:none;';
+    this.root.appendChild(this.anchorLayer);
+
     // Result overlay.
     this.result = document.createElement('div');
     this.result.className = 'hud-result';
@@ -312,6 +344,40 @@ export class Hud {
     // Force a reflow so the animation restarts even on consecutive turns.
     void this.banner.offsetWidth;
     this.banner.classList.add('show');
+  }
+
+  /**
+   * Buttons pinned to points in the 3D scene. The battle screen recomputes the
+   * screen positions each frame; this only rebuilds the DOM when the set of
+   * button ids actually changes, so hovering does not thrash the layout.
+   */
+  setAnchoredButtons(
+    buttons: { id: string; label: string; x: number; y: number; kind?: 'evolve' | 'enhance'; onClick: () => void }[],
+  ): void {
+    const wanted = buttons.map((b) => b.id).join('|');
+    if (wanted !== this.anchorKey) {
+      this.anchorKey = wanted;
+      this.anchors.clear();
+      this.anchorLayer.replaceChildren();
+      for (const b of buttons) {
+        const el = document.createElement('button');
+        el.className = 'hud-anchor' + (b.kind === 'enhance' ? ' enhance' : '');
+        el.textContent = b.label;
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          b.onClick();
+        });
+        this.anchorLayer.appendChild(el);
+        this.anchors.set(b.id, el);
+      }
+    }
+    for (const b of buttons) {
+      const el = this.anchors.get(b.id);
+      if (!el) continue;
+      el.style.left = `${b.x}px`;
+      el.style.top = `${b.y}px`;
+      el.textContent = b.label;
+    }
   }
 
   addLog(html: string): void {

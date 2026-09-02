@@ -6,11 +6,17 @@
  * re-framed without touching anything that knows the rules.
  */
 import * as THREE from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 
 export interface StageOptions {
   container: HTMLElement;
   /** Caps devicePixelRatio; 2 is plenty and keeps mid-range phones smooth. */
   maxPixelRatio?: number;
+  /** Off disables the bloom pass entirely, for weak hardware. */
+  bloom?: boolean;
 }
 
 export class Stage {
@@ -24,6 +30,8 @@ export class Stage {
   readonly keyLight: THREE.DirectionalLight;
   readonly rimLight: THREE.PointLight;
 
+  private composer: EffectComposer | null = null;
+  private bloomPass: UnrealBloomPass | null = null;
   private readonly clock = new THREE.Clock();
   private readonly resizeObserver: ResizeObserver;
   private frame = 0;
@@ -90,10 +98,45 @@ export class Stage {
 
     this.scene.add(ambient, this.keyLight, fill, this.rimLight);
 
+    if (opts.bloom !== false) this.setupPostProcessing();
+
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
     this.resize();
   }
+
+  /**
+   * A restrained bloom. The threshold sits high enough that only genuinely
+   * bright things — rim lights, particles, the evolution burst — pick up a
+   * halo; a low threshold would fog the card faces and cost readability, which
+   * is the one thing effects here are not allowed to do.
+   */
+  private setupPostProcessing(): void {
+    const el = this.renderer.domElement.parentElement;
+    const w = el?.clientWidth ?? 1280;
+    const h = el?.clientHeight ?? 720;
+
+    this.composer = new EffectComposer(this.renderer);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+
+    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(w, h), 0.3, 0.45, 0.93);
+    this.composer.addPass(this.bloomPass);
+    this.composer.addPass(new OutputPass());
+
+    // The composer's own tone mapping happens in OutputPass, so the renderer
+    // must not apply it twice.
+    this.renderer.toneMapping = THREE.NoToneMapping;
+  }
+
+  /** Momentarily pushes the bloom, used for evolution and lethal blows. */
+  flashBloom(strength: number, decay = 2.6): void {
+    if (!this.bloomPass) return;
+    this.bloomTarget = Math.max(this.bloomTarget, strength);
+    this.bloomDecay = decay;
+  }
+
+  private bloomTarget = 0;
+  private bloomDecay = 2.6;
 
   private resize(): void {
     const el = this.renderer.domElement.parentElement;
@@ -101,6 +144,7 @@ export class Stage {
     const w = el.clientWidth || 1;
     const h = el.clientHeight || 1;
     this.renderer.setSize(w, h, false);
+    this.composer?.setSize(w, h);
     this.camera.aspect = w / h;
 
     // Pull the camera back on narrow screens so the five board slots and the
@@ -150,7 +194,14 @@ export class Stage {
         this.camera.lookAt(0.6, 0, 0.5);
       }
 
-      this.renderer.render(this.scene, this.camera);
+      if (this.bloomPass) {
+        if (this.bloomTarget > 0.001) this.bloomTarget *= Math.exp(-this.bloomDecay * dt);
+        else this.bloomTarget = 0;
+        this.bloomPass.strength = 0.3 + this.bloomTarget;
+      }
+
+      if (this.composer) this.composer.render(dt);
+      else this.renderer.render(this.scene, this.camera);
       this.frame++;
     };
     this.raf = requestAnimationFrame(loop);
@@ -164,6 +215,7 @@ export class Stage {
   dispose(): void {
     this.stop();
     this.resizeObserver.disconnect();
+    this.composer?.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
