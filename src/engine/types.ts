@@ -467,6 +467,13 @@ export interface AuraDef {
   damageCap?: number;
   /** Applies to the controller's leader rather than to entities. */
   leader?: boolean;
+  /**
+   * Vengeance counts as active for the controller regardless of their defense
+   * — Blood Moon's "Activate Vengeance even if your leader's defense is
+   * greater than 10". An aura rather than a grant because the printed duration
+   * is "until this amulet leaves play", which is what an aura already is.
+   */
+  forceVengeance?: boolean;
   /** Applies to cards in hand rather than on the field (cost reduction auras). */
   costDelta?: number;
   cond?: Condition;

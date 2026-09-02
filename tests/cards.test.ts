@@ -205,3 +205,65 @@ describe('effects hung on a leader', () => {
     expect(g.leaderHas(0, 'noFanfare')).toBe(true);
   });
 });
+
+describe('effects that last exactly as long as their card is in play', () => {
+  it('makes the leader immune while Timeless Witch is on the board', () => {
+    // "Fanfare: Reduce damage to your leader to 0 until this follower leaves
+    // play." Compiled as an aura, so it switches off the moment she goes.
+    const g = new Game([buildStarterDeck('rune', 3), buildStarterDeck('shadow', 9)], {
+      seed: 12,
+      first: 0,
+      skipMulligan: true,
+    });
+    const witch = g.summonToken('timeless_witch', 0, false);
+    expect(witch).not.toBeNull();
+    expect(g.damageCap({ leaderOf: 0 })).toBe(0);
+    // The opponent's leader is untouched.
+    expect(g.damageCap({ leaderOf: 1 })).toBeNull();
+
+    g.destroyEntity(witch!);
+    g.checkState();
+    expect(g.damageCap({ leaderOf: 0 })).toBeNull();
+  });
+
+  it('turns Vengeance on above 10 defense while Blood Moon is in play', () => {
+    const g = new Game([buildStarterDeck('blood', 3), buildStarterDeck('shadow', 9)], {
+      seed: 12,
+      first: 0,
+      skipMulligan: true,
+    });
+    const ctx = { source: null, controller: 0 as const, targets: [], ti: 0, option: 0, vars: {}, depth: 0 };
+    expect(g.player(0).defense).toBeGreaterThan(10);
+    expect(g.testCondition({ k: 'vengeance' }, ctx)).toBe(false);
+
+    const moon = g.summonToken('blood_moon', 0, false);
+    expect(moon).not.toBeNull();
+    expect(g.testCondition({ k: 'vengeance' }, ctx)).toBe(true);
+    // It is the controller's Vengeance, not both players'.
+    expect(g.testCondition({ k: 'vengeance' }, { ...ctx, controller: 1 })).toBe(false);
+
+    g.destroyEntity(moon!);
+    g.checkState();
+    expect(g.testCondition({ k: 'vengeance' }, ctx)).toBe(false);
+  });
+
+  it('does not recurse when a Vengeance-gated aura shares the board with Blood Moon', () => {
+    // Devil of Vengeance's "Can only attack if Vengeance is active for you" is
+    // an aura conditional on Vengeance, and Blood Moon answers Vengeance by
+    // looking at what is in play. Asking through the aura list closes the loop.
+    // The 200-game soak found this as seven stack overflows.
+    const g = new Game([buildStarterDeck('blood', 3), buildStarterDeck('shadow', 9)], {
+      seed: 77,
+      first: 0,
+      skipMulligan: true,
+    });
+    const devil = g.summonToken('devil_of_vengeance', 0, false);
+    const moon = g.summonToken('blood_moon', 0, false);
+    expect(devil).not.toBeNull();
+    expect(moon).not.toBeNull();
+
+    expect(() => g.stats(devil!)).not.toThrow();
+    // Blood Moon has Vengeance on, so the devil is not held back.
+    expect(g.stats(devil!).keywords.has('cantAttack')).toBe(false);
+  });
+});

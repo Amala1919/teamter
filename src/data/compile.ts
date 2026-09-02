@@ -1896,6 +1896,32 @@ function matchStatic(line: string, res: CompileResult): boolean {
     return true;
   }
 
+  // "Fanfare: Reduce damage to your leader to 0 until this follower leaves
+  // play." and "Fanfare: Activate Vengeance ... until this amulet leaves play."
+  //
+  // A Fanfare that lasts exactly as long as its card is in play is an aura:
+  // auras switch on when the card arrives and off when it goes, which is the
+  // printed duration exactly, and needs no expiry keyed to an entity lifetime.
+  // This only holds where the effect targets the leader or the whole game —
+  // "give all allied Officer followers ... until this follower leaves play"
+  // picks its targets once, at Fanfare time, and an aura would also catch the
+  // ones that arrive later, so that one stays partial.
+  const leaderImmune = l.match(
+    /^(?:fanfare:\s*)?reduce damage to your leader to 0 until this (?:follower|amulet) leaves play$/,
+  );
+  if (leaderImmune) {
+    res.auras.push({ target: { scope: 'self' }, leader: true, damageCap: 0 });
+    return true;
+  }
+  if (
+    /^(?:fanfare:\s*)?activate vengeance even if your leader's defense is greater than 10\.?$/.test(
+      l.replace(/\s*this effect lasts until this (?:amulet|follower) leaves play\.?$/, '').trim(),
+    )
+  ) {
+    res.auras.push({ target: { scope: 'self' }, forceVengeance: true });
+    return true;
+  }
+
   // Unconditional cost reduction printed as a static line.
   const cost = l.match(/^this (?:card|follower) costs (\d+) less(?: play points?)?$/);
   if (cost) {

@@ -11,12 +11,12 @@ card inspector, the compiler-coverage push and the leader animations.
 | Milestone | Status |
 |---|---|
 | 0 — Research and specification | **Done.** `docs/research/RULES_RESEARCH.md` (909 lines, sourced, with uncertainty flagged) and `docs/research/VISUAL_RESEARCH.md` (1176 lines). |
-| 1 — Rules engine, deterministic simulation | **Done.** 189 unit tests; 400-game AI-vs-AI soak with 0 failures. |
+| 1 — Rules engine, deterministic simulation | **Done.** 192 unit tests; 400-game AI-vs-AI soak with 0 failures. |
 | 2 — Card data and the Standard set | **Done.** All 888 cards (825 collectible + 63 tokens) from Basic through Wonderland Dreams, from the official card database, in both languages. |
 | 3 — Three.js battle screen and card renderer | **Done.** |
 | 4 — Playable battle flow | **Done,** including the mulligan. |
 | 5 — UI reproduction and feel | **Done.** Battle HUD, menu, mulligan, deck builder, collection, card detail, in-battle inspector. |
-| 6 — All cards through Wonderland Dreams | **Partial.** All cards are present and playable; **81.6%** have every printed line implemented. |
+| 6 — All cards through Wonderland Dreams | **Partial.** All cards are present and playable; **81.9%** have every printed line implemented. |
 | 7 — Evolution, effects, particles, audio | **Done.** Bloom, particles, camera shake, synthesised audio, leader animation. |
 | 8 — Deck builder and collection | **Done.** Decks persist to localStorage and are validated live. |
 | 9 — Visual comparison and QA | **Partial.** Iterated by screenshot; no side-by-side against real captures — official screenshots are unreachable from this environment. |
@@ -47,7 +47,7 @@ card inspector, the compiler-coverage push and the leader animations.
 
 ## Known gaps
 
-### Card implementation — 163 of 888 cards
+### Card implementation — 161 of 888 cards
 
 Cards with at least one printed line the compiler does not understand carry
 `implemented: false` and `missingText`, and are excluded from generated decks.
@@ -79,9 +79,11 @@ but these groups still repeat:
 
 ## Recommended next steps
 
-1. **Grants that last while a card stays in play.** An expiry keyed to another
-   entity's lifetime rather than to a turn index; Captain Lecia and Timeless
-   Witch are blocked on it alone.
+1. **Grants that pick their targets once and then persist.** Captain Lecia
+   gives her effects to the Officers in play *at Fanfare time* and keeps them
+   until she leaves. An aura is the wrong shape — it would also catch Officers
+   that arrive later — and a grant has no expiry keyed to another entity's
+   lifetime, so she stays partial.
 2. **Optimisation (milestone 10), continued.** `tools/bench.mjs` reports p50
    2.3 ms at grid scale and 2.6 ms at board scale; the p95 tail (~5 ms grid,
    ~20 ms board) is the remaining target, and the battle scene itself has never
@@ -143,6 +145,11 @@ exercised it:
   Zombie. A bare plural with no determiner carries no `all`, so it fell through
   to the default scope and quietly became a different card. Every card that
   names a tribe or a token in the plural was affected.
+- Blood Moon forces Vengeance on by looking at what is in play, and several
+  cards carry auras *gated on* Vengeance. Asking the aura list closed the loop
+  and the soak found it as seven stack overflows in 200 games. An unconditional
+  force answers without asking anything, so only a conditional one is skipped
+  while an aura condition is being evaluated.
 - Queen Medb, Carabosse and Mysterian Grimoire hang effects on a *leader*,
   which is not an entity and had nowhere to keep them. Leaders now carry their
   own effect list — named restrictions the engine enforces at one place each,

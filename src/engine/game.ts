@@ -306,6 +306,33 @@ export class Game {
     return cap;
   }
 
+  /**
+   * Whether a card in play switches Vengeance on for `p` regardless of defense.
+   *
+   * The field is scanned directly rather than through `activeAuras`, because
+   * plenty of auras are *conditional on* Vengeance ("Can only attack if
+   * Vengeance is active for you") and building the list would ask this question
+   * again. Only a force that is itself conditional can close that loop, and
+   * only that case is skipped while an aura condition is being evaluated.
+   */
+  private forcesVengeance(p: PlayerId): boolean {
+    for (const uid of this.player(p).field) {
+      const e = this.state.entities.get(uid);
+      if (!e || e.silenced) continue;
+      for (const a of this.def(e).auras ?? []) {
+        if (!a.forceVengeance) continue;
+        // An unconditional force asks nothing and so can never recurse: it
+        // answers even from inside another aura's condition, which is the
+        // whole point — Blood Moon has to switch on the cards that gate
+        // themselves on Vengeance.
+        if (!a.cond) return true;
+        if (this.auraDepth > 0) continue;
+        if (this.testAuraCondition(a.cond, e)) return true;
+      }
+    }
+    return false;
+  }
+
   /** Whether a leader effect currently imposes this restriction on `p`. */
   leaderHas(p: PlayerId, flag: LeaderFlag): boolean {
     return this.player(p).leaderEffects.some((l) => (l.flags ?? []).includes(flag));
@@ -1989,7 +2016,8 @@ export class Game {
   testCondition(c: Condition, ctx: ResolveCtx): boolean {
     switch (c.k) {
       case 'vengeance':
-        return this.player(ctx.controller).defense <= 10;
+        if (this.player(ctx.controller).defense <= 10) return true;
+        return this.forcesVengeance(ctx.controller);
       case 'overflow':
         return this.player(ctx.controller).maxPp >= 7;
       case 'resonance':
