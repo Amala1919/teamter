@@ -82,6 +82,28 @@ const KEYWORD_WORDS: Record<string, Keyword> = {
 
 const KW_ALT = 'ward|storm|rush|bane|drain|ambush';
 
+/**
+ * Phrases that cards use to describe a granted property. Card text writes
+ * these out longhand ("the following effect - Can't be targeted by enemy
+ * effects") rather than as a keyword, so they are matched as whole phrases.
+ */
+const EFFECT_PHRASES: [RegExp, Keyword][] = [
+  [/^can't be targeted by enemy (?:effects|spells)$/i, 'untargetable'],
+  [/^reduce damage (?:from effects )?to 0$/i, 'effectImmune'],
+  [/^can't be destroyed by effects$/i, 'indestructible'],
+  [/^can't be attacked$/i, 'cantBeAttacked'],
+  [/^can't attack$/i, 'cantAttack'],
+  [/^can't attack the enemy leader$/i, 'cantAttackLeader'],
+  [/^ignore ward$/i, 'ignoreWard'],
+];
+
+function phraseKeyword(text: string): Keyword | null {
+  const t = tidy(text);
+  for (const [re, kw] of EFFECT_PHRASES) if (re.test(t)) return kw;
+  const bare = t.toLowerCase();
+  return bare in KEYWORD_WORDS ? KEYWORD_WORDS[bare] : null;
+}
+
 function tidy(s: string): string {
   return s.replace(/\s+/g, ' ').replace(/[.\s]+$/, '').trim();
 }
@@ -122,7 +144,7 @@ export function parseSelector(raw: string, _ctx?: CompileCtx): Selector | null {
   if (/^(the )?enemy leader$/.test(s)) return { scope: 'leader', side: 'enemy' };
   if (/^your leader$/.test(s)) return { scope: 'leader', side: 'ally' };
   if (/^(each|both|all) leaders?$/.test(s)) return { scope: 'leader', side: 'both' };
-  if (/^(the enemy follower|that follower)$/.test(s)) return { scope: 'other' };
+  if (/^(the enemy follower|that follower|it)$/.test(s)) return { scope: 'other' };
   if (/^all allies and enemies$/.test(s)) {
     return { scope: 'all', side: 'both', kind: 'follower', includeLeader: true };
   }
@@ -287,6 +309,9 @@ function peelCondition(sentence: string): Peeled {
 
   m = s.match(new RegExp(`^if ${CLASS_COND.source} is (not )?active for you,\\s*(.*)$`, 'i'));
   if (m) return { body: m[3], cond: classCondition(m[1], !!m[2]) };
+
+  m = s.match(new RegExp(`^if ${CLASS_COND.source} is already active for you when this card is played,\\s*(.*)$`, 'i'));
+  if (m) return { body: m[2], cond: classCondition(m[1], false) };
 
   m = s.match(/^(.*?),?\s*if at least (\d+) other cards? (?:were|was|have been|has been) played this turn\.?$/i);
   if (m) return { body: m[1], cond: { k: 'cardsPlayed', n: num(m[2]) } };
@@ -540,6 +565,27 @@ const RULES_TABLE: Rule[] = [
     },
   },
   {
+    re: new RegExp(`^give (?:it|that follower) \\+${N}/\\+${N}(?: until the end of (?:the|this|your) turn)?$`, 'i'),
+    build: (m, ctx) => {
+      const a = amt(m[1], ctx);
+      const d = amt(m[2], ctx);
+      if (a === null || d === null) return null;
+      const temp = /until the end of/i.test(m[0]);
+      return [{ k: 'buff', target: { scope: 'other' }, atk: a, def: d, duration: temp ? 'turn' : 'permanent' }];
+    },
+  },
+  {
+    re: new RegExp(`^give (?:it|that follower) (${KW_ALT})$`, 'i'),
+    build: (m) => [{ k: 'grant', target: { scope: 'other' }, keywords: [KEYWORD_WORDS[m[1].toLowerCase()]] }],
+  },
+  {
+    re: /^transform (?:it|that follower) into (?:an?|the) ([\w' -]+)$/i,
+    build: (m, ctx) => {
+      const id = cardId(m[1], ctx);
+      return id ? [{ k: 'transform', target: { scope: 'other' }, into: id }] : null;
+    },
+  },
+  {
     re: new RegExp(`^give (${KW_ALT}) to (.+)$`, 'i'),
     build: (m, ctx) => {
       const t = parseSelector(m[2], ctx);
@@ -631,8 +677,79 @@ const RULES_TABLE: Rule[] = [
     re: /^subtract (\d+) from the cost of this card$/i,
     build: (m) => [{ k: 'costMod', target: { scope: 'self' }, delta: -num(m[1]) }],
   },
+  {
+    re: /^gain (\d+) shadows?$/i,
+    build: (m) => [{ k: 'gainShadows', amount: num(m[1]) }],
+  },
 
   // --- misc ----------------------------------------------------------------
+  // "Give <target> the following effect - <phrase>" and "Gain the following
+  // effect: <phrase>".
+  {
+    re: /^give (.+?) the following effect\s*[-:]\s*(.+)$/i,
+    build: (m, ctx) => {
+      const t = parseSelector(m[1]);
+      const kw = phraseKeyword(m[2]);
+      if (!t || !kw) return null;
+      const temp = /until the end of (?:the|this|your) turn/i.test(m[0]);
+      return [{ k: 'grant', target: t, keywords: [kw], duration: temp ? 'turn' : 'permanent' }];
+      void ctx;
+    },
+  },
+  {
+    re: /^gain the following effect\s*[-:]\s*(.+)$/i,
+    build: (m) => {
+      const kw = phraseKeyword(m[1]);
+      if (!kw) return null;
+      const temp = /until the end of (?:the|this|your) turn/i.test(m[0]);
+      return [{ k: 'grant', target: { scope: 'self' }, keywords: [kw], duration: temp ? 'turn' : 'permanent' }];
+    },
+  },
+  // "Select an enemy follower. It can't attack next turn." and friends.
+  {
+    re: /^(?:select |choose )?(.+?)\.? ?(?:it |they )?can'?t attack next turn$/i,
+    build: (m) => {
+      const t = parseSelector(m[1]);
+      return t ? [{ k: 'freeze', target: t }] : null;
+    },
+  },
+  {
+    re: /^(.+?) in play can'?t attack next turn$/i,
+    build: (m) => {
+      const t = parseSelector(m[1]);
+      return t ? [{ k: 'freeze', target: { ...t, scope: 'all' } }] : null;
+    },
+  },
+  // Cost manipulation on cards already in hand.
+  {
+    re: /^change the cost of (.+?) in your hand to (\d+)$/i,
+    build: (m, ctx) => {
+      const id = cardId(m[1].replace(/^(an?|the|each|all) /i, ''), ctx);
+      const filter = id ? { defId: id } : undefined;
+      if (!filter) return null;
+      return [{ k: 'setCost', target: { scope: 'all', side: 'ally', kind: 'any', zone: 'hand', filter }, cost: num(m[2]) }];
+    },
+  },
+  {
+    re: /^subtract (\d+) from the cost of (?:an?|the) cards? in your hand$/i,
+    build: (m) => [
+      { k: 'costMod', target: { scope: 'random', side: 'ally', kind: 'any', zone: 'hand' }, delta: -num(m[1]) },
+    ],
+  },
+  // Deck search with a filter rather than a named card.
+  {
+    re: /^put an? random (.+?) from your deck into your hand$/i,
+    build: (m) => {
+      const filter = searchFilter(m[1]);
+      return filter ? [{ k: 'searchToHand', filter, count: 1 }] : null;
+    },
+  },
+  {
+    re: /^destroy a damaged enemy follower$/i,
+    build: () => [
+      { k: 'destroy', target: { scope: 'target', side: 'enemy', kind: 'follower', filter: { damaged: true } } },
+    ],
+  },
   {
     re: /^spellboost the cards in your hand$/i,
     build: () => [{ k: 'spellboost', amount: 1 }],
@@ -680,6 +797,28 @@ const RULES_TABLE: Rule[] = [
   },
 ];
 
+/** Turns "spell with Spellboost" / "card that costs at least 5 play points"
+ * into a deck-search filter. */
+function searchFilter(phrase: string): Record<string, unknown> | null {
+  const p = tidy(phrase).toLowerCase();
+  const filter: Record<string, unknown> = {};
+
+  let m = p.match(/costs? at least (\d+)/);
+  if (m) filter.costMin = num(m[1]);
+  m = p.match(/costs? (\d+) (?:play points? )?or less/);
+  if (m) filter.costMax = num(m[1]);
+
+  if (/^spell\b/.test(p) || / spell\b/.test(p)) filter.type = 'spell';
+  else if (/^follower\b/.test(p) || / follower\b/.test(p)) filter.type = 'follower';
+  else if (/^amulet\b/.test(p) || / amulet\b/.test(p)) filter.type = 'amulet';
+
+  for (const t of TRAIT_WORDS) {
+    if (p.includes(t.toLowerCase())) filter.trait = t;
+  }
+
+  return Object.keys(filter).length > 0 ? filter : null;
+}
+
 function parseSentence(sentence: string, ctx: CompileCtx): Effect[] | null {
   const peeled = peelCondition(sentence);
   const body = tidy(peeled.body);
@@ -712,7 +851,7 @@ function compileSentences(text: string, ctx: CompileCtx): Effect[] | null {
     const s = raw.replace(/^(?:then|and then)\s+/i, '');
 
     // "Do this N times." repeats everything parsed so far on this line.
-    const rep = s.match(/^do this (\d+|X|two|three) times\.?$/i);
+    const rep = s.match(/^do this (\d+|X|two|three) times?\.?$/i);
     if (rep && out.length > 0) {
       const times = /^x$/i.test(rep[1]) ? ctx.x : num(rep[1]);
       if (times === undefined || times === null) return null;
@@ -731,6 +870,24 @@ function compileSentences(text: string, ctx: CompileCtx): Effect[] | null {
         const base = out.splice(0, out.length);
         if (insteadPeeled.cond) out.push({ k: 'if', cond: insteadPeeled.cond, then: patched, else: base });
         else out.push(...patched);
+        continue;
+      }
+    }
+
+    // "Summon Otohime's Bodyguards until your area is full."
+    const untilFull = s.match(/^(.*?) until (?:your area|the field) is full\.?$/i);
+    if (untilFull) {
+      const body = parseSentence(untilFull[1], ctx);
+      if (body) {
+        out.push({ k: 'untilFull', where: 'field', body });
+        continue;
+      }
+    }
+    const untilHand = s.match(/^(.*?) until (?:it|your hand) is full\.?$/i);
+    if (untilHand) {
+      const body = parseSentence(untilHand[1], ctx);
+      if (body) {
+        out.push({ k: 'untilFull', where: 'hand', body });
         continue;
       }
     }
@@ -756,11 +913,18 @@ function splitConjunction(sentence: string, ctx: CompileCtx): Effect[] | null {
   for (const sep of [', and then ', ' and then ', ', and ', ' and ']) {
     let idx = body.toLowerCase().indexOf(sep);
     while (idx > 0) {
-      const a = parseSentence(body.slice(0, idx), ctx);
-      const b = parseSentence(body.slice(idx + sep.length), ctx);
-      if (a && b) {
-        const both = [...a, ...b];
-        return peeled.cond ? [{ k: 'if', cond: peeled.cond, then: both }] : both;
+      const left = body.slice(0, idx);
+      const right = body.slice(idx + sep.length);
+      const a = parseSentence(left, ctx);
+      if (a) {
+        // "Summon a Pirate and a Viking" — the right half has no verb of its
+        // own, so it borrows the left one.
+        const verb = left.match(/^(\w+)\s/);
+        const b = parseSentence(right, ctx) ?? (verb ? parseSentence(`${verb[1]} ${right}`, ctx) : null);
+        if (b) {
+          const both = [...a, ...b];
+          return peeled.cond ? [{ k: 'if', cond: peeled.cond, then: both }] : both;
+        }
       }
       idx = body.toLowerCase().indexOf(sep, idx + 1);
     }
@@ -848,12 +1012,17 @@ function applyMore(base: Effect[], clause: string, per: Amount): Effect[] | null
     const step = num(m[1]);
     return patchPrimary(base, (e) => (e.k === 'summon' ? { ...e, count: scale(e.count, step) } : null));
   }
+  m = c.match(/^repeat (\d+) times?$/i);
+  if (m) {
+    const step = num(m[1]);
+    return [{ k: 'repeat', times: { k: 'sum', of: [1, { k: 'mul', a: step, b: per }] }, body: base }];
+  }
   m = c.match(/^draw (\d+) more$/i);
   if (m) {
     const step = num(m[1]);
     return patchPrimary(base, (e) => (e.k === 'draw' ? { ...e, amount: scale(e.amount, step) } : null));
   }
-  m = c.match(/^give \+(\d+)\/\+(\d+) more$/i);
+  m = c.match(/^(?:give|gain) \+(\d+)\/\+(\d+) more$/i);
   if (m) {
     const a = num(m[1]);
     const d = num(m[2]);
@@ -913,17 +1082,51 @@ function matchPrefix(line: string): PrefixMatch | null {
   // "Whenever an allied <Trait> follower comes into play, <effect>" — the
   // effect applies to the follower that arrived, which the engine exposes as
   // the trigger's "other" participant.
-  const trait = l.match(/^whenever an allied (\w+) (?:follower|card) comes into play,\s*/i);
-  if (trait) {
-    const t = TRAIT_WORDS.find((x) => x.toLowerCase() === trait[1].toLowerCase());
-    if (t) {
-      const inner = withInner(['onAllyFollowerPlayed'], l.slice(trait[0].length));
-      inner.cond = {
-        k: 'exists',
-        sel: { scope: 'all', side: 'ally', kind: 'any', filter: { trait: t as never } },
-      };
-      return inner;
+  // "Whenever an allied <Trait|Neutral|N-cost> follower comes into play, …" —
+  // the condition tests the follower that arrived, not the board.
+  const subject = l.match(
+    /^whenever an allied (?:(\w+) )?(?:follower|card)(?: that originally costs (\d+) play points?)? comes into play,\s*/i,
+  );
+  if (subject && (subject[1] || subject[2])) {
+    const filter: Record<string, unknown> = {};
+    if (subject[2]) {
+      filter.costMin = num(subject[2]);
+      filter.costMax = num(subject[2]);
     }
+    if (subject[1]) {
+      const t = TRAIT_WORDS.find((x) => x.toLowerCase() === subject[1].toLowerCase());
+      if (t) filter.trait = t;
+      else if (subject[1].toLowerCase() === 'neutral') filter.cardClass = 'neutral';
+      else if (subject[1].toLowerCase() !== 'follower') return null;
+    }
+    const inner = withInner(['onAllyFollowerPlayed'], l.slice(subject[0].length));
+    inner.cond = { k: 'subject', filter: filter as never };
+    return inner;
+  }
+
+  const anyAttack = l.match(/^whenever an enemy follower attacks,\s*/i);
+  if (anyAttack) {
+    const inner = withInner(['onAnyAttack'], l.slice(anyAttack[0].length));
+    inner.cond = { k: 'subject', filter: {} as never };
+    return inner;
+  }
+
+  const allyAttack = l.match(
+    /^whenever (?:another allied|an allied)(?: (\w+))? (?:(\d+)-attack )?follower attacks,\s*/i,
+  );
+  if (allyAttack) {
+    const filter: Record<string, unknown> = { notSelf: true };
+    if (allyAttack[2]) {
+      filter.atkMin = num(allyAttack[2]);
+      filter.atkMax = num(allyAttack[2]);
+    }
+    if (allyAttack[1]) {
+      const t = TRAIT_WORDS.find((x) => x.toLowerCase() === allyAttack[1].toLowerCase());
+      if (t) filter.trait = t;
+    }
+    const inner = withInner(['onAnyAttack'], l.slice(allyAttack[0].length));
+    inner.cond = { k: 'subject', filter: filter as never };
+    return inner;
   }
 
   return null;

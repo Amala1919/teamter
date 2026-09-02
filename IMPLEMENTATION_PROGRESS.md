@@ -13,11 +13,11 @@ Last updated: after the battle screen, rules corrections and documentation pass.
 | 1 — Rules engine, deterministic simulation | **Done.** 52 unit tests; 300-game AI-vs-AI soak with 0 failures. |
 | 2 — Card data and the Standard set | **Done.** All 888 cards (825 collectible + 63 tokens) from Basic through Wonderland Dreams, from the official card database. |
 | 3 — Three.js battle screen and card renderer | **Done.** |
-| 4 — Playable battle flow | **Done** apart from the mulligan screen. |
-| 5 — UI reproduction and feel | **Partial.** Battle HUD done; menu, mulligan, deck builder and collection are not built. |
-| 6 — All cards through Wonderland Dreams | **Partial.** All cards are present and playable; 62% have every printed line implemented. |
+| 4 — Playable battle flow | **Done,** including the mulligan. |
+| 5 — UI reproduction and feel | **Done.** Battle HUD, menu, mulligan, deck builder, collection and card detail. |
+| 6 — All cards through Wonderland Dreams | **Partial.** All cards are present and playable; 66% have every printed line implemented. |
 | 7 — Evolution, effects, particles, audio | **Done.** Premium card treatment is baked rather than live. |
-| 8 — Deck builder and collection | **Not started.** |
+| 8 — Deck builder and collection | **Done.** Decks persist to localStorage and are validated live. |
 | 9 — Visual comparison and QA | **Partial.** Iterated by screenshot; no side-by-side against real captures — official screenshots are unreachable from this environment. |
 | 10 — Optimisation and final polish | **Not started.** |
 
@@ -34,7 +34,7 @@ Last updated: after the battle screen, rules corrections and documentation pass.
 
 ## Known gaps
 
-### Card implementation — 337 of 888 cards
+### Card implementation — 300 of 888 cards
 
 Cards with at least one printed line the compiler does not understand carry
 `implemented: false` and `missingText`, and are excluded from generated decks.
@@ -53,15 +53,11 @@ remaining clusters:
 
 ### Missing screens
 
-There is no main menu, mulligan, deck builder, collection, card detail or pack
-opening. The battle boots directly from `src/main.ts` with generated starter
-decks. `src/data/decks.ts` already has `deckPool`, `validateDeck` and
-`buildStarterDeck`, so the deck builder has its data layer ready.
+Pack opening is the only screen from the original that does not exist. There is
+also no result/reward flow beyond the victory and defeat overlay.
 
 ### Other
 
-- Mulligan is skipped (`skipMulligan: true`); `Game.mulligan` is implemented and
-  tested but nothing drives it.
 - No turn timer.
 - No bloom or post-processing; glows are additive geometry.
 - No leader animations or voice lines.
@@ -73,16 +69,14 @@ decks. `src/data/decks.ts` already has `deckPool`, `validateDeck` and
 
 ## Recommended next steps
 
-1. **Mulligan screen.** Small, and it is the one missing piece of the core loop.
-2. **Deck builder and collection.** The data layer exists; this is a UI job.
-   Show the `implemented` flag prominently.
-3. **Raise compiler coverage.** Each cluster above is worth 10-30 cards. Add
+1. **Raise compiler coverage.** Each cluster above is worth 10-30 cards. Add
    `grantEffect` (a follower granting an ability to others) and a
    `duration: 'nextTurn'` to the buff system first — between them they unlock
    the two largest clusters.
-4. **Enhance in the UI.** The engine supports it; the player cannot reach it.
-5. **Event-order tests.** Nothing currently asserts the `GameEvent` sequence,
+2. **Enhance in the UI.** The engine supports it; the player cannot reach it.
+3. **Event-order tests.** Nothing currently asserts the `GameEvent` sequence,
    only its effect on state.
+4. **Pack opening.** The one screen from the original with no equivalent here.
 
 ## Environment notes
 
@@ -112,3 +106,5 @@ exercised it:
   out with the spacing of the occupied row.
 - `Countdown (2)` lost its value: the card-text preprocessor stripped trailing
   parentheses as reminder text.
+- "Subtract 1 from the cost of this card" reduced the cost of *every* card in
+  hand: the `costMod` effect ignored its own selector.

@@ -180,6 +180,7 @@ export class Game {
       costMod: 0,
       spellboost: 0,
       ambushed: (def.keywords ?? []).includes('ambush'),
+      frozenUntilTurn: -1,
       barrierCharges: (def.keywords ?? []).includes('barrier') ? 1 : 0,
       firedOnce: {},
       dying: false,
@@ -773,6 +774,7 @@ export class Game {
 
     const st = this.stats(e);
     if (st.keywords.has('cantAttack')) return false;
+    if (s.turn <= e.frozenUntilTurn) return false;
     if (st.atk <= 0) return false;
 
     const maxAttacks = st.keywords.has('doubleAttack') ? 2 : 1;
@@ -817,6 +819,11 @@ export class Game {
     if (!this.canAttack(uid, target)) return false;
     const atk = this.ent(uid);
     atk.attacksThisTurn++;
+    // Cards that watch attacks fire before anything else in the exchange.
+    for (const p of [0, 1] as PlayerId[]) {
+      this.fireTriggers('onAnyAttack', p, { exclude: uid, subject: atk });
+    }
+    if (atk.zone !== 'field') return true;
     // Attacking always breaks Ambush.
     atk.ambushed = false;
 
@@ -1373,12 +1380,11 @@ export class Game {
 
       case 'costMod': {
         const delta = this.amount(eff.delta, ctx);
-        const ps = this.player(ctx.controller);
-        const pool = eff.zone === 'hand' || eff.target.zone === 'hand' ? ps.hand : ps.hand;
-        for (const uid of pool) {
-          const e = this.ent(uid);
-          if (eff.target.filter && !this.matchesFilter(e, eff.target.filter, ctx.source)) continue;
-          e.costMod += delta;
+        // "Subtract 1 from the cost of this card" must hit only that card, so
+        // the selector is resolved rather than assumed to mean the whole hand.
+        const sel: Selector = { ...eff.target, zone: eff.target.zone ?? eff.zone ?? 'hand' };
+        for (const t of this.resolveSelector(sel, ctx).filter(isEntity)) {
+          t.costMod += delta;
         }
         return;
       }
@@ -1419,6 +1425,39 @@ export class Game {
           this.runEffects(eff.then, ctx);
         } else if (eff.else) {
           this.runEffects(eff.else, ctx);
+        }
+        return;
+      }
+
+      case 'freeze': {
+        // "Can't attack next turn" — the follower is locked out through its
+        // controller's next turn, which is two absolute turns away.
+        for (const t of this.resolveSelector(eff.target, ctx).filter(isEntity)) {
+          t.frozenUntilTurn = Math.max(t.frozenUntilTurn, this.state.turn + 2);
+          this.emit({ t: 'grant', uid: t.uid, keywords: ['cantAttack'] });
+        }
+        return;
+      }
+
+      case 'setCost': {
+        const target = this.amount(eff.cost, ctx);
+        for (const t of this.resolveSelector(eff.target, ctx).filter(isEntity)) {
+          t.costMod = target - this.def(t).cost;
+        }
+        return;
+      }
+
+      case 'untilFull': {
+        const ps = this.player(ctx.controller);
+        const cap = eff.where === 'field' ? RULES.BOARD_LIMIT : RULES.HAND_LIMIT;
+        let guard = 0;
+        while (guard++ < cap + 2) {
+          const size = eff.where === 'field' ? ps.field.length : ps.hand.length;
+          if (size >= cap) break;
+          this.runEffects(eff.body, ctx);
+          const after = eff.where === 'field' ? ps.field.length : ps.hand.length;
+          // If the body did not actually add anything, stop rather than spin.
+          if (after <= size) break;
         }
         return;
       }
@@ -1635,6 +1674,8 @@ export class Game {
         return this.player(ctx.controller).cardsPlayedThisTurn >= c.n;
       case 'opponentTurn':
         return this.state.active !== ctx.controller;
+      case 'subject':
+        return !!ctx.other && this.matchesFilter(ctx.other, c.filter, ctx.source);
       case 'hasShadows':
         return this.player(ctx.controller).shadows >= c.n;
       case 'atLeast':
@@ -1681,6 +1722,7 @@ export class Game {
     e.costMod = 0;
     e.countdown = this.def(e).countdown ?? 0;
     e.ambushed = (this.def(e).keywords ?? []).includes('ambush');
+    e.frozenUntilTurn = -1;
     e.barrierCharges = (this.def(e).keywords ?? []).includes('barrier') ? 1 : 0;
     e.firedOnce = {};
     e.dying = false;

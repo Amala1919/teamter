@@ -523,3 +523,29 @@ describe('win conditions', () => {
     expect(g.canPlay(card)).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Cost modification
+// ---------------------------------------------------------------------------
+
+describe('cost modification', () => {
+  it('reduces only the card its selector names', () => {
+    const g = newGame();
+    const a = toHand(g, 0, 't_big');
+    const b = toHand(g, 0, 't_big');
+    g.runEffects(
+      [{ k: 'costMod', target: { scope: 'self' }, delta: -2 }],
+      // The source is the card whose own cost is being reduced.
+      { source: g.ent(a), controller: 0, targets: [], ti: 0, option: 0, vars: {}, depth: 0 },
+    );
+    expect(g.costOf(a)).toBe(3);
+    expect(g.costOf(b)).toBe(5);
+  });
+
+  it('never lets a cost fall below zero', () => {
+    const g = newGame();
+    const uid = toHand(g, 0, 't_vanilla');
+    g.ent(uid).costMod = -10;
+    expect(g.costOf(uid)).toBe(0);
+  });
+});

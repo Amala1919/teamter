@@ -231,6 +231,8 @@ export type Condition =
   | { k: 'cardsPlayed'; n: number }
   /** True while it is not the controller's turn. */
   | { k: 'opponentTurn' }
+  /** Tests the card a trigger is *about* — the follower that just arrived. */
+  | { k: 'subject'; filter: Filter }
   /** Shadowcraft: you have at least N shadows (does NOT spend them). */
   | { k: 'hasShadows'; n: number }
   | { k: 'atLeast'; a: Amount; b: Amount }
@@ -276,6 +278,12 @@ export type Effect =
   /** Advance or delay a Countdown amulet. */
   | { k: 'countdown'; target: Selector; delta: Amount }
   | { k: 'spellboost'; amount?: Amount }
+  /** Stops a follower attacking until after its controller's next turn. */
+  | { k: 'freeze'; target: Selector }
+  /** Sets a hand card's cost outright, rather than adjusting it. */
+  | { k: 'setCost'; target: Selector; cost: Amount }
+  /** Repeats `body` until the controller's board (or hand) is full. */
+  | { k: 'untilFull'; where: 'field' | 'hand'; body: Effect[] }
   /** Earth Rite: destroy one allied Earth Sigil, then run `then`. */
   | { k: 'earthRite'; then: Effect[]; else?: Effect[] }
   | { k: 'consumeSpellboost' }
@@ -314,6 +322,8 @@ export type TriggerKind =
   | 'onHeal'
   | 'countdownEnd' // a Countdown amulet reaching 0
   | 'onEvolveAlly'
+  /** Any follower on either side declaring an attack. */
+  | 'onAnyAttack'
   | 'onSummon'; // when put onto the field by any means (not only from hand)
 
 export interface Ability {
@@ -476,6 +486,8 @@ export interface Entity {
   spellboost: number;
   /** Ambush is consumed on attack or when the owner's turn ends. */
   ambushed: boolean;
+  /** Absolute turn number up to and including which this cannot attack. */
+  frozenUntilTurn: number;
   barrierCharges: number;
 
   firedOnce: Record<string, boolean>;
