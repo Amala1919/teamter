@@ -11,6 +11,7 @@ import { Game } from '../src/engine/game';
 import { loadCards } from '../src/data/index';
 import { getCard } from '../src/engine/registry';
 import { buildStarterDeck } from '../src/data/decks';
+import { compileCardText } from '../src/data/compile';
 import { RULES, type Effect } from '../src/engine/types';
 
 loadCards();
@@ -113,6 +114,59 @@ describe('"X equals ..." amounts', () => {
     if (bound?.k !== 'withTarget') return;
     expect(bound.body.map((e) => e.k)).toEqual(['banish', 'heal']);
     expect(bound.target).not.toMatchObject({ scope: 'leader' });
+  });
+});
+
+describe('new trigger kinds fire on the right event', () => {
+  /** A game with full play points and evolution available for seat 0. */
+  function ready(cls: Parameters<typeof buildStarterDeck>[0]): Game {
+    const g = new Game([buildStarterDeck(cls, 5), buildStarterDeck('shadow', 6)], {
+      seed: 77,
+      first: 0,
+      skipMulligan: true,
+    });
+    const me = g.player(0);
+    me.pp = RULES.MAX_PP;
+    me.maxPp = RULES.MAX_PP;
+    me.ep = 2;
+    me.shadows = 30;
+    return g;
+  }
+
+  it('"whenever another follower evolves" sees the opponent evolve too', () => {
+    // Elf Bard: "Whenever another follower evolves, put a Fairy into your hand."
+    const g = ready('forest');
+    g.summonToken('elf_bard', 0, false);
+    const foe = g.summonToken('goblin', 1, false);
+    expect(foe).not.toBeNull();
+    const before = g.player(0).hand.length;
+    expect(g.forceEvolve(foe!.uid)).toBe(true);
+    expect(g.player(0).hand.length).toBe(before + 1);
+  });
+
+  it('separates "another follower" from "an allied follower"', () => {
+    const ctx = { names: new Map<string, string>(), selfType: 'follower' as const, selfId: 'x' };
+    const any = compileCardText('Whenever another follower evolves, draw a card.', ctx);
+    const ally = compileCardText('Whenever an allied follower evolves, draw a card.', ctx);
+    expect(any.abilities[0]?.on).toBe('onEvolveAny');
+    expect(ally.abilities[0]?.on).toBe('onEvolveAlly');
+    expect(getCard('elf_bard').abilities?.some((a) => a.on === 'onEvolveAny')).toBe(true);
+  });
+
+  it('"whenever an enemy follower is destroyed during your turn" is turn-gated', () => {
+    const ability = getCard('professor_of_taboos').abilities?.find(
+      (a) => a.on === 'onEnemyFollowerDestroyed',
+    );
+    expect(ability?.cond).toEqual({ k: 'not', c: { k: 'opponentTurn' } });
+  });
+
+  it('a discard trigger sees how many cards were discarded', () => {
+    // Dracomancer's Rites: "Whenever you discard cards from your hand, draw X
+    // cards. X equals the number of cards discarded."
+    const ability = getCard('dracomancers_rites').abilities?.find((a) => a.on === 'onDiscard');
+    expect(ability).toBeDefined();
+    const draw = flatten(ability!.effects).find((e) => e.k === 'draw');
+    expect(draw).toMatchObject({ amount: { k: 'ctx', name: 'discarded' } });
   });
 });
 

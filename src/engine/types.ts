@@ -351,6 +351,17 @@ export type TriggerKind =
   | 'onHeal'
   | 'countdownEnd' // a Countdown amulet reaching 0
   | 'onEvolveAlly'
+  /**
+   * Any follower on either board evolving — the printed "Whenever another
+   * follower evolves", which watches the opponent's evolutions too.
+   */
+  | 'onEvolveAny'
+  /** Cards leaving the controller's hand to the cemetery. `vars.discarded` is how many. */
+  | 'onDiscard'
+  /** A Necromancy cost actually being paid by the controller. */
+  | 'onNecromancy'
+  /** A follower arriving on the opponent's board. */
+  | 'onEnemyFollowerPlayed'
   /** Any follower on either side declaring an attack. */
   | 'onAnyAttack'
   | 'onSummon'; // when put onto the field by any means (not only from hand)

@@ -647,6 +647,7 @@ export class Game {
       this.putOnField(e, slot);
       if (d.type === 'follower') {
         this.fireTriggers('onAllyFollowerPlayed', e.owner, { exclude: e.uid, subject: e });
+        this.fireTriggers('onEnemyFollowerPlayed', other(e.owner), { subject: e });
       } else if (d.type === 'amulet') {
         this.fireTriggers('onAllyAmuletPlayed', e.owner, { exclude: e.uid, subject: e });
       }
@@ -696,6 +697,7 @@ export class Game {
       this.fireEntityTriggers(e, 'onSummon');
       if (this.def(e).type === 'follower') {
         this.fireTriggers('onAllyFollowerPlayed', owner, { exclude: e.uid, subject: e });
+        this.fireTriggers('onEnemyFollowerPlayed', other(owner), { subject: e });
       }
     }
     return e;
@@ -751,7 +753,11 @@ export class Game {
       vars: {},
       depth: 0,
     });
-    this.fireTriggers('onEvolveAlly', e.owner, { exclude: e.uid });
+    this.fireTriggers('onEvolveAlly', e.owner, { exclude: e.uid, subject: e });
+    // "Whenever another follower evolves" watches both boards.
+    for (const p of [0, 1] as PlayerId[]) {
+      this.fireTriggers('onEvolveAny', p, { exclude: e.uid, subject: e });
+    }
     this.checkState();
   }
 
@@ -1048,14 +1054,19 @@ export class Game {
   // Triggers
   // -------------------------------------------------------------------------
 
-  private fireEntityTriggers(e: Entity, kind: TriggerKind, otherEnt?: Entity | null): void {
+  private fireEntityTriggers(
+    e: Entity,
+    kind: TriggerKind,
+    otherEnt?: Entity | null,
+    vars: Record<string, number> = {},
+  ): void {
     this.runAbilities(e, kind, {
       source: e,
       controller: e.owner,
       targets: [],
       ti: 0,
       option: 0,
-      vars: {},
+      vars: { ...vars },
       other: otherEnt ?? null,
       depth: this.triggerDepth,
     });
@@ -1064,7 +1075,7 @@ export class Game {
   private fireTriggers(
     kind: TriggerKind,
     p: PlayerId,
-    opts: { exclude?: number; subject?: Entity | null } = {},
+    opts: { exclude?: number; subject?: Entity | null; vars?: Record<string, number> } = {},
   ): void {
     for (const uid of [...this.player(p).field]) {
       if (uid === opts.exclude) continue;
@@ -1072,7 +1083,7 @@ export class Game {
       if (!e || e.zone !== 'field') continue;
       // `subject` is the card the trigger is *about* — the follower that just
       // arrived, say — which card text refers to as "it".
-      this.fireEntityTriggers(e, kind, opts.subject ?? null);
+      this.fireEntityTriggers(e, kind, opts.subject ?? null, opts.vars);
     }
   }
 
@@ -1141,6 +1152,8 @@ export class Game {
           ps.shadows -= eff.n;
           this.emit({ t: 'shadows', player: ctx.controller, value: ps.shadows });
           this.runEffects(eff.then, ctx);
+          // "Whenever you perform Necromancy" means the cost was actually paid.
+          this.fireTriggers('onNecromancy', ctx.controller);
         } else if (eff.else) {
           this.runEffects(eff.else, ctx);
         }
@@ -1298,6 +1311,7 @@ export class Game {
         const n = this.amount(eff.amount, ctx);
         const who = eff.side === 'enemy' ? other(ctx.controller) : ctx.controller;
         const ps = this.player(who);
+        let discarded = 0;
         for (let i = 0; i < n && ps.hand.length > 0; i++) {
           const idx = eff.random ? this.rng.int(ps.hand.length) : ps.hand.length - 1;
           const uid = ps.hand.splice(idx, 1)[0];
@@ -1305,7 +1319,9 @@ export class Game {
           e.zone = 'cemetery';
           ps.cemetery.push(uid);
           this.emit({ t: 'log', text: `Discarded ${this.def(e).name}` });
+          discarded++;
         }
+        if (discarded > 0) this.fireTriggers('onDiscard', who, { vars: { discarded } });
         return;
       }
 
@@ -1530,6 +1546,9 @@ export class Game {
           ps.cemetery.push(uid);
         }
         ctx.vars.discarded = doomed.length;
+        if (doomed.length > 0) {
+          this.fireTriggers('onDiscard', ctx.controller, { vars: { discarded: doomed.length } });
+        }
         return;
       }
 

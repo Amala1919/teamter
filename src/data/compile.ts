@@ -1196,6 +1196,19 @@ function matchPrefix(line: string): PrefixMatch | null {
     [/^whenever your leader takes damage,\s*/i, ['onLeaderDamaged']],
     [/^whenever this follower (?:attacks|is attacked),\s*/i, ['clash']],
     [/^whenever this follower attacks,\s*/i, ['strike']],
+    // "Another follower" includes the opponent's; "an allied follower" does not.
+    [/^whenever another follower evolves,\s*/i, ['onEvolveAny']],
+    [/^whenever an allied follower evolves,\s*/i, ['onEvolveAlly']],
+    [/^whenever you perform necromancy,\s*/i, ['onNecromancy']],
+    [/^whenever you discard cards from your hand,\s*/i, ['onDiscard']],
+    [/^whenever your leader's defense is restored,\s*/i, ['onHeal']],
+    [/^whenever an enemy follower comes into play,\s*/i, ['onEnemyFollowerPlayed']],
+    // The engine only fires this one when the attacker survives, which is what
+    // the printed "if this follower is not destroyed" says.
+    [
+      /^whenever this follower attacks and destroys an enemy follower,(?: if this follower is not destroyed,)?\s*/i,
+      ['onDestroyEnemy'],
+    ],
   ];
   for (const [re, triggers] of timed) {
     const m = l.match(re);
@@ -1224,6 +1237,14 @@ function matchPrefix(line: string): PrefixMatch | null {
     }
     const inner = withInner(['onAllyFollowerPlayed'], l.slice(subject[0].length));
     inner.cond = { k: 'subject', filter: filter as never };
+    return inner;
+  }
+
+  // "…during your turn" narrows a trigger that otherwise fires on both turns.
+  const duringYourTurn = l.match(/^whenever an enemy follower is destroyed during your turn,\s*/i);
+  if (duringYourTurn) {
+    const inner = withInner(['onEnemyFollowerDestroyed'], l.slice(duringYourTurn[0].length));
+    inner.cond = { k: 'not', c: { k: 'opponentTurn' } };
     return inner;
   }
 
