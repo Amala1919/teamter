@@ -249,11 +249,19 @@ describe('sentence forms the printed text keeps using', () => {
     expect(grant).toMatchObject({ keywords: ['damageImmune'], duration: 'turn' });
   });
 
-  it('refuses a duration the engine cannot honour', () => {
-    // "Until the end of your opponent's turn" outlives every duration the
-    // engine has; the card stays partial rather than getting a shorter effect
-    // than it prints.
-    expect(getCard('elf_girl_liza').implemented).toBe(false);
+  it('carries "until the end of your opponent\u2019s turn" through as its own duration', () => {
+    // Elf Girl Liza's grant has to survive the opponent's whole turn, which is
+    // the point of it. Compiled as a this-turn grant it would lapse before the
+    // damage it exists to stop ever arrives.
+    const grant = flatten(abilityEffects('elf_girl_liza')).find((e) => e.k === 'grant');
+    expect(grant).toMatchObject({ keywords: ['effectImmune'], duration: 'opponentTurn' });
+  });
+
+  it('still refuses a duration the engine cannot honour', () => {
+    // "Until this follower leaves play" outlives every duration the engine
+    // has; the card stays partial rather than getting a shorter effect than it
+    // prints.
+    expect(getCard('captain_lecia').implemented).toBe(false);
   });
 
   it('compares the two leaders for "if their defense is higher than yours"', () => {

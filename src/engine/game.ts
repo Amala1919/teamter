@@ -3,6 +3,7 @@ import { getCard } from './registry';
 import type {
   Amount,
   AuraDef,
+  BuffDuration,
   CardDef,
   Condition,
   Effect,
@@ -168,14 +169,11 @@ export class Game {
       damage: 0,
       buffAtk: 0,
       buffDef: 0,
-      tempAtk: 0,
-      tempDef: 0,
+      temps: [],
       setAtk: null,
       setDef: null,
       grantedKeywords: [],
-      tempKeywords: [],
       grantedAbilities: [],
-      tempAbilities: [],
       silenced: false,
       removedKeywords: [],
       attacksThisTurn: 0,
@@ -241,14 +239,18 @@ export class Game {
     if (e.setAtk !== null) atk = e.setAtk;
     if (e.setDef !== null) maxDef = e.setDef;
 
-    atk += e.buffAtk + e.tempAtk;
-    maxDef += e.buffDef + e.tempDef;
+    atk += e.buffAtk;
+    maxDef += e.buffDef;
+    for (const t of e.temps) {
+      atk += t.atk ?? 0;
+      maxDef += t.def ?? 0;
+    }
 
     // A silenced follower keeps its stats but loses everything printed on it.
     const keywords = new Set<Keyword>(e.silenced ? [] : (d.keywords ?? []));
     if (e.evolved && !e.silenced) for (const k of d.evoKeywords ?? []) keywords.add(k);
     for (const k of e.grantedKeywords) keywords.add(k);
-    for (const k of e.tempKeywords) keywords.add(k);
+    for (const t of e.temps) for (const k of t.keywords ?? []) keywords.add(k);
 
     // `auraDepth` is non-zero only while an aura's own condition is being
     // tested; see `testAuraCondition`.
@@ -300,6 +302,22 @@ export class Game {
       cap = cap === null ? a.aura.damageCap : Math.min(cap, a.aura.damageCap);
     }
     return cap;
+  }
+
+  /**
+   * The turn index at the end of which a grant of this duration lapses, or
+   * null when it never does. `turn` is this turn; `opponentTurn` runs through
+   * the next one, which is the opponent's.
+   */
+  private expiryFor(d: BuffDuration | undefined): number | null {
+    switch (d ?? 'permanent') {
+      case 'turn':
+        return this.state.turn;
+      case 'opponentTurn':
+        return this.state.turn + 1;
+      default:
+        return null;
+    }
   }
 
   private activeAuras(): { src: Entity; aura: AuraDef }[] {
@@ -515,29 +533,19 @@ export class Game {
     const s = this.state;
     if (s.phase === 'over') return;
     s.phase = 'end';
-    const p = this.player(s.active);
 
     this.fireTriggers('turnEnd', s.active);
     this.checkState();
     if (s.winner !== null) return;
 
     // Ambush lapses at the end of its controller's turn if the follower has
-    // not attacked; temporary buffs expire here too.
-    for (const uid of [...p.field]) {
-      const e = this.state.entities.get(uid);
-      if (!e) continue;
-      e.tempAtk = 0;
-      e.tempDef = 0;
-      e.tempKeywords = [];
-      e.tempAbilities = [];
-    }
-    for (const uid of [...this.player(other(s.active)).field]) {
-      const e = this.state.entities.get(uid);
-      if (!e) continue;
-      e.tempAtk = 0;
-      e.tempDef = 0;
-      e.tempKeywords = [];
-      e.tempAbilities = [];
+    // not attacked; temporary grants lapse here too, each on its own turn.
+    for (const side of [0, 1] as PlayerId[]) {
+      for (const uid of [...this.player(side).field]) {
+        const e = this.state.entities.get(uid);
+        if (!e) continue;
+        if (e.temps.length > 0) e.temps = e.temps.filter((t) => t.until > s.turn);
+      }
     }
 
     this.emit({ t: 'turnEnd', player: s.active, turn: s.turn });
@@ -1155,7 +1163,7 @@ export class Game {
     const abilities = [
       ...(e.silenced ? [] : (d.abilities ?? [])),
       ...e.grantedAbilities,
-      ...e.tempAbilities,
+      ...e.temps.flatMap((t) => t.abilities ?? []),
     ].filter((a) => a.on === kind);
     if (abilities.length === 0) return;
     if (this.triggerDepth > 24) return;
@@ -1273,14 +1281,13 @@ export class Game {
       case 'buff': {
         const a = eff.atk ? this.amount(eff.atk, ctx) : 0;
         const d = eff.def ? this.amount(eff.def, ctx) : 0;
-        const perm = (eff.duration ?? 'permanent') === 'permanent';
+        const until = this.expiryFor(eff.duration);
         for (const t of this.resolveSelector(eff.target, ctx).filter(isEntity)) {
-          if (perm) {
+          if (until === null) {
             t.buffAtk += a;
             t.buffDef += d;
           } else {
-            t.tempAtk += a;
-            t.tempDef += d;
+            t.temps.push({ atk: a, def: d, until });
           }
           this.emit({ t: 'buff', uid: t.uid, atk: a, def: d });
         }
@@ -1302,27 +1309,29 @@ export class Game {
       }
 
       case 'grant': {
-        const perm = (eff.duration ?? 'permanent') === 'permanent';
+        const until = this.expiryFor(eff.duration);
         for (const t of this.resolveSelector(eff.target, ctx).filter(isEntity)) {
+          const fresh: Keyword[] = [];
           for (const k of eff.keywords) {
-            if (perm) {
+            if (until === null) {
               if (!t.grantedKeywords.includes(k)) t.grantedKeywords.push(k);
-            } else if (!t.tempKeywords.includes(k)) {
-              t.tempKeywords.push(k);
+            } else {
+              fresh.push(k);
             }
             if (k === 'barrier') t.barrierCharges = Math.max(t.barrierCharges, 1);
             if (k === 'ambush') t.ambushed = true;
           }
+          if (until !== null && fresh.length > 0) t.temps.push({ keywords: fresh, until });
           this.emit({ t: 'grant', uid: t.uid, keywords: eff.keywords });
         }
         return;
       }
 
       case 'grantAbility': {
-        const perm = (eff.duration ?? 'permanent') === 'permanent';
+        const until = this.expiryFor(eff.duration);
         for (const t of this.resolveSelector(eff.target, ctx).filter(isEntity)) {
-          const into = perm ? t.grantedAbilities : t.tempAbilities;
-          for (const ability of eff.abilities) into.push(ability);
+          if (until === null) for (const ability of eff.abilities) t.grantedAbilities.push(ability);
+          else t.temps.push({ abilities: [...eff.abilities], until });
           this.emit({ t: 'grant', uid: t.uid, keywords: [] });
         }
         return;
@@ -1332,9 +1341,8 @@ export class Game {
         for (const t of this.resolveSelector(eff.target, ctx).filter(isEntity)) {
           t.silenced = true;
           t.grantedKeywords = [];
-          t.tempKeywords = [];
           t.grantedAbilities = [];
-          t.tempAbilities = [];
+          t.temps = [];
           t.barrierCharges = 0;
           t.ambushed = false;
           this.emit({ t: 'log', text: `${this.def(t).name} lost its abilities` });
@@ -1958,13 +1966,10 @@ export class Game {
     e.damage = 0;
     e.buffAtk = 0;
     e.buffDef = 0;
-    e.tempAtk = 0;
-    e.tempDef = 0;
+    e.temps = [];
     e.setAtk = null;
     e.setDef = null;
     e.grantedKeywords = [];
-    e.tempKeywords = [];
-    e.tempAbilities = [];
     e.removedKeywords = [];
     e.attacksThisTurn = 0;
     e.canAttackFollowersEarly = false;

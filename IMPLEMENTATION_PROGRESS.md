@@ -11,12 +11,12 @@ card inspector, the compiler-coverage push and the leader animations.
 | Milestone | Status |
 |---|---|
 | 0 — Research and specification | **Done.** `docs/research/RULES_RESEARCH.md` (909 lines, sourced, with uncertainty flagged) and `docs/research/VISUAL_RESEARCH.md` (1176 lines). |
-| 1 — Rules engine, deterministic simulation | **Done.** 183 unit tests; 400-game AI-vs-AI soak with 0 failures. |
+| 1 — Rules engine, deterministic simulation | **Done.** 185 unit tests; 400-game AI-vs-AI soak with 0 failures. |
 | 2 — Card data and the Standard set | **Done.** All 888 cards (825 collectible + 63 tokens) from Basic through Wonderland Dreams, from the official card database, in both languages. |
 | 3 — Three.js battle screen and card renderer | **Done.** |
 | 4 — Playable battle flow | **Done,** including the mulligan. |
 | 5 — UI reproduction and feel | **Done.** Battle HUD, menu, mulligan, deck builder, collection, card detail, in-battle inspector. |
-| 6 — All cards through Wonderland Dreams | **Partial.** All cards are present and playable; **81.1%** have every printed line implemented. |
+| 6 — All cards through Wonderland Dreams | **Partial.** All cards are present and playable; **81.3%** have every printed line implemented. |
 | 7 — Evolution, effects, particles, audio | **Done.** Bloom, particles, camera shake, synthesised audio, leader animation. |
 | 8 — Deck builder and collection | **Done.** Decks persist to localStorage and are validated live. |
 | 9 — Visual comparison and QA | **Partial.** Iterated by screenshot; no side-by-side against real captures — official screenshots are unreachable from this environment. |
@@ -47,7 +47,7 @@ card inspector, the compiler-coverage push and the leader animations.
 
 ## Known gaps
 
-### Card implementation — 168 of 888 cards
+### Card implementation — 166 of 888 cards
 
 Cards with at least one printed line the compiler does not understand carry
 `implemented: false` and `missingText`, and are excluded from generated decks.
@@ -58,11 +58,11 @@ builder and card detail all say so.
 genuine long tail — every remaining unparsed line is now unique to one card —
 but these groups still repeat:
 
-- **Durations longer than a turn.** "Until the end of your opponent's turn",
-  "until this follower leaves play", "until the start of your next turn". A
-  grant is either permanent or expires at the end of the current turn, and
-  cards asking for anything else stay partial rather than getting a shorter
-  effect than they print.
+- **Durations tied to a card staying in play.** "Until this follower leaves
+  play", "until this amulet leaves play". A grant now carries its own expiry
+  turn — permanent, this turn, or through the opponent's turn — but nothing
+  hangs an expiry on another entity's lifetime. Cards asking for that stay
+  partial rather than getting a shorter effect than they print.
 - **Leader-attached effects.** "Give your leader the following effect:
   Followers can't be played" (Queen Medb, Carabosse, Wordwielder Ginger).
 - **Damage replacement.** "Deal any damage dealt to your leader to the enemy
@@ -84,8 +84,9 @@ but these groups still repeat:
 1. **Leader-attached effects** — "Give your leader the following effect:
    Followers can't be played". Abilities can now be granted to *entities*
    (`grantAbility`); a leader is not one, and has nowhere to hang them.
-2. **A longer grant duration.** An expiry turn per grant rather than the
-   current permanent-or-this-turn pair. Several cards are blocked on it alone.
+2. **Grants that last while a card stays in play.** An expiry keyed to another
+   entity's lifetime rather than to a turn index; Captain Lecia and Timeless
+   Witch are blocked on it alone.
 3. **Optimisation (milestone 10), continued.** A card face is 7.0 ms to paint
    at collection scale, of which 4.6 ms is the illustration; the three
    full-canvas rim-light passes are the obvious next target. The battle scene
@@ -147,6 +148,10 @@ exercised it:
   Zombie. A bare plural with no determiner carries no `all`, so it fell through
   to the default scope and quietly became a different card. Every card that
   names a tribe or a token in the plural was affected.
+- Temporary grants all expired at the end of whatever turn happened to be
+  ending, so nothing could last through the opponent's turn. Each grant now
+  carries its own expiry, which also means a this-turn grant landing on a
+  follower no longer cuts short a longer one already on it.
 - An aura whose condition counts the board recursed until the stack gave out:
   counting resolves a selector, resolving one reads `stats` to check for
   Ambush, and `stats` asks for the active auras again. Bahamut was the only

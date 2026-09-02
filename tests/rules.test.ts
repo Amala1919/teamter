@@ -433,10 +433,27 @@ describe('effects', () => {
     const buff = toHand(g, 0, 't_buff');
     g.playCard(buff, [f]);
     expect(g.stats(f).atk).toBe(4);
-    g.ent(f).tempAtk = 3;
+    g.ent(f).temps.push({ atk: 3, until: g.state.turn });
     expect(g.stats(f).atk).toBe(7);
     g.endTurn();
     expect(g.stats(f).atk).toBe(4);
+  });
+
+  it('keeps an “until the end of your opponent’s turn” grant through that turn', () => {
+    const g = newGame();
+    advanceToTurn(g, 5);
+    const f = place(g, 0, 't_vanilla');
+    const base = g.stats(f).atk;
+    g.ent(f).temps.push({ atk: 3, keywords: ['ward'], until: g.state.turn + 1 });
+    expect(g.stats(f).atk).toBe(base + 3);
+
+    g.endTurn(); // the opponent's turn begins — still there
+    expect(g.stats(f).atk).toBe(base + 3);
+    expect(g.stats(f).keywords.has('ward')).toBe(true);
+
+    g.endTurn(); // the opponent's turn ended — gone
+    expect(g.stats(f).atk).toBe(base);
+    expect(g.stats(f).keywords.has('ward')).toBe(false);
   });
 
   it('replaces a follower entirely on transform', () => {

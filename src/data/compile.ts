@@ -12,6 +12,7 @@
  * `npm run cards:report -- --lines` prints what is still missing.
  */
 import type {
+  BuffDuration,
   Ability,
   Amount,
   AuraDef,
@@ -365,6 +366,35 @@ function classCondition(word: string, negated: boolean): Condition {
   return negated ? { k: 'not', c } : c;
 }
 
+// ---------------------------------------------------------------------------
+// Durations
+// ---------------------------------------------------------------------------
+
+/**
+ * The trailing "until ..." clause, as an optional group. Anything outside this
+ * set makes the surrounding rule fail to match, which leaves the card partial
+ * — better than silently giving it a shorter effect than it prints.
+ */
+const UNTIL = `(?: until the (?:end of (?:the|this|your|your opponent['’]s|the opponent['’]s) turn|start of your next turn))?`;
+
+/** The duration named by a clause, or null when the engine cannot honour it. */
+function durationOfClause(clause: string): BuffDuration | null {
+  const u = tidy(clause).toLowerCase().replace(/\.$/, '').replace(/^until\s+/, '');
+  if (/^the end of (?:the|this|your) turn$/.test(u)) return 'turn';
+  // "Until the start of your next turn" is the same span as the opponent's
+  // turn ending, and the printed cards use the two interchangeably.
+  if (/^the end of (?:your |the )?opponent['’]s turn$/.test(u)) return 'opponentTurn';
+  if (/^the start of your next turn$/.test(u)) return 'opponentTurn';
+  return null;
+}
+
+/** The duration of a matched line, reading its last "until" clause. */
+function durationIn(text: string): BuffDuration | null {
+  const i = text.toLowerCase().lastIndexOf(' until ');
+  if (i < 0) return 'permanent';
+  return durationOfClause(text.slice(i + 1));
+}
+
 interface Peeled {
   body: string;
   cond?: Condition;
@@ -636,16 +666,17 @@ const RULES_TABLE: Rule[] = [
 
   // --- stat changes --------------------------------------------------------
   {
-    re: new RegExp(`^give \\+${N}/\\+${N} and (${KW_ALT}) to (.+?)(?: until the end of (?:the|this|your) turn)?$`, 'i'),
+    re: new RegExp(`^give \\+${N}/\\+${N} and (${KW_ALT}) to (.+?)${UNTIL}$`, 'i'),
     build: (m, ctx) => {
       const t = parseSelector(m[4], ctx);
       const a = amt(m[1], ctx);
       const d = amt(m[2], ctx);
       if (!t || a === null || d === null) return null;
-      const temp = /until the end of/i.test(m[0]);
+      const duration = durationIn(m[0]);
+      if (duration === null) return null;
       return [
-        { k: 'buff', target: t, atk: a, def: d, duration: temp ? 'turn' : 'permanent' },
-        { k: 'grant', target: t, keywords: [KEYWORD_WORDS[m[3].toLowerCase()]], duration: temp ? 'turn' : 'permanent' },
+        { k: 'buff', target: t, atk: a, def: d, duration },
+        { k: 'grant', target: t, keywords: [KEYWORD_WORDS[m[3].toLowerCase()]], duration },
       ];
     },
   },
@@ -653,7 +684,7 @@ const RULES_TABLE: Rule[] = [
     // "Give an allied follower +3/+3 and Rush." — the ditransitive order with a
     // keyword rider.
     re: new RegExp(
-      `^give (?![-+])(.+?) \\+${N}/\\+${N} and (${KW_ALT})(?: until the end of (?:the|this|your) turn)?$`,
+      `^give (?![-+])(.+?) \\+${N}/\\+${N} and (${KW_ALT})${UNTIL}$`,
       'i',
     ),
     build: (m, ctx) => {
@@ -661,9 +692,9 @@ const RULES_TABLE: Rule[] = [
       const a = amt(m[2], ctx);
       const d = amt(m[3], ctx);
       if (!t || a === null || d === null) return null;
-      const temp = /until the end of/i.test(m[0]);
-      const duration = temp ? ('turn' as const) : ('permanent' as const);
-      return [
+      const duration = durationIn(m[0]);
+      if (duration === null) return null;
+            return [
         { k: 'buff', target: t, atk: a, def: d, duration },
         { k: 'grant', target: t, keywords: [KEYWORD_WORDS[m[4].toLowerCase()]], duration },
       ];
@@ -672,7 +703,7 @@ const RULES_TABLE: Rule[] = [
   {
     // "Gain +1/+1, Ward and Bane." — any number of keywords after the stats.
     re: new RegExp(
-      `^gain \\+${N}/\\+${N},? (?:and )?((?:${KW_ALT})(?:,? (?:and )?(?:${KW_ALT}))*)(?: until the end of (?:the|this|your) turn)?$`,
+      `^gain \\+${N}/\\+${N},? (?:and )?((?:${KW_ALT})(?:,? (?:and )?(?:${KW_ALT}))*)${UNTIL}$`,
       'i',
     ),
     build: (m, ctx) => {
@@ -680,9 +711,9 @@ const RULES_TABLE: Rule[] = [
       const d = amt(m[2], ctx);
       const keywords = keywordList(m[3]);
       if (a === null || d === null || keywords.length === 0) return null;
-      const temp = /until the end of/i.test(m[0]);
-      const duration = temp ? ('turn' as const) : ('permanent' as const);
-      return [
+      const duration = durationIn(m[0]);
+      if (duration === null) return null;
+            return [
         { k: 'buff', target: { scope: 'self' }, atk: a, def: d, duration },
         { k: 'grant', target: { scope: 'self' }, keywords, duration },
       ];
@@ -692,7 +723,7 @@ const RULES_TABLE: Rule[] = [
     // The ditransitive word order, and debuffs: "Give all other allied
     // followers +0/+1", "Give an enemy follower -10/-0".
     re: new RegExp(
-      `^give (?![-+])(.+?) ([-+])${N}/([-+])${N}(?: until the end of (?:the|this|your) turn)?$`,
+      `^give (?![-+])(.+?) ([-+])${N}/([-+])${N}${UNTIL}$`,
       'i',
     ),
     build: (m, ctx) => {
@@ -700,13 +731,14 @@ const RULES_TABLE: Rule[] = [
       const a = signed(m[2], m[3], ctx);
       const d = signed(m[4], m[5], ctx);
       if (!t || a === null || d === null) return null;
-      const temp = /until the end of/i.test(m[0]);
-      return [{ k: 'buff', target: t, atk: a, def: d, duration: temp ? 'turn' : 'permanent' }];
+      const duration = durationIn(m[0]);
+      if (duration === null) return null;
+      return [{ k: 'buff', target: t, atk: a, def: d, duration }];
     },
   },
   {
     re: new RegExp(
-      `^give ([-+])${N}/([-+])${N} to (.+?)(?: until the end of (?:the|this|your) turn)?$`,
+      `^give ([-+])${N}/([-+])${N} to (.+?)${UNTIL}$`,
       'i',
     ),
     build: (m, ctx) => {
@@ -714,18 +746,20 @@ const RULES_TABLE: Rule[] = [
       const a = signed(m[1], m[2], ctx);
       const d = signed(m[3], m[4], ctx);
       if (!t || a === null || d === null) return null;
-      const temp = /until the end of/i.test(m[0]);
-      return [{ k: 'buff', target: t, atk: a, def: d, duration: temp ? 'turn' : 'permanent' }];
+      const duration = durationIn(m[0]);
+      if (duration === null) return null;
+      return [{ k: 'buff', target: t, atk: a, def: d, duration }];
     },
   },
   {
-    re: new RegExp(`^give (?:it|that follower) ([-+])${N}/([-+])${N}(?: until the end of (?:the|this|your) turn)?$`, 'i'),
+    re: new RegExp(`^give (?:it|that follower) ([-+])${N}/([-+])${N}${UNTIL}$`, 'i'),
     build: (m, ctx) => {
       const a = signed(m[1], m[2], ctx);
       const d = signed(m[3], m[4], ctx);
       if (a === null || d === null) return null;
-      const temp = /until the end of/i.test(m[0]);
-      return [{ k: 'buff', target: { scope: 'other' }, atk: a, def: d, duration: temp ? 'turn' : 'permanent' }];
+      const duration = durationIn(m[0]);
+      if (duration === null) return null;
+      return [{ k: 'buff', target: { scope: 'other' }, atk: a, def: d, duration }];
     },
   },
   {
@@ -742,15 +776,13 @@ const RULES_TABLE: Rule[] = [
       const t = parseSelector(m[1], ctx);
       if (!t) return null;
 
-      // Only two durations are expressible. "Until the end of your opponent's
-      // turn" and "until this follower leaves play" outlive both, and the
-      // engine has nowhere to hang them — such a card stays partial rather
-      // than quietly getting a shorter effect than it prints.
-      const until = (m[2] ?? '').trim().toLowerCase();
-      let duration: 'turn' | 'permanent';
-      if (!until) duration = 'permanent';
-      else if (/^until the end of (?:the|this|your) turn$/.test(until)) duration = 'turn';
-      else return null;
+      // "Until this follower leaves play" and the like outlive every duration
+      // the engine can express, and it has nowhere to hang them — such a card
+      // stays partial rather than quietly getting a shorter effect than it
+      // prints.
+      const until = (m[2] ?? '').trim();
+      const duration = until ? durationOfClause(until) : 'permanent';
+      if (duration === null) return null;
 
       const clause = tidy(m[3]).replace(/\.$/, '');
       const kw = phraseKeyword(clause) ?? KEYWORD_WORDS[clause.toLowerCase()];
@@ -762,53 +794,57 @@ const RULES_TABLE: Rule[] = [
   },
   {
     // "Give an allied follower Rush." — the keyword grant in the same order.
-    re: new RegExp(`^give (.+?) (${KW_ALT})(?: until the end of (?:the|this|your) turn)?$`, 'i'),
+    re: new RegExp(`^give (.+?) (${KW_ALT})${UNTIL}$`, 'i'),
     build: (m, ctx) => {
       const t = parseSelector(m[1], ctx);
       if (!t) return null;
-      const temp = /until the end of/i.test(m[0]);
+      const duration = durationIn(m[0]);
+      if (duration === null) return null;
       return [
         {
           k: 'grant',
           target: t,
           keywords: [KEYWORD_WORDS[m[2].toLowerCase()]],
-          duration: temp ? 'turn' : 'permanent',
+          duration,
         },
       ];
     },
   },
   {
-    re: new RegExp(`^give \\+${N}/\\+${N} to (.+?)(?: until the end of (?:the|this|your) turn)?$`, 'i'),
+    re: new RegExp(`^give \\+${N}/\\+${N} to (.+?)${UNTIL}$`, 'i'),
     build: (m, ctx) => {
       const t = parseSelector(m[3], ctx);
       const a = amt(m[1], ctx);
       const d = amt(m[2], ctx);
       if (!t || a === null || d === null) return null;
-      const temp = /until the end of/i.test(m[0]);
-      return [{ k: 'buff', target: t, atk: a, def: d, duration: temp ? 'turn' : 'permanent' }];
+      const duration = durationIn(m[0]);
+      if (duration === null) return null;
+      return [{ k: 'buff', target: t, atk: a, def: d, duration }];
     },
   },
   {
-    re: new RegExp(`^gain \\+${N}/\\+${N} and (${KW_ALT})(?: until the end of (?:the|this|your) turn)?$`, 'i'),
+    re: new RegExp(`^gain \\+${N}/\\+${N} and (${KW_ALT})${UNTIL}$`, 'i'),
     build: (m, ctx) => {
       const a = amt(m[1], ctx);
       const d = amt(m[2], ctx);
       if (a === null || d === null) return null;
-      const temp = /until the end of/i.test(m[0]);
+      const duration = durationIn(m[0]);
+      if (duration === null) return null;
       return [
-        { k: 'buff', target: { scope: 'self' }, atk: a, def: d, duration: temp ? 'turn' : 'permanent' },
-        { k: 'grant', target: { scope: 'self' }, keywords: [KEYWORD_WORDS[m[3].toLowerCase()]], duration: temp ? 'turn' : 'permanent' },
+        { k: 'buff', target: { scope: 'self' }, atk: a, def: d, duration },
+        { k: 'grant', target: { scope: 'self' }, keywords: [KEYWORD_WORDS[m[3].toLowerCase()]], duration },
       ];
     },
   },
   {
-    re: new RegExp(`^gain \\+${N}/\\+${N}(?: until the end of (?:the|this|your) turn)?$`, 'i'),
+    re: new RegExp(`^gain \\+${N}/\\+${N}${UNTIL}$`, 'i'),
     build: (m, ctx) => {
       const a = amt(m[1], ctx);
       const d = amt(m[2], ctx);
       if (a === null || d === null) return null;
-      const temp = /until the end of/i.test(m[0]);
-      return [{ k: 'buff', target: { scope: 'self' }, atk: a, def: d, duration: temp ? 'turn' : 'permanent' }];
+      const duration = durationIn(m[0]);
+      if (duration === null) return null;
+      return [{ k: 'buff', target: { scope: 'self' }, atk: a, def: d, duration }];
     },
   },
   {
@@ -829,27 +865,29 @@ const RULES_TABLE: Rule[] = [
     },
   },
   {
-    re: new RegExp(`^gain (${KW_ALT})(?: until the end of (?:the|this|your) turn)?$`, 'i'),
+    re: new RegExp(`^gain (${KW_ALT})${UNTIL}$`, 'i'),
     build: (m) => {
-      const temp = /until the end of/i.test(m[0]);
+      const duration = durationIn(m[0]);
+      if (duration === null) return null;
       return [
         {
           k: 'grant',
           target: { scope: 'self' },
           keywords: [KEYWORD_WORDS[m[1].toLowerCase()]],
-          duration: temp ? 'turn' : 'permanent',
+          duration,
         },
       ];
     },
   },
   {
-    re: new RegExp(`^give (?:it|that follower) \\+${N}/\\+${N}(?: until the end of (?:the|this|your) turn)?$`, 'i'),
+    re: new RegExp(`^give (?:it|that follower) \\+${N}/\\+${N}${UNTIL}$`, 'i'),
     build: (m, ctx) => {
       const a = amt(m[1], ctx);
       const d = amt(m[2], ctx);
       if (a === null || d === null) return null;
-      const temp = /until the end of/i.test(m[0]);
-      return [{ k: 'buff', target: { scope: 'other' }, atk: a, def: d, duration: temp ? 'turn' : 'permanent' }];
+      const duration = durationIn(m[0]);
+      if (duration === null) return null;
+      return [{ k: 'buff', target: { scope: 'other' }, atk: a, def: d, duration }];
     },
   },
   {
@@ -1011,8 +1049,9 @@ const RULES_TABLE: Rule[] = [
       const t = parseSelector(m[1]);
       const kw = phraseKeyword(m[2]);
       if (!t || !kw) return null;
-      const temp = /until the end of (?:the|this|your) turn/i.test(m[0]);
-      return [{ k: 'grant', target: t, keywords: [kw], duration: temp ? 'turn' : 'permanent' }];
+      const duration = durationIn(m[0]);
+      if (duration === null) return null;
+      return [{ k: 'grant', target: t, keywords: [kw], duration }];
       void ctx;
     },
   },
@@ -1021,8 +1060,9 @@ const RULES_TABLE: Rule[] = [
     build: (m) => {
       const kw = phraseKeyword(m[1]);
       if (!kw) return null;
-      const temp = /until the end of (?:the|this|your) turn/i.test(m[0]);
-      return [{ k: 'grant', target: { scope: 'self' }, keywords: [kw], duration: temp ? 'turn' : 'permanent' }];
+      const duration = durationIn(m[0]);
+      if (duration === null) return null;
+      return [{ k: 'grant', target: { scope: 'self' }, keywords: [kw], duration }];
     },
   },
   // "Select an enemy follower. It can't attack next turn." and friends.

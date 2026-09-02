@@ -267,7 +267,25 @@ export type Condition =
 // Effects — the data-driven vocabulary every card is built from
 // ---------------------------------------------------------------------------
 
-export type BuffDuration = 'permanent' | 'turn';
+/**
+ * How long a buff, keyword grant or granted ability lasts.
+ *
+ * `turn` is "until the end of the turn"; `opponentTurn` is "until the end of
+ * your opponent's turn", which is also how "until the start of your next turn"
+ * is written on some cards. A duration the engine cannot honour exactly is
+ * never quietly shortened — the card stays partial instead.
+ */
+export type BuffDuration = 'permanent' | 'turn' | 'opponentTurn';
+
+/** A temporary effect and the turn index at the end of which it lapses. */
+export interface TempEffect {
+  atk?: number;
+  def?: number;
+  keywords?: Keyword[];
+  abilities?: Ability[];
+  /** Lapses when `GameState.turn` passes this index. */
+  until: number;
+}
 
 export type Effect =
   | { k: 'damage'; target: Selector; amount: Amount; drain?: boolean }
@@ -537,21 +555,23 @@ export interface Entity {
 
   buffAtk: number;
   buffDef: number;
-  tempAtk: number;
-  tempDef: number;
+  /**
+   * Temporary stat, keyword and ability grants, each with its own expiry, so a
+   * grant that lasts through the opponent's turn is not cut short by a
+   * this-turn grant landing on the same follower.
+   */
+  temps: TempEffect[];
   /** Absolute overrides applied after buffs (used by "becomes X/Y" effects). */
   setAtk: number | null;
   setDef: number | null;
 
   grantedKeywords: Keyword[];
-  tempKeywords: Keyword[];
   /**
    * Abilities handed to this entity by another card — "Give an allied follower
    * the following effect: Follower Strike - Destroy the enemy follower." They
-   * fire alongside the card's own, and the temporary ones expire with buffs.
+   * fire alongside the card's own. Temporary ones live in `temps`.
    */
   grantedAbilities: Ability[];
-  tempAbilities: Ability[];
   /**
    * The entity has lost its printed abilities and keywords — Shadowverse's
    * 能力を失う. Anything granted afterwards still applies.
