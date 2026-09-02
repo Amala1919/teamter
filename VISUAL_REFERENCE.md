@@ -157,6 +157,20 @@ Everything is laid out in **head units** — the head is 2 units wide with its
 origin at the centre — so one transform seats any figure in the art window at
 any of the framings.
 
+That window is small: at bust framing it leaves roughly **1.7 units above the
+head's centre and 2.9 to the side**. Anything drawn past that is cropped
+silently, which is how a weapon ends up as a bare stick — the shaft is inside
+the frame and the head that identifies it is not. Long weapons are therefore
+scaled about the grip until their business end lands in the upper outer corner:
+past the face, inside the edge.
+
+The weapon frame is also **mirrored with the side the figure holds it on**, so
+every weapon can be authored for the right hand with +x pointing away from the
+figure. Without that an asymmetric weapon keeps its handedness when the figure
+swaps sides: a bow drawn to the left of the hand ends up outside the window
+entirely, and an archer holds nothing. Mirroring flips which side the light
+falls on, so the weapon gets the reflected light angle.
+
 ### Card names
 
 `src/art/cardname.ts` is deliberately a standalone system, because official

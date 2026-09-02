@@ -1248,15 +1248,38 @@ function drawGrip(ctx: CanvasRenderingContext2D, p: Portrait, light: number, at:
   });
 }
 
-function drawWeapon(ctx: CanvasRenderingContext2D, p: Portrait, light: number): void {
+function drawWeapon(ctx: CanvasRenderingContext2D, p: Portrait, lightIn: number): void {
   const w = p.spec.weapon ?? 'none';
   if (w === 'none') return;
   const s = p.turn >= 0 ? 1 : -1;
+  const light = s < 0 ? Math.PI - lightIn : lightIn;
   const wood = ramp('#6B4A2E', 0.9);
 
+  // A long haft drawn at full length leaves the art window and reads as a bare
+  // stick: only the shaft is inside the frame. Long weapons are scaled about
+  // the grip so the head stays visible; the hand is drawn at full size after.
+  const REACH: Partial<Record<Weapon, number>> = {
+    staff: 0.72,
+    scythe: 0.68,
+    spear: 0.74,
+    greatsword: 0.84,
+    axe: 0.9,
+  };
+  const reach = REACH[w] ?? 1;
+
+  // The art window leaves about 1.7 head-units above the head's centre and 2.9
+  // to the side, so a weapon's head has to land in the upper outer corner: any
+  // further up is cropped, any further in is behind the face.
   ctx.save();
-  ctx.translate(s * 2.15, 1.1);
-  ctx.rotate(s * 0.2);
+  ctx.translate(s * 1.85, 1.0);
+  // Mirrored so every weapon can be authored for the right hand with +x
+  // pointing away from the figure. Without this an asymmetric weapon — a bow,
+  // an axe head — keeps its handedness when the figure swaps sides and ends up
+  // outside the art window, or across the face.
+  ctx.scale(s, 1);
+  ctx.rotate(0.26);
+  ctx.save();
+  ctx.scale(reach, reach);
 
   const blade = (len: number, wide: number) =>
     cel(
@@ -1310,24 +1333,33 @@ function drawWeapon(ctx: CanvasRenderingContext2D, p: Portrait, light: number): 
       grip(0.5);
       break;
     case 'axe':
+      flat(ctx, (c) => { c.beginPath(); c.rect(-0.1, -2.8, 0.2, 3.3); }, wood.base, p.lineColor, 0.045);
+      // A bearded head: flat back against the haft, crescent edge swept out.
       cel(
         ctx,
-        (c) =>
-          blob(
-            c,
-            [
-              [0, -2.6],
-              [1.05, -2.35],
-              [1.15, -1.5],
-              [0.05, -1.35],
-            ],
-            0.85,
-          ),
+        (c) => {
+          c.beginPath();
+          c.moveTo(-0.06, -2.72);
+          c.lineTo(-1.02, -2.5);
+          c.quadraticCurveTo(-1.5, -1.86, -1.0, -1.2);
+          c.lineTo(-0.06, -1.42);
+          c.closePath();
+        },
         p.metal,
-        { x: -0.2, y: -2.7, w: 1.5, h: 1.5 },
+        { x: -1.55, y: -2.8, w: 1.6, h: 1.7 },
         { angle: light, coverage: 0.4, line: p.lineColor, lineWidth: 0.055, rim: rgba('#FFFFFF', 0.6), rimWidth: 0.05 },
       );
-      flat(ctx, (c) => { c.beginPath(); c.rect(-0.1, -2.8, 0.2, 3.3); }, wood.base, p.lineColor, 0.045);
+      // The cheek line that separates the edge from the body of the head.
+      ctx.save();
+      ctx.strokeStyle = rgba(p.lineColor, 0.45);
+      ctx.lineWidth = 0.05;
+      stroke(ctx, [
+        [-0.86, -2.44],
+        [-1.16, -1.9],
+        [-0.86, -1.34],
+      ]);
+      ctx.stroke();
+      ctx.restore();
       break;
     case 'spear':
       flat(ctx, (c) => { c.beginPath(); c.rect(-0.08, -3.6, 0.16, 4.4); }, wood.base, p.lineColor, 0.045);
@@ -1336,24 +1368,48 @@ function drawWeapon(ctx: CanvasRenderingContext2D, p: Portrait, light: number): 
       break;
     case 'scythe':
       flat(ctx, (c) => { c.beginPath(); c.rect(-0.09, -3.7, 0.18, 4.5); }, wood.base, p.lineColor, 0.045);
+      // The blade hooks back over the top of the haft. Swept the other way it
+      // crosses the face, and the weapon is drawn behind the figure, so it
+      // simply disappears.
       cel(
         ctx,
         (c) => {
           c.beginPath();
-          c.moveTo(0, -3.7);
-          c.quadraticCurveTo(-2.0, -4.1, -2.5, -2.7);
-          c.quadraticCurveTo(-1.7, -3.5, 0, -3.4);
+          c.moveTo(0.02, -3.62);
+          c.quadraticCurveTo(-1.4, -4.15, -2.25, -3.25);
+          c.quadraticCurveTo(-1.3, -3.6, 0.02, -3.28);
           c.closePath();
         },
         p.metal,
-        { x: -2.6, y: -4.2, w: 2.7, h: 1.6 },
+        { x: -2.35, y: -4.2, w: 2.5, h: 1.1 },
         { angle: light, coverage: 0.38, line: p.lineColor, lineWidth: 0.055, rim: rgba('#FFFFFF', 0.7), rimWidth: 0.05 },
       );
       break;
     case 'staff':
     case 'wand': {
-      const len = w === 'staff' ? 4.2 : 2.4;
+      const len = w === 'staff' ? 3.5 : 2.2;
       flat(ctx, (c) => { c.beginPath(); c.rect(-0.09, -len, 0.18, len + 0.9); }, wood.base, p.lineColor, 0.045);
+      // A binding at the shaft, so it is a made object and not a dowel.
+      for (const y of [-len * 0.32, -len * 0.32 - 0.16]) {
+        flat(ctx, (c) => { c.beginPath(); c.rect(-0.14, y, 0.28, 0.1); }, p.trim.base);
+      }
+      // The head: two claws closed around the stone.
+      for (const side of [-1, 1]) {
+        cel(
+          ctx,
+          (c) =>
+            sliver(
+              c,
+              [side * 0.1, -len + 0.16],
+              [side * 0.46, -len - 0.66],
+              0.09,
+              side * 0.14,
+            ),
+          p.metal,
+          { x: -0.6, y: -len - 0.8, w: 1.2, h: 1.1 },
+          { angle: light, coverage: 0.4, line: p.lineColor, lineWidth: 0.045 },
+        );
+      }
       // The gem, which is also the illustration's second light source.
       ctx.save();
       ctx.shadowColor = rgba(p.trim.light, 0.95);
@@ -1362,7 +1418,7 @@ function drawWeapon(ctx: CanvasRenderingContext2D, p: Portrait, light: number): 
         ctx,
         (c) => {
           c.beginPath();
-          c.ellipse(0, -len - 0.22, 0.32, 0.38, 0, 0, Math.PI * 2);
+          c.ellipse(0, -len - 0.24, 0.3, 0.36, 0, 0, Math.PI * 2);
         },
         p.trim.light,
         p.lineColor,
@@ -1371,22 +1427,58 @@ function drawWeapon(ctx: CanvasRenderingContext2D, p: Portrait, light: number): 
       ctx.restore();
       break;
     }
-    case 'bow':
+    case 'bow': {
+      // Curved around the hand that holds it. Drawn off to one side the whole
+      // bow falls outside the art window and the archer holds nothing.
+      const r = 1.55;
+      const cxB = 0.3;
+      const gy = -0.35;
+      const a0 = Math.PI * 0.6;
+      const a1 = Math.PI * 1.4;
+      const tip = (a: number): Pt => [cxB + Math.cos(a) * r, gy + Math.sin(a) * r];
       ctx.save();
-      ctx.strokeStyle = wood.base;
-      ctx.lineWidth = 0.18;
       ctx.lineCap = 'round';
+      // The limbs, thick enough to read against a dark background and rimmed
+      // on the lit side like every other solid form in the figure.
+      ctx.strokeStyle = p.lineColor;
+      ctx.lineWidth = 0.3;
       ctx.beginPath();
-      ctx.arc(0.9, -1.2, 2.1, Math.PI * 0.55, Math.PI * 1.45);
+      ctx.arc(cxB, gy, r, a0, a1);
       ctx.stroke();
-      ctx.strokeStyle = rgba('#EDE6D8', 0.85);
-      ctx.lineWidth = 0.05;
+      ctx.strokeStyle = wood.base;
+      ctx.lineWidth = 0.21;
       ctx.beginPath();
-      ctx.moveTo(0.24, -3.05);
-      ctx.lineTo(0.24, 0.65);
+      ctx.arc(cxB, gy, r, a0, a1);
+      ctx.stroke();
+      ctx.strokeStyle = rgba(wood.light, 0.8);
+      ctx.lineWidth = 0.07;
+      ctx.beginPath();
+      ctx.arc(cxB - 0.04, gy - 0.04, r, a0 + 0.12, a1 - 0.12);
+      ctx.stroke();
+      // Grip wrap.
+      ctx.strokeStyle = p.trim.base;
+      ctx.lineWidth = 0.24;
+      ctx.beginPath();
+      ctx.arc(cxB, gy, r, Math.PI * 0.94, Math.PI * 1.06);
+      ctx.stroke();
+      // The string, and an arrow nocked on it.
+      const t0 = tip(a0);
+      const t1 = tip(a1);
+      ctx.strokeStyle = rgba('#EDE6D8', 0.9);
+      ctx.lineWidth = 0.06;
+      ctx.beginPath();
+      ctx.moveTo(t0[0], t0[1]);
+      ctx.lineTo(t1[0], t1[1]);
+      ctx.stroke();
+      ctx.strokeStyle = wood.shade;
+      ctx.lineWidth = 0.08;
+      ctx.beginPath();
+      ctx.moveTo((t0[0] + t1[0]) / 2, (t0[1] + t1[1]) / 2);
+      ctx.lineTo(cxB - r * 0.95, gy);
       ctx.stroke();
       ctx.restore();
       break;
+    }
     case 'book':
       cel(
         ctx,
@@ -1423,6 +1515,8 @@ function drawWeapon(ctx: CanvasRenderingContext2D, p: Portrait, light: number): 
       break;
   }
 
+  ctx.restore();
+
   // The hand, last, so it closes over whatever shaft was drawn.
   const gripAt: Partial<Record<Weapon, number>> = {
     sword: 0.42,
@@ -1436,7 +1530,7 @@ function drawWeapon(ctx: CanvasRenderingContext2D, p: Portrait, light: number): 
     bow: -0.6,
   };
   const at = gripAt[w];
-  if (at !== undefined) drawGrip(ctx, p, light, at);
+  if (at !== undefined) drawGrip(ctx, p, light, at * reach);
 
   ctx.restore();
 }
@@ -1460,7 +1554,7 @@ export interface PortraitFrame {
 /** Long hafted weapons read better rising behind the shoulder than in front. */
 function behindShoulder(p: Portrait): boolean {
   const w = p.spec.weapon ?? 'none';
-  return w === 'staff' || w === 'spear' || w === 'scythe' || w === 'greatsword' || w === 'bow';
+  return w === 'staff' || w === 'spear' || w === 'scythe' || w === 'greatsword';
 }
 
 export function drawPortrait(
