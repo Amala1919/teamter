@@ -10,7 +10,7 @@ Last updated: after the battle screen, rules corrections and documentation pass.
 | Milestone | Status |
 |---|---|
 | 0 — Research and specification | **Done.** `docs/research/RULES_RESEARCH.md` (909 lines, sourced, with uncertainty flagged) and `docs/research/VISUAL_RESEARCH.md` (1176 lines). |
-| 1 — Rules engine, deterministic simulation | **Done.** 52 unit tests; 300-game AI-vs-AI soak with 0 failures. |
+| 1 — Rules engine, deterministic simulation | **Done.** 95 unit tests; 400-game AI-vs-AI soak with 0 failures. |
 | 2 — Card data and the Standard set | **Done.** All 888 cards (825 collectible + 63 tokens) from Basic through Wonderland Dreams, from the official card database. |
 | 3 — Three.js battle screen and card renderer | **Done.** |
 | 4 — Playable battle flow | **Done,** including the mulligan. |
@@ -34,7 +34,7 @@ Last updated: after the battle screen, rules corrections and documentation pass.
 
 ## Known gaps
 
-### Card implementation — 300 of 888 cards
+### Card implementation — 264 of 888 cards
 
 Cards with at least one printed line the compiler does not understand carry
 `implemented: false` and `missingText`, and are excluded from generated decks.

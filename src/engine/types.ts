@@ -207,6 +207,14 @@ export type Amount =
   | { k: 'leaderDefenseLost'; side?: Side }
   | { k: 'sourceAtk' }
   | { k: 'sourceDef' }
+  /** Stats of the entity bound as the context's "other" — see `withTarget`. */
+  | { k: 'otherAtk' }
+  | { k: 'otherDef' }
+  | { k: 'otherCost' }
+  /** Followers destroyed this turn, per side. */
+  | { k: 'destroyedThisTurn'; side?: Side }
+  /** The controller's current leader defense. */
+  | { k: 'leaderDefense'; side?: Side }
   /** Value carried in the resolution context, e.g. damage just dealt. */
   | { k: 'ctx'; name: string }
   | { k: 'sum'; of: Amount[] }
@@ -284,6 +292,21 @@ export type Effect =
   | { k: 'setCost'; target: Selector; cost: Amount }
   /** Repeats `body` until the controller's board (or hand) is full. */
   | { k: 'untilFull'; where: 'field' | 'hand'; body: Effect[] }
+  /**
+   * Binds one selected entity as the context's "other" and runs `body`, so an
+   * effect can act on a target and then read that same target's stats.
+   */
+  | { k: 'withTarget'; target: Selector; body: Effect[] }
+  /** Search the deck and put matching cards directly onto the field. */
+  | { k: 'searchToField'; filter: Filter; count?: Amount; distinctCost?: boolean }
+  /** Copy an entity into hand or onto the field. */
+  | { k: 'copy'; target: Selector; to: 'hand' | 'field'; count?: Amount }
+  /** Discard every matching card from hand; stores the count as `discarded`. */
+  | { k: 'discardMatching'; filter: Filter }
+  /** Heals a follower to full. */
+  | { k: 'restoreFully'; target: Selector }
+  /** Summons one of the listed cards at random — "randomly summon 1 of …". */
+  | { k: 'summonRandom'; defIds: string[]; count?: Amount }
   /** Earth Rite: destroy one allied Earth Sigil, then run `then`. */
   | { k: 'earthRite'; then: Effect[]; else?: Effect[] }
   | { k: 'consumeSpellboost' }
@@ -316,6 +339,7 @@ export type TriggerKind =
   | 'enemyTurnEnd' // end of the opponent's turn
   | 'onAllyFollowerPlayed'
   | 'onAllySpellPlayed'
+  | 'onAllyAmuletPlayed'
   | 'onAllyFollowerDestroyed'
   | 'onEnemyFollowerDestroyed'
   | 'onLeaderDamaged'

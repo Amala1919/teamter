@@ -16,7 +16,7 @@ verify, it is in the wrong place.
 
 ## Unit tests
 
-`tests/rules.test.ts` — 52 tests over the engine. They run against a small
+`tests/rules.test.ts` — 54 tests over the engine. They run against a small
 hand-written card set in `tests/helpers.ts` rather than the real card pool, so
 a rules test never breaks because a card was rebalanced upstream.
 
@@ -60,6 +60,15 @@ g.playCard(card, [uid]);                // targets are supplied as uids
 `place()` marks the entity as having entered on turn -1, so it can attack
 immediately — pass through `playCard` instead when summoning sickness matters.
 
+### Card tests
+
+`tests/cards.test.ts` plays every hand-written card from `overrides.ts` on a
+board with followers on both sides, and asserts the game state stays consistent
+afterwards: no zone holds a card twice, no board or hand exceeds its limit, no
+leader is healed above maximum, no follower has negative attack. It also checks
+the pool as a whole — unique ids, sane stats, every `creates` reference
+resolving, and that `implemented` and `missingText` never disagree.
+
 ## The soak test
 
 `tools/simulate.ts` plays complete AI-vs-AI matches over the **real** 888-card
@@ -91,11 +100,11 @@ the seed for match `i` is `baseSeed + i * 7919`.
 ```
 $ npm run cards:report
 cards            888
-fully compiled   477
+fully compiled   514
 vanilla          74
-hand-written     0
-incomplete       337
-coverage         62.0%
+hand-written     36
+incomplete       264
+coverage         70.3%
 ```
 
 "Incomplete" cards have at least one printed line the compiler did not

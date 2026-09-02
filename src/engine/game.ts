@@ -392,6 +392,7 @@ export class Game {
     const p = this.player(s.active);
     p.hasEvolvedThisTurn = false;
     p.cardsPlayedThisTurn = 0;
+    this.destroyedThisTurn = [0, 0];
 
     for (const uid of p.field) {
       const e = this.ent(uid);
@@ -441,6 +442,8 @@ export class Game {
   }
 
   private epGranted = new Set<PlayerId>();
+  /** Followers each player has lost this turn; reset at the start of a turn. */
+  private destroyedThisTurn: [number, number] = [0, 0];
   /** Turns each player has begun, used for the going-second extra draw. */
   private turnsTaken: [number, number] = [0, 0];
 
@@ -644,6 +647,8 @@ export class Game {
       this.putOnField(e, slot);
       if (d.type === 'follower') {
         this.fireTriggers('onAllyFollowerPlayed', e.owner, { exclude: e.uid, subject: e });
+      } else if (d.type === 'amulet') {
+        this.fireTriggers('onAllyAmuletPlayed', e.owner, { exclude: e.uid, subject: e });
       }
       if (enhanceMode) this.runEffects(enhanceMode.effects, ctx);
       else this.runAbilities(e, 'fanfare', ctx);
@@ -998,6 +1003,7 @@ export class Game {
         this.emit({ t: 'destroy', uid: e.uid, defId: e.defId });
         if (this.def(e).type === 'follower') {
           ps.shadows++;
+          this.destroyedThisTurn[e.owner]++;
           this.emit({ t: 'shadows', player: e.owner, value: ps.shadows });
         }
       }
@@ -1462,6 +1468,87 @@ export class Game {
         return;
       }
 
+      case 'withTarget': {
+        // Bind the chosen entity so later effects in `body` can read its stats
+        // even after it has left play.
+        for (const t of this.resolveSelector(eff.target, ctx).filter(isEntity)) {
+          this.runEffects(eff.body, { ...ctx, other: t });
+        }
+        return;
+      }
+
+      case 'searchToField': {
+        const ps = this.player(ctx.controller);
+        const n = eff.count ? this.amount(eff.count, ctx) : 1;
+        let pool = ps.deck.filter((u) => this.matchesFilter(this.ent(u), eff.filter, ctx.source));
+        const chosen: number[] = [];
+        const usedCosts = new Set<number>();
+        while (chosen.length < n && pool.length > 0) {
+          if (ps.field.length + chosen.length >= RULES.BOARD_LIMIT) break;
+          const pick = this.rng.pick(pool);
+          if (pick === undefined) break;
+          const cost = this.def(pick).cost;
+          if (eff.distinctCost && usedCosts.has(cost)) {
+            pool = pool.filter((u) => this.def(u).cost !== cost);
+            continue;
+          }
+          usedCosts.add(cost);
+          chosen.push(pick);
+          pool = pool.filter((u) => u !== pick);
+        }
+        for (const uid of chosen) {
+          const i = ps.deck.indexOf(uid);
+          if (i >= 0) ps.deck.splice(i, 1);
+          const e = this.ent(uid);
+          e.zone = 'limbo';
+          if (ps.field.length >= RULES.BOARD_LIMIT) break;
+          this.putOnField(e);
+          this.fireEntityTriggers(e, 'onSummon');
+        }
+        return;
+      }
+
+      case 'copy': {
+        const n = eff.count ? this.amount(eff.count, ctx) : 1;
+        for (const t of this.resolveSelector(eff.target, ctx).filter(isEntity)) {
+          for (let i = 0; i < n; i++) {
+            if (eff.to === 'hand') this.addToHand(ctx.controller, t.defId);
+            else this.summonToken(t.defId, ctx.controller);
+          }
+        }
+        return;
+      }
+
+      case 'discardMatching': {
+        const ps = this.player(ctx.controller);
+        const doomed = ps.hand.filter((u) => this.matchesFilter(this.ent(u), eff.filter, ctx.source));
+        for (const uid of doomed) {
+          const i = ps.hand.indexOf(uid);
+          if (i >= 0) ps.hand.splice(i, 1);
+          const e = this.ent(uid);
+          e.zone = 'cemetery';
+          ps.cemetery.push(uid);
+        }
+        ctx.vars.discarded = doomed.length;
+        return;
+      }
+
+      case 'summonRandom': {
+        const n = eff.count ? this.amount(eff.count, ctx) : 1;
+        for (let i = 0; i < n; i++) {
+          const pick = this.rng.pick(eff.defIds);
+          if (pick) this.summonToken(pick, ctx.controller);
+        }
+        return;
+      }
+
+      case 'restoreFully': {
+        for (const t of this.resolveSelector(eff.target, ctx).filter(isEntity)) {
+          this.healEntity(t, t.damage);
+        }
+        return;
+      }
+
       case 'consumeSpellboost': {
         if (ctx.source) ctx.source.spellboost = 0;
         return;
@@ -1610,6 +1697,10 @@ export class Game {
   // -------------------------------------------------------------------------
 
   amount(a: Amount, ctx: ResolveCtx): number {
+    return Math.floor(this.rawAmount(a, ctx));
+  }
+
+  private rawAmount(a: Amount, ctx: ResolveCtx): number {
     if (typeof a === 'number') return a;
     switch (a.k) {
       case 'count':
@@ -1634,16 +1725,29 @@ export class Game {
         return ctx.source ? this.stats(ctx.source).atk : 0;
       case 'sourceDef':
         return ctx.source ? this.stats(ctx.source).def : 0;
+      case 'otherAtk':
+        return ctx.other ? this.stats(ctx.other).atk : 0;
+      case 'otherDef':
+        return ctx.other ? this.stats(ctx.other).def : 0;
+      case 'otherCost':
+        return ctx.other ? this.def(ctx.other).cost : 0;
+      case 'destroyedThisTurn': {
+        const side = a.side ?? 'ally';
+        const p = side === 'enemy' ? other(ctx.controller) : ctx.controller;
+        return this.destroyedThisTurn[p];
+      }
+      case 'leaderDefense':
+        return this.player(this.sideToPlayer(a.side ?? 'ally', ctx.controller)).defense;
       case 'ctx':
         return ctx.vars[a.name] ?? 0;
       case 'sum':
-        return a.of.reduce<number>((s, x) => s + this.amount(x, ctx), 0);
+        return a.of.reduce<number>((s, x) => s + this.rawAmount(x, ctx), 0);
       case 'mul':
-        return this.amount(a.a, ctx) * this.amount(a.b, ctx);
+        return this.rawAmount(a.a, ctx) * this.rawAmount(a.b, ctx);
       case 'min':
-        return Math.min(this.amount(a.a, ctx), this.amount(a.b, ctx));
+        return Math.min(this.rawAmount(a.a, ctx), this.rawAmount(a.b, ctx));
       case 'max':
-        return Math.max(this.amount(a.a, ctx), this.amount(a.b, ctx));
+        return Math.max(this.rawAmount(a.a, ctx), this.rawAmount(a.b, ctx));
       default:
         return 0;
     }
