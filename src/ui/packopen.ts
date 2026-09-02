@@ -16,6 +16,7 @@ import { FONT, RARITY_THEME, UI } from '../art/theme';
 import { SET_LABEL } from './cardgrid';
 import { CardDetail } from './detail';
 import { el, ensureScreenStyles } from './style';
+import { t } from '../i18n';
 import { builtCards } from '../data/index';
 
 const PACK_SIZE = 8;
@@ -179,20 +180,20 @@ export class PackOpenOverlay {
 
   private showSealed(): void {
     const label =
-      this.opts.set && this.opts.set !== 'all' ? SET_LABEL[this.opts.set] : 'All sets';
+      this.opts.set && this.opts.set !== 'all' ? SET_LABEL[this.opts.set] : t('pack.allSets');
 
     const pack = el('div', { class: 'pack-wrapper' }, this.packArt());
     const beam = el('div', { class: 'pack-beam' });
 
-    const close = el('button', { class: 'sv-btn' }, 'Close');
+    const close = el('button', { class: 'sv-btn' }, t('pack.close'));
     close.addEventListener('click', () => this.close());
 
     this.root.replaceChildren(
       beam,
-      el('div', { class: 'pack-title' }, 'Card Pack'),
+      el('div', { class: 'pack-title' }, t('pack.title')),
       el('div', { class: 'pack-hint' }, label),
       pack,
-      el('div', { class: 'pack-hint' }, 'Tap the pack to open it'),
+      el('div', { class: 'pack-hint' }, t('pack.hint')),
       el('div', { class: 'pack-actions' }, close),
       this.detail.root,
     );
@@ -287,7 +288,7 @@ export class PackOpenOverlay {
     ctx.fillStyle = UI.goldBright;
     ctx.textAlign = 'center';
     ctx.letterSpacing = '4px';
-    ctx.fillText('CARD PACK', cx, 44);
+    ctx.fillText(t('pack.label'), cx, 44);
 
     c.style.cssText = 'width:230px;height:auto;display:block;border-radius:10px;filter:drop-shadow(0 22px 44px rgba(0,0,0,.8));';
     return c;
@@ -336,7 +337,7 @@ export class PackOpenOverlay {
       fan.append(slot);
     });
 
-    const revealAll = el('button', { class: 'sv-btn primary' }, 'Reveal all');
+    const revealAll = el('button', { class: 'sv-btn primary' }, t('pack.revealAll'));
     revealAll.addEventListener('click', () => {
       slots.forEach((slot, i) => {
         window.setTimeout(() => {
@@ -350,21 +351,21 @@ export class PackOpenOverlay {
       });
     });
 
-    const again = el('button', { class: 'sv-btn' }, 'Open another');
+    const again = el('button', { class: 'sv-btn' }, t('pack.again'));
     again.addEventListener('click', () => {
       this.detail.close();
       this.root.remove();
       new PackOpenOverlay(this.opts);
     });
 
-    const done = el('button', { class: 'sv-btn' }, 'Done');
+    const done = el('button', { class: 'sv-btn' }, t('pack.done'));
     done.addEventListener('click', () => this.close());
 
     this.actions = el('div', { class: 'pack-actions' }, revealAll, again, done);
 
     this.root.replaceChildren(
-      el('div', { class: 'pack-title' }, 'Your Cards'),
-      el('div', { class: 'pack-hint' }, 'Tap a card to turn it over, again for details'),
+      el('div', { class: 'pack-title' }, t('pack.results')),
+      el('div', { class: 'pack-hint' }, t('pack.resultsHint')),
       fan,
       this.actions,
       this.detail.root,

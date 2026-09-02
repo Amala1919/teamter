@@ -11,6 +11,7 @@ import type { CardDef, Keyword } from '../engine/types';
 import { KEYWORD_LABEL } from '../engine/types';
 import { drawIllustration } from './illustration';
 import { drawCardName } from './cardname';
+import { cardName } from '../i18n';
 import { CLASS_THEME, FONT, UI } from './theme';
 
 export const BOARD_CARD = { W: 340, H: 476 } as const;
@@ -254,7 +255,7 @@ export function drawBoardCard(ctx: CanvasRenderingContext2D, card: CardDef, st: 
   ctx.fillRect(art.x, band.y - 40, art.w, art.h);
   ctx.restore();
 
-  drawCardName(ctx, card.name, band, {
+  drawCardName(ctx, cardName(card), band, {
     drawPlate: true,
     plateColor: rgba(theme.deep, 0.85),
     style: { maxSize: 30, minSize: 15, outlineRatio: 0.16 },

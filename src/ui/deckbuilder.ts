@@ -13,6 +13,7 @@ import { CardGrid, DEFAULT_FILTERS, applyFilters, buildFilterBar, type GridFilte
 import { CardDetail } from './detail';
 import { COPY_LIMIT, DECK_SIZE, deckSize, saveDeck, statusOf, type SavedDeck } from './decks';
 import { el, ensureScreenStyles } from './style';
+import { cardName, className, t } from '../i18n';
 
 export class DeckBuilderScreen {
   readonly root: HTMLDivElement;
@@ -36,7 +37,7 @@ export class DeckBuilderScreen {
     ensureScreenStyles();
     this.deck = { ...deck, cards: { ...deck.cards } };
 
-    const back = el('button', { class: 'sv-btn' }, '← Save & back');
+    const back = el('button', { class: 'sv-btn', 'data-act': 'back' }, t('deck.saveBack'));
     back.addEventListener('click', () => {
       saveDeck(this.deck);
       this.onBack();
@@ -55,7 +56,7 @@ export class DeckBuilderScreen {
 
     const classRow = el('div', { class: 'sv-chiprow' });
     for (const cls of CRAFT_CLASSES) {
-      const chip = el('div', { class: 'sv-chip' + (cls === this.deck.leaderClass ? ' on' : '') }, CLASS_THEME[cls].label.replace('craft', ''));
+      const chip = el('div', { class: 'sv-chip' + (cls === this.deck.leaderClass ? ' on' : '') }, className(CLASS_THEME[cls]).replace('craft', ''));
       chip.setAttribute('data-class', '1');
       chip.style.setProperty('--chip-color', CLASS_THEME[cls].primary);
       chip.addEventListener('click', () => this.changeClass(cls));
@@ -87,7 +88,7 @@ export class DeckBuilderScreen {
     const panel = el(
       'div',
       { class: 'sv-panel', style: 'width:320px;flex:none;display:flex;flex-direction:column;margin:14px 14px 14px 0;' },
-      el('div', { class: 'sv-panel-title' }, 'Deck'),
+      el('div', { class: 'sv-panel-title' }, t('deck.title')),
       this.listEl,
       this.curveEl,
       this.statusEl,
@@ -125,7 +126,7 @@ export class DeckBuilderScreen {
     }
     this.deck.leaderClass = cls;
     for (const chip of Array.from(this.root.querySelectorAll('.sv-topbar .sv-chip'))) {
-      chip.classList.toggle('on', chip.textContent === CLASS_THEME[cls].label.replace('craft', ''));
+      chip.classList.toggle('on', chip.textContent === className(CLASS_THEME[cls]).replace('craft', ''));
     }
     this.rebuildPool();
   }
@@ -187,17 +188,17 @@ export class DeckBuilderScreen {
     const entries = Object.entries(this.deck.cards)
       .map(([id, n]) => ({ card: tryGetCard(id), n }))
       .filter((e): e is { card: CardDef; n: number } => !!e.card)
-      .sort((a, b) => a.card.cost - b.card.cost || a.card.name.localeCompare(b.card.name));
+      .sort((a, b) => a.card.cost - b.card.cost || cardName(a.card).localeCompare(cardName(b.card), 'ja'));
 
     const rows = entries.map(({ card, n }) => {
       const row = el('div', { class: 'sv-deckrow' });
       row.style.setProperty('--row-color', CLASS_THEME[card.cardClass].primary);
-      row.append(el('div', { class: 'cost' }, String(card.cost)), el('div', { class: 'name' }, card.name));
+      row.append(el('div', { class: 'cost' }, String(card.cost)), el('div', { class: 'name' }, cardName(card)));
       if (card.implemented === false) {
-        row.append(el('span', { style: 'font-size:9px;color:#FFC08A;letter-spacing:.08em;' }, 'PARTIAL'));
+        row.append(el('span', { style: 'font-size:9px;color:#FFC08A;letter-spacing:.08em;' }, t('deck.partial')));
       }
       row.append(el('div', { class: 'n' }, `×${n}`));
-      row.title = `${card.name} — click to remove one`;
+      row.title = t('deck.removeOne', { name: cardName(card) });
       row.addEventListener('click', () => this.remove(card.id));
       row.addEventListener('contextmenu', (e) => {
         e.preventDefault();
@@ -207,7 +208,7 @@ export class DeckBuilderScreen {
     });
 
     this.listEl.replaceChildren(
-      ...(rows.length > 0 ? rows : [el('div', { class: 'sv-empty', style: 'padding:30px 10px;' }, 'Click cards to add them.')]),
+      ...(rows.length > 0 ? rows : [el('div', { class: 'sv-empty', style: 'padding:30px 10px;' }, t('deck.empty'))]),
     );
 
     // Cost curve, 1..7+.
@@ -227,7 +228,8 @@ export class DeckBuilderScreen {
 
     const size = deckSize(this.deck);
     const status = statusOf(this.deck);
-    this.countEl.textContent = `${size} / ${DECK_SIZE}${size >= DECK_SIZE ? ' — full' : ''}`;
+    this.countEl.textContent =
+      t('deck.count', { n: size, max: DECK_SIZE }) + (size >= DECK_SIZE ? t('deck.full') : '');
     this.countEl.style.color = size === DECK_SIZE ? UI.heal : size > DECK_SIZE ? UI.damage : UI.textDim;
 
     const lines: (Node | string)[] = [];
@@ -236,11 +238,13 @@ export class DeckBuilderScreen {
         el(
           'div',
           { style: `color:${UI.textDim};` },
-          size < DECK_SIZE ? `Add ${DECK_SIZE - size} more card${DECK_SIZE - size === 1 ? '' : 's'}.` : `Remove ${size - DECK_SIZE}.`,
+          size < DECK_SIZE
+            ? t('deck.addMore', { n: DECK_SIZE - size })
+            : t('deck.removeSome', { n: size - DECK_SIZE }),
         ),
       );
     } else if (status.legal) {
-      lines.push(el('div', { style: `color:${UI.heal};font-weight:700;` }, 'Legal deck — ready to play.'));
+      lines.push(el('div', { style: `color:${UI.heal};font-weight:700;` }, t('deck.legal')));
     }
     for (const err of status.errors.slice(0, 3)) {
       lines.push(el('div', { style: `color:${UI.damage};` }, err));
@@ -250,7 +254,7 @@ export class DeckBuilderScreen {
         el(
           'div',
           { style: 'color:#FFC08A;' },
-          `${status.partial.length} card${status.partial.length === 1 ? '' : 's'} not fully implemented.`,
+          t('deck.partialCount', { n: status.partial.length }),
         ),
       );
     }

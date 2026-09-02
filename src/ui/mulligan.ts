@@ -9,6 +9,7 @@ import type { CardDef } from '../engine/types';
 import { cardFaceCanvas } from '../art/cardface';
 import { FONT, UI } from '../art/theme';
 import { el, ensureScreenStyles } from './style';
+import { t } from '../i18n';
 
 const CSS = `
 .mull {
@@ -73,7 +74,7 @@ export class MulliganOverlay {
       copy.height = face.height;
       copy.getContext('2d')?.drawImage(face, 0, 0);
 
-      const slot = el('div', { class: 'mull-card' }, copy, el('div', { class: 'mull-mark' }, 'Redraw'));
+      const slot = el('div', { class: 'mull-card' }, copy, el('div', { class: 'mull-mark' }, t('mull.mark')));
       slot.addEventListener('click', () => {
         if (this.replace.has(uid)) this.replace.delete(uid);
         else this.replace.add(uid);
@@ -85,21 +86,21 @@ export class MulliganOverlay {
 
     this.summary = el('p', {});
 
-    const keepAll = el('button', { class: 'sv-btn' }, 'Keep all');
+    const keepAll = el('button', { class: 'sv-btn' }, t('mull.keepAll'));
     keepAll.addEventListener('click', () => {
       this.replace.clear();
       for (const s of Array.from(hand.querySelectorAll('.mull-card'))) s.classList.remove('swap');
       this.refresh();
     });
 
-    const confirm = el('button', { class: 'sv-btn primary', style: 'font-size:16px;padding:15px 44px;' }, 'Confirm');
+    const confirm = el('button', { class: 'sv-btn primary', 'data-act': 'mull-confirm', style: 'font-size:16px;padding:15px 44px;' }, t('mull.confirm'));
     confirm.addEventListener('click', () => this.close());
 
     this.root = el(
       'div',
       { class: 'mull' },
-      el('h1', {}, 'Redraw'),
-      el('p', {}, 'Tap any card you would rather not keep. You may redraw once.'),
+      el('h1', {}, t('mull.title')),
+      el('p', {}, t('mull.hint')),
       hand,
       this.summary,
       el('div', { class: 'mull-actions' }, keepAll, confirm),
@@ -113,7 +114,7 @@ export class MulliganOverlay {
   private refresh(): void {
     const n = this.replace.size;
     this.summary.textContent =
-      n === 0 ? 'Keeping your whole hand.' : `Redrawing ${n} card${n === 1 ? '' : 's'}.`;
+      n === 0 ? t('mull.keeping') : t('mull.redrawing', { n });
   }
 
   private close(): void {

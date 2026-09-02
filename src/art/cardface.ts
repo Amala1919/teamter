@@ -8,9 +8,10 @@
  * card rather than an upscaled one.
  */
 import type { CardDef } from '../engine/types';
-import { KEYWORD_LABEL } from '../engine/types';
+import { KEYWORD_LABEL, KEYWORD_LABEL_JA } from '../engine/types';
 import { drawIllustration } from './illustration';
 import { drawCardName, type NameBand } from './cardname';
+import { LANG } from '../i18n';
 import { CARD, CLASS_THEME, FONT, RARITY_THEME, UI } from './theme';
 
 export interface CardFaceOptions {
@@ -293,18 +294,33 @@ function drawRulesText(
   const text = (lang === 'ja' ? card.textJa || card.text : card.text).trim();
   if (!text) {
     // A vanilla card shows its flavour line instead of an empty box.
-    if (!card.flavor) return;
+    const flavor = (lang === 'ja' ? card.flavorJa || card.flavor : card.flavor) ?? '';
+    if (!flavor) return;
     ctx.save();
     ctx.font = `italic ${15 * s}px ${FONT.ui}`;
     ctx.fillStyle = hexToRgba(UI.textDim, 0.7);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    wrapCentered(ctx, card.flavor, box, 19 * s, 4);
+    wrapCentered(ctx, flavor, box, 19 * s, 4);
     ctx.restore();
     return;
   }
 
+  // Ability names are emphasised in the printed text; both languages' names are
+  // listed so the same tokenizer serves either.
   const KEYWORDS = [
+    'ファンファーレ',
+    'ラストワード',
+    '進化時',
+    '交戦時',
+    '攻撃時',
+    'エンハンス',
+    'スペルブースト',
+    'ネクロマンス',
+    '復讐',
+    'オーバーフロー',
+    '土の秘術',
+    'カウントダウン',
     'Fanfare',
     'Last Words',
     'Evolve',
@@ -318,6 +334,7 @@ function drawRulesText(
     'Earth Rite',
     'Countdown',
     ...Object.values(KEYWORD_LABEL),
+    ...Object.values(KEYWORD_LABEL_JA),
   ];
 
   // Fit the whole block by shrinking until it fits the box.
@@ -426,15 +443,22 @@ function wrapCentered(
   lh: number,
   maxLines: number,
 ): void {
-  const words = text.split(/\s+/);
+  // Japanese has no spaces, so it breaks per character; Latin breaks on words.
+  const cjk = /[^\x00-\x7F]/.test(text);
+  const parts = cjk ? [...text] : text.split(/\s+/);
+  const join = (a: string, b: string) => (cjk || !a ? a + b : `${a} ${b}`);
+  // Simplified kinsoku: these may not open a line.
+  const noStart = '。、，．」』）｝】〕・ー々ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮ！？';
+
   const lines: string[] = [];
   let cur = '';
   let truncated = false;
-  for (const word of words) {
-    const test = cur ? `${cur} ${word}` : word;
-    if (ctx.measureText(test).width > box.w - 24 && cur) {
+  for (const part of parts) {
+    const test = join(cur, part);
+    const tooWide = ctx.measureText(test).width > box.w - 24;
+    if (tooWide && cur && !(cjk && noStart.includes(part))) {
       lines.push(cur);
-      cur = word;
+      cur = part;
       if (lines.length === maxLines) {
         truncated = true;
         break;
@@ -448,7 +472,7 @@ function wrapCentered(
   // A flavour line cut mid-sentence looks like a bug, so mark the elision.
   if (truncated && lines.length > 0) {
     const last = lines.length - 1;
-    lines[last] = lines[last].replace(/[,;:]$/, '') + '…';
+    lines[last] = lines[last].replace(/[,;:、，]$/, '') + '…';
   }
   let y = box.y + (box.h - lines.length * lh) / 2 + lh / 2;
   for (const l of lines) {
@@ -473,7 +497,7 @@ export function drawCardFace(ctx: CanvasRenderingContext2D, card: CardDef, opts:
   const theme = CLASS_THEME[card.cardClass];
   const rarity = RARITY_THEME[card.rarity];
   const evolved = !!opts.evolved && card.type === 'follower';
-  const lang = opts.lang ?? 'en';
+  const lang = opts.lang ?? LANG;
 
   ctx.save();
   ctx.clearRect(0, 0, W, H);

@@ -8,15 +8,17 @@
  *
  * The panel is built the way key art is: a graded sky, a horizon, background
  * architecture, a rim-lit subject silhouette, foreground occlusion and
- * atmosphere. The subject is assembled from parts — head, torso, cloak, wings,
- * horns, weapon — rather than stamped from a fixed emblem, because a card pool
- * of 800 needs 800 different silhouettes, not eight.
+ * atmosphere. Only the *subject* is a real drawing: each card is matched by
+ * name to a hand-drawn shape from the Game Icons collection (CC BY 3.0, see
+ * `cardart.ts` and `ASSET_LICENSES.md`), which this file then lights, models
+ * and rims. Everything around it is generated.
  *
  * If official art is later dropped into `public/assets/official/`,
  * `cardface.ts` prefers it and this becomes the fallback.
  */
 import type { CardDef, ClassId } from '../engine/types';
 import { CLASS_THEME, RARITY_THEME } from './theme';
+import { fillSubject, subjectFor, type Subject } from './cardart';
 
 // ---------------------------------------------------------------------------
 // Seeded randomness
@@ -442,323 +444,48 @@ function drawStructure(s: Scene, kind: Structure, y: number, scale: number, colo
 // The subject silhouette
 // ---------------------------------------------------------------------------
 
+/**
+ * A card's subject: the Game Icons shape chosen for it by name (see
+ * `cardart.ts`), plus the small per-card variation the illustration rolls so a
+ * shared icon does not produce two identical panels.
+ *
+ * The shape arrives as a flat silhouette, which is what the rest of this file
+ * wants — it does the lighting, the interior modelling and the rim itself.
+ */
 interface Figure {
-  wings: 'none' | 'feathered' | 'membrane' | 'insect';
-  horns: 'none' | 'curved' | 'straight' | 'crown' | 'halo';
-  cloak: boolean;
-  weapon: 'none' | 'sword' | 'staff' | 'scythe' | 'bow' | 'claw';
-  /** 0 = humanoid, 1 = beast (quadruped/serpentine). */
-  beast: number;
-  /** Overall body mass. */
-  bulk: number;
-  facing: -1 | 1;
+  subject: Subject | null;
+  flip: boolean;
+  /** Slight off-vertical lean, so a row of cards is not a row of statues. */
+  tilt: number;
+  /** Extra scale on top of the framing radius. */
+  scale: number;
 }
 
 function rollFigure(rng: Seeded, card: CardDef): Figure {
-  const cls = card.cardClass;
-  const wingBias: Record<ClassId, number> = {
-    forest: 0.25,
-    sword: 0.12,
-    rune: 0.2,
-    dragon: 0.72,
-    shadow: 0.35,
-    blood: 0.62,
-    haven: 0.66,
-    neutral: 0.3,
-  };
-  const wingKind =
-    cls === 'haven' ? 'feathered' : cls === 'dragon' || cls === 'blood' ? 'membrane' : rng.pick(['feathered', 'membrane', 'insect'] as const);
-
-  const hornBias: Record<ClassId, Figure['horns'][]> = {
-    forest: ['none', 'none', 'crown'],
-    sword: ['crown', 'none', 'straight'],
-    rune: ['none', 'crown', 'none'],
-    dragon: ['curved', 'straight', 'curved'],
-    shadow: ['curved', 'none', 'straight'],
-    blood: ['curved', 'none', 'crown'],
-    haven: ['halo', 'halo', 'crown'],
-    neutral: ['none', 'curved', 'crown', 'straight', 'halo'],
-  };
-
-  const weaponBias: Record<ClassId, Figure['weapon'][]> = {
-    forest: ['bow', 'staff', 'none', 'claw'],
-    sword: ['sword', 'sword', 'staff', 'none'],
-    rune: ['staff', 'staff', 'none'],
-    dragon: ['claw', 'sword', 'none', 'claw'],
-    shadow: ['scythe', 'staff', 'claw', 'none'],
-    blood: ['claw', 'sword', 'scythe', 'none'],
-    haven: ['staff', 'sword', 'none'],
-    neutral: ['sword', 'staff', 'bow', 'claw', 'none', 'scythe'],
-  };
-
-  const beastBias: Record<ClassId, number> = {
-    forest: 0.35,
-    sword: 0.12,
-    rune: 0.15,
-    dragon: 0.7,
-    shadow: 0.3,
-    blood: 0.35,
-    haven: 0.15,
-    neutral: 0.35,
-  };
-
   return {
-    wings: rng.bool(wingBias[cls]) ? wingKind : 'none',
-    horns: rng.pick(hornBias[cls]),
-    cloak: rng.bool(cls === 'rune' || cls === 'shadow' || cls === 'haven' ? 0.75 : 0.4),
-    weapon: rng.pick(weaponBias[cls]),
-    beast: rng.bool(beastBias[cls]) ? 1 : 0,
-    bulk: rng.range(0.8, 1.35) * (1 + Math.min(card.cost, 10) * 0.03),
-    facing: rng.bool() ? 1 : -1,
+    subject: subjectFor(card.id),
+    flip: rng.bool(0.4),
+    tilt: rng.range(-0.055, 0.055),
+    scale: rng.range(0.94, 1.1),
   };
 }
 
-/**
- * Draws the subject as a single filled path in `color`. Called twice — once in
- * shadow, once offset toward the light for the rim — so it must be
- * deterministic given the same `Figure`.
- */
 function drawFigure(s: Scene, fig: Figure, cx: number, cy: number, r: number, color: string): void {
   const { ctx } = s;
   ctx.save();
   ctx.translate(cx, cy);
-  ctx.scale(fig.facing, 1);
-  ctx.fillStyle = color;
-
-  const bulk = fig.bulk;
-
-  // --- wings first, so the body overlaps them --------------------------
-  if (fig.wings !== 'none') {
-    for (const dir of [-1, 1]) {
-      ctx.save();
-      ctx.scale(dir, 1);
-      ctx.beginPath();
-      if (fig.wings === 'feathered') {
-        ctx.moveTo(r * 0.12, -r * 0.5);
-        ctx.quadraticCurveTo(r * 0.85, -r * 1.25, r * 1.45, -r * 0.62);
-        ctx.quadraticCurveTo(r * 1.1, -r * 0.5, r * 1.2, -r * 0.16);
-        ctx.quadraticCurveTo(r * 0.9, -r * 0.3, r * 0.88, r * 0.1);
-        ctx.quadraticCurveTo(r * 0.62, -r * 0.16, r * 0.52, r * 0.24);
-        ctx.quadraticCurveTo(r * 0.3, -r * 0.08, r * 0.12, r * 0.02);
-      } else if (fig.wings === 'membrane') {
-        ctx.moveTo(r * 0.1, -r * 0.55);
-        ctx.lineTo(r * 0.75, -r * 1.32);
-        ctx.lineTo(r * 0.72, -r * 0.86);
-        ctx.lineTo(r * 1.32, -r * 1.05);
-        ctx.lineTo(r * 1.16, -r * 0.5);
-        ctx.lineTo(r * 1.5, -r * 0.34);
-        ctx.quadraticCurveTo(r * 0.95, r * 0.1, r * 0.4, r * 0.05);
-      } else {
-        ctx.moveTo(r * 0.1, -r * 0.5);
-        ctx.quadraticCurveTo(r * 0.9, -r * 1.1, r * 1.3, -r * 0.35);
-        ctx.quadraticCurveTo(r * 0.8, -r * 0.2, r * 0.1, -r * 0.15);
-      }
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-    }
-  }
-
-  if (fig.beast) {
-    // --- quadruped / serpentine body ------------------------------------
-    ctx.beginPath();
-    ctx.moveTo(-r * 0.75 * bulk, r * 0.15);
-    ctx.quadraticCurveTo(-r * 0.5 * bulk, -r * 0.55 * bulk, r * 0.15 * bulk, -r * 0.5 * bulk);
-    ctx.quadraticCurveTo(r * 0.72 * bulk, -r * 0.45 * bulk, r * 0.8 * bulk, r * 0.05);
-    ctx.lineTo(r * 0.72 * bulk, r * 0.8);
-    ctx.lineTo(r * 0.5 * bulk, r * 0.8);
-    ctx.lineTo(r * 0.44 * bulk, r * 0.2);
-    ctx.lineTo(-r * 0.32 * bulk, r * 0.24);
-    ctx.lineTo(-r * 0.4 * bulk, r * 0.82);
-    ctx.lineTo(-r * 0.62 * bulk, r * 0.82);
-    ctx.closePath();
-    ctx.fill();
-
-    // Neck and head.
-    ctx.beginPath();
-    ctx.moveTo(r * 0.5 * bulk, -r * 0.42 * bulk);
-    ctx.quadraticCurveTo(r * 0.95 * bulk, -r * 0.95 * bulk, r * 1.02 * bulk, -r * 1.2 * bulk);
-    ctx.lineTo(r * 1.35 * bulk, -r * 1.16 * bulk);
-    ctx.quadraticCurveTo(r * 1.05 * bulk, -r * 0.72 * bulk, r * 0.78 * bulk, -r * 0.3 * bulk);
-    ctx.closePath();
-    ctx.fill();
-
-    // Tail.
-    ctx.beginPath();
-    ctx.moveTo(-r * 0.7 * bulk, r * 0.05);
-    ctx.quadraticCurveTo(-r * 1.45 * bulk, -r * 0.1, -r * 1.6 * bulk, -r * 0.62 * bulk);
-    ctx.quadraticCurveTo(-r * 1.25 * bulk, -r * 0.22, -r * 0.68 * bulk, r * 0.3);
-    ctx.closePath();
-    ctx.fill();
+  ctx.rotate(fig.tilt);
+  ctx.translate(-cx, -cy);
+  if (fig.subject) {
+    fillSubject(ctx, fig.subject, cx, cy, r * fig.scale, fig.flip, color);
   } else {
-    // --- humanoid --------------------------------------------------------
-    // Heroic proportions: roughly 2.2r tall, head at 0.85r above centre, so a
-    // figure always reads as a person rather than a mass.
-    const shoulder = r * 0.3 * bulk;
-    const waist = r * 0.17 * bulk;
-
-    if (fig.cloak) {
-      ctx.beginPath();
-      ctx.moveTo(-shoulder * 1.15, -r * 0.58);
-      ctx.quadraticCurveTo(-r * 0.72 * bulk, r * 0.25, -r * 0.6 * bulk, r * 1.08);
-      ctx.quadraticCurveTo(0, r * 1.22, r * 0.6 * bulk, r * 1.08);
-      ctx.quadraticCurveTo(r * 0.72 * bulk, r * 0.25, shoulder * 1.15, -r * 0.58);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    // Torso: shoulders down to waist.
+    // No icon mapped: a plain mass, so the lighting pipeline still has a form
+    // to work on rather than an empty panel.
+    ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.moveTo(-shoulder, -r * 0.6);
-    ctx.quadraticCurveTo(-shoulder * 1.1, -r * 0.2, -waist, r * 0.06);
-    ctx.lineTo(waist, r * 0.06);
-    ctx.quadraticCurveTo(shoulder * 1.1, -r * 0.2, shoulder, -r * 0.6);
-    ctx.closePath();
-    ctx.fill();
-
-    // Legs, or a robe skirt when cloaked.
-    if (fig.cloak) {
-      ctx.beginPath();
-      ctx.moveTo(-waist, r * 0.02);
-      ctx.quadraticCurveTo(-r * 0.42 * bulk, r * 0.6, -r * 0.4 * bulk, r * 1.08);
-      ctx.lineTo(r * 0.4 * bulk, r * 1.08);
-      ctx.quadraticCurveTo(r * 0.42 * bulk, r * 0.6, waist, r * 0.02);
-      ctx.closePath();
-      ctx.fill();
-    } else {
-      for (const dir of [-1, 1]) {
-        ctx.beginPath();
-        ctx.moveTo(dir * waist * 0.15, r * 0.02);
-        ctx.lineTo(dir * waist * 1.1, r * 0.04);
-        ctx.quadraticCurveTo(dir * waist * 1.25, r * 0.6, dir * waist * 0.95, r * 1.06);
-        ctx.lineTo(dir * waist * 0.3, r * 1.06);
-        ctx.quadraticCurveTo(dir * waist * 0.45, r * 0.6, dir * waist * 0.12, r * 0.05);
-        ctx.closePath();
-        ctx.fill();
-      }
-    }
-
-    // Arms.
-    for (const dir of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(dir * shoulder * 0.85, -r * 0.62);
-      ctx.quadraticCurveTo(dir * shoulder * 1.5, -r * 0.4, dir * shoulder * 1.35, -r * 0.02);
-      ctx.quadraticCurveTo(dir * shoulder * 1.25, r * 0.26, dir * shoulder * 1.05, r * 0.34);
-      ctx.quadraticCurveTo(dir * shoulder * 0.95, r * 0.05, dir * shoulder * 0.8, -r * 0.24);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    // Neck and head.
-    ctx.fillRect(-r * 0.06 * bulk, -r * 0.74, r * 0.12 * bulk, r * 0.16);
-    ctx.beginPath();
-    ctx.ellipse(0, -r * 0.86, r * 0.135, r * 0.16, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy, r * 0.6, r * 0.95, 0, 0, Math.PI * 2);
     ctx.fill();
   }
-
-  // --- horns / crown / halo -------------------------------------------
-  const headY = fig.beast ? -r * 1.16 * bulk : -r * 0.86;
-  const headX = fig.beast ? r * 1.15 * bulk : 0;
-  const hr = r * (fig.beast ? 0.15 : 0.14);
-  switch (fig.horns) {
-    case 'curved':
-      for (const dir of [-1, 1]) {
-        ctx.beginPath();
-        ctx.moveTo(headX + dir * hr * 0.7, headY - hr * 0.5);
-        ctx.quadraticCurveTo(headX + dir * hr * 2.6, headY - hr * 1.5, headX + dir * hr * 2.0, headY - hr * 2.9);
-        ctx.quadraticCurveTo(headX + dir * hr * 2.0, headY - hr * 1.4, headX + dir * hr * 0.5, headY - hr * 0.9);
-        ctx.closePath();
-        ctx.fill();
-      }
-      break;
-    case 'straight':
-      for (const dir of [-1, 1]) {
-        ctx.beginPath();
-        ctx.moveTo(headX + dir * hr * 0.6, headY - hr * 0.6);
-        ctx.lineTo(headX + dir * hr * 1.5, headY - hr * 3.1);
-        ctx.lineTo(headX + dir * hr * 0.2, headY - hr * 1.0);
-        ctx.closePath();
-        ctx.fill();
-      }
-      break;
-    case 'crown': {
-      const spikes = 5;
-      ctx.beginPath();
-      for (let i = 0; i < spikes; i++) {
-        const t = (i / (spikes - 1) - 0.5) * 2;
-        const x = headX + t * hr * 1.3;
-        ctx.moveTo(x - hr * 0.16, headY - hr * 0.8);
-        ctx.lineTo(x, headY - hr * (2.0 - Math.abs(t) * 0.7));
-        ctx.lineTo(x + hr * 0.16, headY - hr * 0.8);
-      }
-      ctx.fill();
-      break;
-    }
-    case 'halo':
-      ctx.save();
-      ctx.lineWidth = hr * 0.28;
-      ctx.strokeStyle = color;
-      ctx.beginPath();
-      ctx.ellipse(headX, headY - hr * 1.9, hr * 1.35, hr * 0.42, 0, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-      break;
-    default:
-      break;
-  }
-
-  // --- weapon ----------------------------------------------------------
-  const wx = r * 0.46 * bulk;
-  switch (fig.weapon) {
-    case 'sword':
-      ctx.beginPath();
-      ctx.moveTo(wx - r * 0.05, r * 0.3);
-      ctx.lineTo(wx + r * 0.05, r * 0.3);
-      ctx.lineTo(wx + r * 0.07, -r * 1.25);
-      ctx.lineTo(wx, -r * 1.42);
-      ctx.lineTo(wx - r * 0.07, -r * 1.25);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillRect(wx - r * 0.22, r * 0.24, r * 0.44, r * 0.07);
-      break;
-    case 'staff':
-      ctx.fillRect(wx - r * 0.035, -r * 1.35, r * 0.07, r * 1.85);
-      ctx.beginPath();
-      ctx.arc(wx, -r * 1.45, r * 0.14, 0, Math.PI * 2);
-      ctx.fill();
-      break;
-    case 'scythe':
-      ctx.fillRect(wx - r * 0.035, -r * 1.2, r * 0.07, r * 1.75);
-      ctx.beginPath();
-      ctx.moveTo(wx, -r * 1.2);
-      ctx.quadraticCurveTo(wx - r * 0.95, -r * 1.5, wx - r * 1.05, -r * 0.85);
-      ctx.quadraticCurveTo(wx - r * 0.6, -r * 1.18, wx, -r * 1.05);
-      ctx.closePath();
-      ctx.fill();
-      break;
-    case 'bow':
-      ctx.save();
-      ctx.lineWidth = r * 0.06;
-      ctx.strokeStyle = color;
-      ctx.beginPath();
-      ctx.arc(wx + r * 0.3, -r * 0.35, r * 0.85, Math.PI * 0.62, Math.PI * 1.38);
-      ctx.stroke();
-      ctx.restore();
-      break;
-    case 'claw':
-      for (let i = 0; i < 3; i++) {
-        ctx.beginPath();
-        ctx.moveTo(wx + i * r * 0.1, r * 0.36);
-        ctx.quadraticCurveTo(wx + r * 0.42 + i * r * 0.1, r * 0.5, wx + r * 0.5 + i * r * 0.1, r * 0.86);
-        ctx.quadraticCurveTo(wx + r * 0.28 + i * r * 0.1, r * 0.52, wx + i * r * 0.1, r * 0.48);
-        ctx.closePath();
-        ctx.fill();
-      }
-      break;
-    default:
-      break;
-  }
-
   ctx.restore();
 }
 
@@ -921,10 +648,16 @@ export function drawIllustration(
   // --- subject ------------------------------------------------------------
   const cx = w * (framing === 'vista' ? rng.range(0.3, 0.7) : rng.around(0.5, 0.07));
   const baseR = Math.min(w, h);
-  const rByFraming = { portrait: 0.2, close: 0.27, vista: 0.12, arcane: 0.3 } as const;
-  const r = baseR * rByFraming[framing] * (1 + Math.min(card.cost, 10) * 0.018);
-  // Seat the figure so its feet land just above the foreground ridge.
-  const cy = h * (framing === 'close' ? 0.46 : framing === 'vista' ? s.horizon - 0.03 : s.horizon - 0.12);
+  const rByFraming = { portrait: 0.27, close: 0.32, vista: 0.21, arcane: 0.3 } as const;
+  const r = baseR * rByFraming[framing] * (1 + Math.min(card.cost, 10) * 0.01);
+  // Seat the subject across the horizon rather than floating in the sky, then
+  // clamp it into the part of the art panel the frame actually leaves visible:
+  // the name band covers the bottom, so nothing may hang below 0.76.
+  const half = r * 1.12;
+  const wanted = h * (framing === 'close' ? 0.47 : framing === 'vista' ? s.horizon - 0.1 : s.horizon - 0.16);
+  const lo = h * 0.05 + half;
+  const hi = h * 0.76 - half;
+  const cy = hi > lo ? Math.min(hi, Math.max(lo, wanted)) : (lo + hi) / 2;
 
   glow(s, cx, cy, r * 2.4, s.key, 0.4);
 
@@ -939,7 +672,7 @@ export function drawIllustration(
     ctx.fillStyle = '#000000';
     ctx.filter = 'blur(8px)';
     ctx.beginPath();
-    ctx.ellipse(cx, cy + r * 1.12, r * 0.85, r * 0.14, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy + r * 1.05, r * 0.9, r * 0.15, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
@@ -953,20 +686,30 @@ export function drawIllustration(
     // Interior modelling: a soft vertical gradient inside the silhouette,
     // clipped to the figure, so it is a form rather than a cut-out.
     withFigureMask(s, fig, cx, cy, r, (mctx) => {
-      const g = mctx.createLinearGradient(0, cy - r * 1.2, 0, cy + r * 1.2);
-      g.addColorStop(0, rgba(s.key, 0.34));
-      g.addColorStop(0.55, rgba(s.deep, 0.14));
+      // Vertical falloff: lit from above, sinking into the ground plane.
+      const g = mctx.createLinearGradient(0, cy - r * 1.15, 0, cy + r * 1.15);
+      g.addColorStop(0, rgba(s.key, 0.46));
+      g.addColorStop(0.5, rgba(s.deep, 0.2));
       g.addColorStop(1, 'rgba(0,0,0,0)');
       mctx.fillStyle = g;
+      mctx.fillRect(0, 0, s.w, s.h);
+
+      // A soft bounce of the key light on the side facing it, so the mass
+      // turns rather than reading as a sticker.
+      const b = mctx.createRadialGradient(lx, ly, 0, lx, ly, Math.max(s.w, s.h) * 0.8);
+      b.addColorStop(0, rgba(s.accent, 0.3));
+      b.addColorStop(1, 'rgba(0,0,0,0)');
+      mctx.globalCompositeOperation = 'lighter';
+      mctx.fillStyle = b;
       mctx.fillRect(0, 0, s.w, s.h);
     });
 
     // Rim light: the figure drawn offset toward the key light, with the
     // un-offset figure punched out. What survives is a crescent along the lit
     // edge, which is what a rim light actually is.
-    drawRim(s, fig, cx, cy, r, lx, ly, s.accent, 1);
-    drawRim(s, fig, cx, cy, r, lx, ly, '#FFFFFF', 0.5);
-    drawRim(s, fig, cx, cy, r, w - lx, h - ly, s.key, 0.55);
+    drawRim(s, fig, cx, cy, r, lx, ly, s.accent, 0.62);
+    drawRim(s, fig, cx, cy, r, lx, ly, '#FFFFFF', 0.26);
+    drawRim(s, fig, cx, cy, r, w - lx, h - ly, s.key, 0.4);
 
     if (card.type === 'amulet') {
       ctx.save();
@@ -1044,7 +787,7 @@ function drawRim(
   const dx = lx - cx;
   const dy = ly - cy;
   const len = Math.hypot(dx, dy) || 1;
-  const push = r * 0.075;
+  const push = Math.max(1.5, r * 0.028);
   const ox = (dx / len) * push;
   const oy = (dy / len) * push;
 

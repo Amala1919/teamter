@@ -255,6 +255,8 @@ type ElProps<K extends keyof HTMLElementTagNameMap> = Omit<
 > & {
   class?: string;
   style?: string;
+  /** Stable hooks for the end-to-end test, unaffected by copy or language. */
+  [key: `data-${string}`]: string | undefined;
   [key: `on${string}`]: unknown;
 };
 

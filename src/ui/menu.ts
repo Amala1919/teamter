@@ -17,6 +17,7 @@ import {
   type SavedDeck,
 } from './decks';
 import { el, ensureScreenStyles } from './style';
+import { className, isJa, t } from '../i18n';
 import { DECK_SIZE } from './decks';
 
 export interface MenuCallbacks {
@@ -35,7 +36,7 @@ function classBanner(cls: ClassId, w: number, h: number): HTMLCanvasElement {
   if (ctx) {
     drawIllustration(ctx, w, h, {
       id: `banner_${cls}`,
-      name: CLASS_THEME[cls].label,
+      name: className(CLASS_THEME[cls]),
       cardClass: cls,
       set: 'basic',
       rarity: 'legendary',
@@ -63,16 +64,16 @@ export class MenuScreen {
     const bar = el(
       'div',
       { class: 'sv-topbar' },
-      el('div', { class: 'sv-title' }, 'Teamter'),
-      el('div', { class: 'sv-subtitle' }, 'Standard → Wonderland Dreams'),
+      el('div', { class: 'sv-title' }, t('menu.title')),
+      el('div', { class: 'sv-subtitle' }, t('menu.tagline')),
       el('div', { class: 'sv-spacer' }),
       (() => {
-        const b = el('button', { class: 'sv-btn' }, 'Open a pack');
+        const b = el('button', { class: 'sv-btn', 'data-act': 'pack' }, t('menu.pack'));
         b.addEventListener('click', () => this.cb.onOpenPack());
         return b;
       })(),
       (() => {
-        const b = el('button', { class: 'sv-btn' }, 'Collection');
+        const b = el('button', { class: 'sv-btn', 'data-act': 'collection' }, t('menu.collection'));
         b.addEventListener('click', () => this.cb.onCollection());
         return b;
       })(),
@@ -83,9 +84,9 @@ export class MenuScreen {
       style: 'flex:1;position:relative;display:flex;flex-direction:column;justify-content:flex-end;padding:34px;gap:20px;min-width:0;',
     });
 
-    const newDeck = el('button', { class: 'sv-btn', style: 'margin:10px;' }, '+ New deck');
+    const newDeck = el('button', { class: 'sv-btn', 'data-act': 'new-deck', style: 'margin:10px;' }, t('menu.newDeckBtn'));
     newDeck.addEventListener('click', () => {
-      const deck = createDeck('sword', 'New deck');
+      const deck = createDeck('sword', t('menu.newDeck'));
       saveDeck(deck);
       this.cb.onEditDeck(deck);
     });
@@ -93,7 +94,7 @@ export class MenuScreen {
     const decksPanel = el(
       'div',
       { class: 'sv-panel', style: 'width:300px;flex:none;display:flex;flex-direction:column;margin:18px;' },
-      el('div', { class: 'sv-panel-title' }, 'Your decks'),
+      el('div', { class: 'sv-panel-title' }, t('menu.decks')),
       this.deckList,
       newDeck,
     );
@@ -114,7 +115,7 @@ export class MenuScreen {
 
     this.deckList.replaceChildren(
       ...(decks.length === 0
-        ? [el('div', { class: 'sv-empty', style: 'padding:30px 10px;' }, 'No decks yet.')]
+        ? [el('div', { class: 'sv-empty', style: 'padding:30px 10px;' }, t('menu.noDecks'))]
         : decks.map((deck) => this.deckRow(deck))),
     );
 
@@ -147,12 +148,12 @@ export class MenuScreen {
         el(
           'div',
           { style: `font-size:11px;letter-spacing:.06em;color:${status.legal ? UI.textDim : UI.damage};` },
-          `${theme.label} · ${size}/${DECK_SIZE}${status.legal ? '' : ' · incomplete'}`,
+          `${className(theme)} · ${size}/${DECK_SIZE}${status.legal ? '' : t('menu.incomplete')}`,
         ),
       ),
     );
 
-    const edit = el('button', { class: 'sv-btn', style: 'padding:6px 11px;font-size:10px;' }, 'Edit');
+    const edit = el('button', { class: 'sv-btn', 'data-act': 'edit-deck', style: 'padding:6px 11px;font-size:10px;' }, t('menu.edit'));
     edit.addEventListener('click', (e) => {
       e.stopPropagation();
       this.cb.onEditDeck(deck);
@@ -177,7 +178,7 @@ export class MenuScreen {
   private refreshHero(deck: SavedDeck | undefined): void {
     this.hero.replaceChildren();
     if (!deck) {
-      this.hero.append(el('div', { class: 'sv-empty' }, 'Create a deck to begin.'));
+      this.hero.append(el('div', { class: 'sv-empty' }, t('menu.createFirst')));
       return;
     }
 
@@ -205,17 +206,17 @@ export class MenuScreen {
       el(
         'div',
         { style: `font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:${UI.textDim};margin-top:4px;` },
-        `${theme.label} · ${theme.labelJa}`,
+        `${className(theme)} · ${isJa ? theme.label : theme.labelJa}`,
       ),
     );
 
     const oppRow = el(
       'div',
       { class: 'sv-chiprow', style: 'position:relative;' },
-      el('span', { style: 'font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#6B7386;' }, 'Opponent'),
+      el('span', { style: 'font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#6B7386;' }, t('menu.opponent')),
     );
     for (const cls of CRAFT_CLASSES) {
-      const chip = el('div', { class: 'sv-chip' + (cls === this.opponent ? ' on' : '') }, CLASS_THEME[cls].label.replace('craft', ''));
+      const chip = el('div', { class: 'sv-chip' + (cls === this.opponent ? ' on' : '') }, className(CLASS_THEME[cls]).replace('craft', ''));
       chip.setAttribute('data-class', '1');
       chip.style.setProperty('--chip-color', CLASS_THEME[cls].primary);
       chip.addEventListener('click', () => {
@@ -225,15 +226,15 @@ export class MenuScreen {
       oppRow.append(chip);
     }
 
-    const play = el('button', { class: 'sv-btn primary', style: 'position:relative;align-self:flex-start;font-size:17px;padding:16px 46px;' }, 'Battle');
+    const play = el('button', { class: 'sv-btn primary', 'data-act': 'battle', style: 'position:relative;align-self:flex-start;font-size:17px;padding:16px 46px;' }, t('menu.battle'));
     play.disabled = !status.legal;
     play.addEventListener('click', () => this.cb.onPlay(deck, this.opponent));
 
     const note = status.legal
       ? status.partial.length > 0
-        ? el('div', { style: 'position:relative;font-size:12px;color:#FFC08A;' }, `${status.partial.length} card${status.partial.length === 1 ? '' : 's'} in this deck are not fully implemented.`)
+        ? el('div', { style: 'position:relative;font-size:12px;color:#FFC08A;' }, t('menu.partialNote', { n: status.partial.length }))
         : null
-      : el('div', { style: `position:relative;font-size:12px;color:${UI.damage};` }, status.errors[0] ?? 'Deck is not legal yet.');
+      : el('div', { style: `position:relative;font-size:12px;color:${UI.damage};` }, status.errors[0] ?? t('menu.illegal'));
 
     this.hero.append(heading, oppRow, play, note ?? el('div'));
   }

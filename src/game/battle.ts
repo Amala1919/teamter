@@ -21,6 +21,9 @@ import { CLASS_THEME, TIMING, UI } from '../art/theme';
 import { Audio } from '../audio/audio';
 import { chooseAiMulligan, chooseAiTurn } from './ai';
 import { MulliganOverlay } from '../ui/mulligan';
+import { CardDetail, type LiveCardState } from '../ui/detail';
+import { ensureScreenStyles } from '../ui/style';
+import { cardName, t } from '../i18n';
 
 const HAND_CARD_W = 1.34;
 const BOARD_CARD_W = 1.06;
@@ -68,6 +71,11 @@ export class Battle {
   private disposed = false;
   /** A card dropped on the board that is waiting for an Enhance choice. */
   private pendingEnhance: { uid: number; slot: number } | null = null;
+  /** Reads out any card on the board, including the opponent's. */
+  private readonly inspector: CardDetail;
+  /** Press-and-hold state, so a long press inspects instead of acting. */
+  private holdTimer = 0;
+  private holdUid: number | null = null;
 
   constructor(private readonly opts: BattleOptions) {
     this.human = opts.human ?? 0;
@@ -103,6 +111,11 @@ export class Battle {
     });
     this.hud.applyClassTheme(opts.decks[this.human].leaderClass, this.human);
 
+    // The opponent's cards are otherwise unreadable at board scale, so any card
+    // in a public zone can be opened full size with its live state.
+    ensureScreenStyles();
+    this.inspector = new CardDetail(opts.container);
+
     this.bindInput();
     this.stage.onUpdate((dt, t) => this.update(dt, t));
     this.stage.start();
@@ -110,6 +123,8 @@ export class Battle {
     // Drain the events the constructor already produced (draws, first turn).
     this.queue.push(...this.game.drainEvents());
     this.syncAll(true);
+
+    this.hud.addLog(t('battle.inspectHint'));
 
     if (this.game.state.phase === 'mulligan') this.startMulligan();
     else this.hud.showTurnBanner(this.game.state.active === this.human);
@@ -318,7 +333,55 @@ export class Battle {
     el.addEventListener('pointermove', (e) => this.onPointerMove(e));
     el.addEventListener('pointerdown', (e) => this.onPointerDown(e));
     el.addEventListener('pointerup', (e) => this.onPointerUp(e));
-    el.addEventListener('pointercancel', () => this.cancelInteraction());
+    el.addEventListener('pointercancel', () => {
+      this.clearHold();
+      this.cancelInteraction();
+    });
+    // Right-click reads a card out rather than opening the browser menu.
+    el.addEventListener('contextmenu', (e) => {
+      this.setPointer(e as unknown as PointerEvent);
+      const uid = this.pick();
+      if (uid !== null && this.inspect(uid)) e.preventDefault();
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Card inspector
+  // -------------------------------------------------------------------------
+
+  /**
+   * Opens the full card for `uid` if the player is allowed to see it. Cards in
+   * the opponent's hand or deck are face down and stay that way; everything on
+   * the board is public information and readable by either side.
+   */
+  private inspect(uid: number): boolean {
+    const ent = this.game.state.entities.get(uid);
+    if (!ent) return false;
+    const visible = ent.zone === 'field' || ent.owner === this.human;
+    if (!visible) return false;
+    const def = this.game.def(uid);
+
+    let live: LiveCardState | undefined;
+    if (ent.zone === 'field') {
+      const st = this.game.stats(uid);
+      const on: LiveCardState = {
+        owner: ent.owner === this.human ? 'you' : 'foe',
+        evolved: ent.evolved,
+        keywords: [...st.keywords],
+      };
+      if (def.type === 'follower') {
+        // `stats()` already nets out damage taken; maxDef is the undamaged value.
+        on.atk = st.atk;
+        on.def = st.def;
+        on.maxDef = st.maxDef;
+      }
+      if (def.type === 'amulet' && ent.countdown !== undefined) on.countdown = ent.countdown;
+      live = on;
+    }
+
+    this.inspector.open(def, live);
+    this.audio.play('hover');
+    return true;
   }
 
   private setPointer(e: PointerEvent): void {
@@ -362,6 +425,7 @@ export class Battle {
 
   private onPointerMove(e: PointerEvent): void {
     this.setPointer(e);
+    if (this.holdTimer) this.clearHold();
     const it = this.interaction;
 
     if (it.kind === 'dragCard') {
@@ -403,8 +467,41 @@ export class Battle {
     }
   }
 
+  /** Cancels a pending press-and-hold. */
+  private clearHold(): void {
+    if (this.holdTimer) window.clearTimeout(this.holdTimer);
+    this.holdTimer = 0;
+    this.holdUid = null;
+  }
+
   private onPointerDown(e: PointerEvent): void {
     this.setPointer(e);
+    this.clearHold();
+    if (this.inspector.isOpen) return;
+
+    const hit = this.pick();
+
+    // Press and hold reads a card out. It is armed in every phase — including
+    // the opponent's turn — and cancelled the moment the pointer moves or
+    // lifts, so it never competes with dragging.
+    if (hit !== null) {
+      this.holdUid = hit;
+      this.holdTimer = window.setTimeout(() => {
+        this.holdTimer = 0;
+        const uid = this.holdUid;
+        this.holdUid = null;
+        if (uid !== null && this.inspect(uid)) this.cancelInteraction();
+      }, 420);
+    }
+
+    // A card the player cannot act on is a card they can only read: tapping an
+    // opponent's follower, or one of their own amulets, opens it at once.
+    if (hit !== null && !this.isActionable(hit)) {
+      this.clearHold();
+      this.inspect(hit);
+      return;
+    }
+
     if (this.game.state.winner !== null || this.animating) return;
     if (this.game.state.active !== this.human) return;
 
@@ -459,8 +556,20 @@ export class Battle {
     }
   }
 
+  /** Whether tapping `uid` starts a play, an attack or a target choice. */
+  private isActionable(uid: number): boolean {
+    if (this.game.state.winner !== null || this.animating) return false;
+    if (this.interaction.kind === 'chooseTarget') return true;
+    if (this.game.state.active !== this.human) return false;
+    const me = this.game.player(this.human);
+    if (me.hand.includes(uid)) return true;
+    if (!me.field.includes(uid)) return false;
+    return this.game.def(uid).type === 'follower';
+  }
+
   private onPointerUp(e: PointerEvent): void {
     this.setPointer(e);
+    this.clearHold();
     const it = this.interaction;
 
     if (it.kind === 'dragCard') {
@@ -600,7 +709,7 @@ export class Battle {
     this.game.state.phase = 'over';
     this.queue.length = 0;
     this.audio.play('defeat');
-    this.hud.showResult('lose', 'You conceded.');
+    this.hud.showResult('lose', t('hud.conceded'));
   }
 
   // -------------------------------------------------------------------------
@@ -670,7 +779,7 @@ export class Battle {
           const p = this.toScreen(obj.group.position, 0.9);
           buttons.push({
             id: `play_${uid}`,
-            label: `Play · ${g.costOf(uid)}`,
+            label: t('battle.play', { n: g.costOf(uid) }),
             x: p.x - 78,
             y: p.y,
             onClick: () => {
@@ -681,7 +790,7 @@ export class Battle {
           for (const cost of g.availableEnhance(uid)) {
             buttons.push({
               id: `enh_${uid}_${cost}`,
-              label: `Enhance · ${cost}`,
+              label: t('battle.enhance', { n: cost }),
               x: p.x + 78,
               y: p.y,
               kind: 'enhance',
@@ -701,7 +810,7 @@ export class Battle {
           const p = this.toScreen(obj.group.position, 1.15);
           buttons.push({
             id: `evo_${uid}`,
-            label: 'Evolve',
+            label: t('battle.evolve'),
             x: p.x,
             y: p.y,
             onClick: () => this.tryEvolve(uid),
@@ -771,7 +880,12 @@ export class Battle {
 
       case 'play': {
         const def = this.game.def(ev.uid);
-        this.hud.addLog(`${ev.player === this.human ? 'You' : 'Opponent'} played <b>${def.name}</b>`);
+        this.hud.addLog(
+          t('battle.played', {
+            who: t(ev.player === this.human ? 'battle.you' : 'battle.foe'),
+            card: cardName(def),
+          }),
+        );
         this.audio.play(def.type === 'spell' ? 'spell' : 'play');
         if (def.type === 'spell') {
           const obj = this.cards.get(ev.uid);
@@ -880,7 +994,7 @@ export class Battle {
       case 'gameOver': {
         const kind = ev.winner === 'draw' ? 'draw' : ev.winner === this.human ? 'win' : 'lose';
         this.audio.play(kind === 'win' ? 'victory' : 'defeat');
-        this.hud.showResult(kind, kind === 'win' ? 'Your leader stood.' : 'Your leader fell.');
+        this.hud.showResult(kind, t(kind === 'win' ? 'hud.wonBecause' : 'hud.lostBecause'));
         return ms(400);
       }
 
@@ -922,8 +1036,10 @@ export class Battle {
 
   dispose(): void {
     this.disposed = true;
+    this.clearHold();
     for (const obj of this.cards.values()) obj.dispose();
     this.cards.clear();
+    this.inspector.root.remove();
     this.hud.dispose();
     this.effects.dispose();
     this.stage.dispose();

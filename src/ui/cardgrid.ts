@@ -10,6 +10,7 @@ import { CRAFT_CLASSES, SET_ORDER } from '../engine/types';
 import { cardFaceCanvas } from '../art/cardface';
 import { CLASS_THEME, RARITY_THEME } from '../art/theme';
 import { el } from './style';
+import { className, t } from '../i18n';
 
 export interface GridFilters {
   text: string;
@@ -45,7 +46,8 @@ export function applyFilters(cards: CardDef[], f: GridFilters): CardDef[] {
     }
     if (f.playableOnly && c.implemented === false) return false;
     if (needle) {
-      const hay = `${c.name} ${c.nameJa ?? ''} ${c.text} ${c.traits?.join(' ') ?? ''}`.toLowerCase();
+      const hay =
+        `${c.name} ${c.nameJa ?? ''} ${c.text} ${c.textJa ?? ''} ${c.traits?.join(' ') ?? ''}`.toLowerCase();
       if (!hay.includes(needle)) return false;
     }
     return true;
@@ -102,7 +104,7 @@ export class CardGrid {
     this.root.replaceChildren();
 
     if (this.cards.length === 0) {
-      this.root.append(el('div', { class: 'sv-empty' }, 'No cards match these filters.'));
+      this.root.append(el('div', { class: 'sv-empty' }, t('grid.noMatch')));
       return;
     }
 
@@ -159,7 +161,7 @@ export class CardGrid {
 
       const n = this.opts.counts?.get(id) ?? 0;
       if (n > 0) slot.append(el('div', { class: 'sv-count' }, `×${n}`));
-      if (card.implemented === false) slot.append(el('div', { class: 'sv-badge' }, 'Partial'));
+      if (card.implemented === false) slot.append(el('div', { class: 'sv-badge' }, t('grid.partial')));
       slot.classList.toggle('dim', !!this.opts.isDimmed?.(card));
     }
   }
@@ -200,12 +202,17 @@ export function buildFilterBar(
   bar.append(search);
 
   const group = (label: string, items: { key: string; label: string; color?: string }[], get: () => string, set: (k: string) => void) => {
+    // `data-group` / `data-key` give the end-to-end test stable handles that do
+    // not move when the interface language or the copy changes.
     const wrap = el('div', { class: 'sv-chiprow', style: 'gap:5px;' });
     wrap.append(
       el('span', { style: 'font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6B7386;margin-right:2px;' }, label),
     );
     for (const item of items) {
+      // `data-key` gives the end-to-end test a handle that does not move when
+      // the interface language changes.
       const chip = el('div', { class: 'sv-chip' }, item.label);
+      chip.setAttribute('data-key', item.key);
       if (item.color) {
         chip.setAttribute('data-class', '1');
         chip.style.setProperty('--chip-color', item.color);
@@ -223,42 +230,42 @@ export function buildFilterBar(
   };
 
   group(
-    'Class',
+    t('filter.class'),
     [
-      { key: 'all', label: 'All' },
-      ...CRAFT_CLASSES.map((c) => ({ key: c, label: CLASS_THEME[c].label.replace('craft', ''), color: CLASS_THEME[c].primary })),
-      { key: 'neutral', label: 'Neutral', color: CLASS_THEME.neutral.primary },
+      { key: 'all', label: t('filter.all') },
+      ...CRAFT_CLASSES.map((c) => ({ key: c, label: className(CLASS_THEME[c]).replace('craft', ''), color: CLASS_THEME[c].primary })),
+      { key: 'neutral', label: className(CLASS_THEME.neutral), color: CLASS_THEME.neutral.primary },
     ],
     () => state.cardClass,
     (k) => (state.cardClass = k as GridFilters['cardClass']),
   );
 
   group(
-    'Cost',
-    [{ key: 'all', label: 'All' }, ...[1, 2, 3, 4, 5, 6, 7].map((n) => ({ key: String(n), label: n === 7 ? '7+' : String(n) }))],
+    t('filter.cost'),
+    [{ key: 'all', label: t('filter.all') }, ...[1, 2, 3, 4, 5, 6, 7].map((n) => ({ key: String(n), label: n === 7 ? '7+' : String(n) }))],
     () => String(state.cost),
     (k) => (state.cost = k === 'all' ? 'all' : Number(k)),
   );
 
   group(
-    'Type',
+    t('filter.type'),
     [
-      { key: 'all', label: 'All' },
-      { key: 'follower', label: 'Follower' },
-      { key: 'spell', label: 'Spell' },
-      { key: 'amulet', label: 'Amulet' },
+      { key: 'all', label: t('filter.all') },
+      { key: 'follower', label: t('type.follower') },
+      { key: 'spell', label: t('type.spell') },
+      { key: 'amulet', label: t('type.amulet') },
     ],
     () => state.type,
     (k) => (state.type = k as GridFilters['type']),
   );
 
   group(
-    'Rarity',
+    t('filter.rarity'),
     [
-      { key: 'all', label: 'All' },
+      { key: 'all', label: t('filter.all') },
       ...(['bronze', 'silver', 'gold', 'legendary'] as Rarity[]).map((r) => ({
         key: r,
-        label: RARITY_THEME[r].label,
+        label: t(`rarity.${r}` as const),
         color: RARITY_THEME[r].gem,
       })),
     ],
@@ -267,9 +274,9 @@ export function buildFilterBar(
   );
 
   group(
-    'Set',
+    t('filter.set'),
     [
-      { key: 'all', label: 'All' },
+      { key: 'all', label: t('filter.all') },
       ...SET_ORDER.map((s) => ({ key: s, label: SET_LABEL[s] })),
     ],
     () => state.set,
@@ -277,8 +284,9 @@ export function buildFilterBar(
   );
 
   if (opts.showPlayableToggle) {
-    const chip = el('div', { class: 'sv-chip' + (state.playableOnly ? ' on' : '') }, 'Fully implemented');
-    chip.title = 'Hide cards whose printed text is not fully implemented yet';
+    const chip = el('div', { class: 'sv-chip' + (state.playableOnly ? ' on' : '') }, t('filter.implemented'));
+    chip.setAttribute('data-key', 'implemented-only');
+    chip.title = t('filter.implementedHint');
     chip.addEventListener('click', () => {
       state.playableOnly = !state.playableOnly;
       chip.classList.toggle('on', state.playableOnly);
@@ -291,10 +299,10 @@ export function buildFilterBar(
 }
 
 export const SET_LABEL: Record<SetId, string> = {
-  basic: 'Basic',
-  standard: 'Standard',
-  darkness: 'Darkness Evolved',
-  bahamut: 'Rise of Bahamut',
-  tempest: 'Tempest of the Gods',
-  wonderland: 'Wonderland Dreams',
+  basic: t('set.basic'),
+  standard: t('set.standard'),
+  darkness: t('set.darkness'),
+  bahamut: t('set.bahamut'),
+  tempest: t('set.tempest'),
+  wonderland: t('set.wonderland'),
 };

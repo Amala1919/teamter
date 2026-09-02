@@ -26,6 +26,7 @@ export interface RawCard {
   textJa: string;
   evoText: string;
   evoTextJa: string;
+  flavorJa: string;
   flavor: string;
   artSeed: number;
   traits?: CardDef['traits'];
@@ -83,7 +84,9 @@ function buildAll(): { cards: CardDef[]; report: BuildReport } {
       text: raw.text,
       textJa: raw.textJa || undefined,
       evoText: raw.evoText || undefined,
+      evoTextJa: raw.evoTextJa || undefined,
       flavor: raw.flavor || undefined,
+      flavorJa: raw.flavorJa || undefined,
       artSeed: raw.artSeed,
     };
     if (raw.traits) def.traits = raw.traits;

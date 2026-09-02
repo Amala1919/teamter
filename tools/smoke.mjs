@@ -40,14 +40,14 @@ await page.waitForTimeout(900);
 
 await step('menu renders decks', async () => {
   await page.waitForSelector('.sv-title', { timeout: 8000 });
-  const n = await page.locator('.sv-panel .sv-btn', { hasText: 'Edit' }).count();
+  const n = await page.locator('[data-act="edit-deck"]').count();
   if (n === 0) throw new Error('no decks listed');
 });
 
 await step('open collection and filter', async () => {
-  await page.click('.sv-topbar .sv-btn:has-text("Collection")');
+  await page.click('[data-act="collection"]');
   await page.waitForSelector('.sv-grid', { timeout: 8000 });
-  await page.click('.sv-chip:has-text("Dragon")');
+  await page.click('.sv-chip[data-key="dragon"]');
   await page.waitForTimeout(500);
   const shown = await page.locator('.sv-cardslot').count();
   if (shown === 0) throw new Error('filter produced no cards');
@@ -56,24 +56,24 @@ await step('open collection and filter', async () => {
 await step('open a card detail', async () => {
   await page.locator('.sv-cardslot').first().click();
   await page.waitForSelector('.sv-detail.open', { timeout: 5000 });
-  await page.click('.sv-detail .sv-btn:has-text("Close")');
+  await page.click('[data-act="close-detail"]');
 });
 
 await step('back to menu', async () => {
-  await page.click('.sv-topbar .sv-btn:has-text("Back")');
-  await page.waitForSelector('.sv-title:has-text("Teamter")', { timeout: 5000 });
+  await page.click('[data-act="back"]');
+  await page.waitForSelector('[data-act="battle"]', { timeout: 5000 });
 });
 
 console.log('battle');
 await step('start a battle', async () => {
-  await page.click('.sv-btn.primary:has-text("Battle")');
+  await page.click('[data-act="battle"]');
   await page.waitForSelector('.mull', { timeout: 10000 });
 });
 
 await step('mulligan a card and confirm', async () => {
   await page.locator('.mull-card').first().click();
   await page.waitForTimeout(200);
-  await page.click('.mull .sv-btn.primary');
+  await page.click('[data-act="mull-confirm"]');
   await page.waitForTimeout(1800);
   const hand = await page.evaluate(() => (window.battle ?? window.shell) && 1);
   if (!hand) throw new Error('battle not reachable');

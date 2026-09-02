@@ -8,6 +8,8 @@ import { builtCards } from './index';
 import type { CardDef, ClassId } from '../engine/types';
 import { RULES } from '../engine/types';
 import type { DeckList } from '../engine/game';
+import { CLASS_THEME } from '../art/theme';
+import { cardName, className, t } from '../i18n';
 
 export interface DeckValidation {
   ok: boolean;
@@ -19,25 +21,30 @@ export function validateDeck(deck: DeckList, pool = builtCards()): DeckValidatio
   const errors: string[] = [];
 
   if (deck.cards.length !== RULES.DECK_SIZE) {
-    errors.push(`A deck must contain exactly ${RULES.DECK_SIZE} cards (has ${deck.cards.length}).`);
+    errors.push(t('deckerr.size', { max: RULES.DECK_SIZE, n: deck.cards.length }));
   }
 
   const counts = new Map<string, number>();
   for (const id of deck.cards) {
     const card = byId.get(id);
     if (!card) {
-      errors.push(`Unknown card: ${id}`);
+      errors.push(t('deckerr.unknown', { id }));
       continue;
     }
-    if (card.token) errors.push(`${card.name} is a token and cannot be added to a deck.`);
+    if (card.token) errors.push(t('deckerr.token', { name: cardName(card) }));
     if (card.cardClass !== 'neutral' && card.cardClass !== deck.leaderClass) {
-      errors.push(`${card.name} is not a ${deck.leaderClass} card.`);
+      errors.push(
+        t('deckerr.class', { name: cardName(card), cls: className(CLASS_THEME[deck.leaderClass]) }),
+      );
     }
     counts.set(id, (counts.get(id) ?? 0) + 1);
   }
   for (const [id, n] of counts) {
     if (n > RULES.COPY_LIMIT) {
-      errors.push(`${byId.get(id)?.name ?? id}: ${n} copies (limit ${RULES.COPY_LIMIT}).`);
+      const c = byId.get(id);
+      errors.push(
+        t('deckerr.copies', { name: c ? cardName(c) : id, n, max: RULES.COPY_LIMIT }),
+      );
     }
   }
 

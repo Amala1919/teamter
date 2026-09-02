@@ -6,6 +6,8 @@
  * dropped and reported rather than silently swallowed.
  */
 import type { ClassId } from '../engine/types';
+import { CLASS_THEME } from '../art/theme';
+import { cardName, className, t } from '../i18n';
 import { RULES } from '../engine/types';
 import type { DeckList } from '../engine/game';
 import { tryGetCard } from '../engine/registry';
@@ -65,7 +67,7 @@ export function deleteDeck(id: string): void {
 export function createDeck(leaderClass: ClassId, name?: string): SavedDeck {
   return {
     id: newId(),
-    name: name ?? `New ${leaderClass} deck`,
+    name: name ?? t('menu.newDeck'),
     leaderClass,
     cards: {},
     updated: Date.now(),
@@ -100,7 +102,7 @@ export function statusOf(deck: SavedDeck): DeckStatus {
   const partial: string[] = [];
   for (const id of Object.keys(deck.cards)) {
     const card = tryGetCard(id);
-    if (card?.implemented === false) partial.push(card.name);
+    if (card?.implemented === false) partial.push(cardName(card));
   }
   return { size: list.cards.length, legal: ok, errors, partial };
 }
@@ -132,7 +134,10 @@ export function activeDeck(fallbackClass: ClassId = 'sword'): { list: DeckList; 
     const status = statusOf(deck);
     if (status.legal) return { list: toDeckList(deck), name: deck.name };
   }
-  return { list: buildStarterDeck(fallbackClass), name: `${fallbackClass} starter` };
+  return {
+    list: buildStarterDeck(fallbackClass),
+    name: t('menu.starterDeck', { cls: className(CLASS_THEME[fallbackClass]) }),
+  };
 }
 
 /** Seeds one starter deck per class the first time the game is opened. */
@@ -145,7 +150,7 @@ export function ensureStarterDecks(): void {
     for (const id of list.cards) counts[id] = (counts[id] ?? 0) + 1;
     decks.push({
       id: newId(),
-      name: `${cls} starter`,
+      name: t('menu.starterDeck', { cls: className(CLASS_THEME[cls]) }),
       leaderClass: cls,
       cards: counts,
       updated: Date.now(),

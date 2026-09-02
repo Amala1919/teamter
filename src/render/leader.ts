@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import type { CardDef, ClassId } from '../engine/types';
 import { drawIllustration } from '../art/illustration';
+import { className } from '../i18n';
 import { CLASS_THEME, FONT, UI } from '../art/theme';
 
 const PORTRAIT_W = 384;
@@ -32,7 +33,7 @@ function metal(ctx: CanvasRenderingContext2D, w: number, h: number): CanvasGradi
 function leaderArtCard(cls: ClassId, seed: number): CardDef {
   return {
     id: `leader_${cls}`,
-    name: CLASS_THEME[cls].label,
+    name: className(CLASS_THEME[cls]),
     cardClass: cls,
     set: 'basic',
     rarity: 'legendary',
@@ -169,7 +170,7 @@ export class LeaderObject {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = rgba(theme.deep, 0.9);
-    const label = theme.label.toUpperCase();
+    const label = className(theme).toUpperCase();
     const lw = ctx.measureText(label).width + 40;
     ctx.fillRect(W / 2 - lw / 2, H * 0.72, lw, 32);
     ctx.strokeStyle = rgba(UI.gold, 0.6);

@@ -7,6 +7,7 @@
  */
 import { CLASS_THEME, FONT, UI } from '../art/theme';
 import type { ClassId, PlayerId } from '../engine/types';
+import { t } from '../i18n';
 
 export interface HudCallbacks {
   onEndTurn: () => void;
@@ -234,7 +235,7 @@ export class Hud {
     // End turn.
     this.endTurn = document.createElement('button');
     this.endTurn.className = 'hud-endturn';
-    this.endTurn.textContent = 'End Turn';
+    this.endTurn.textContent = t('hud.endTurn');
     this.endTurn.addEventListener('click', () => this.cb.onEndTurn());
     this.root.appendChild(this.endTurn);
 
@@ -266,7 +267,7 @@ export class Hud {
   
     const logChip = document.createElement('button');
     logChip.className = 'hud-chip';
-    logChip.textContent = 'Log';
+    logChip.textContent = t('hud.log');
     logChip.addEventListener('click', () => {
       this.log.classList.toggle('open');
       this.cb.onToggleLog?.();
@@ -275,7 +276,7 @@ export class Hud {
     if (this.cb.onSurrender) {
       const s = document.createElement('button');
       s.className = 'hud-chip';
-      s.textContent = 'Concede';
+      s.textContent = t('hud.concede');
       s.addEventListener('click', () => this.cb.onSurrender?.());
       bar.appendChild(s);
     }
@@ -292,7 +293,7 @@ export class Hud {
     const done = document.createElement('button');
     done.className = 'hud-endturn hud-exit';
     done.style.cssText = 'position:static;margin-top:10px;';
-    done.textContent = 'Back to menu';
+    done.textContent = t('hud.backToMenu');
     done.addEventListener('click', () => this.cb.onExit?.());
     this.result.appendChild(done);
     this.root.appendChild(this.result);
@@ -324,21 +325,26 @@ export class Hud {
   }
 
   setDeckCounts(ally: number, enemy: number, allyHand: number, enemyHand: number): void {
-    this.deckAlly.innerHTML = `Deck <span class="n">${ally}</span> · Hand <span class="n">${allyHand}</span>`;
-    this.deckEnemy.innerHTML = `Deck <span class="n">${enemy}</span> · Hand <span class="n">${enemyHand}</span>`;
+    const line = (deck: number, hand: number) =>
+      `${t('hud.deck')} <span class="n">${deck}</span> · ${t('hud.hand')} <span class="n">${hand}</span>`;
+    this.deckAlly.innerHTML = line(ally, allyHand);
+    this.deckEnemy.innerHTML = line(enemy, enemyHand);
   }
 
   setTurn(turn: number, mine: boolean): void {
-    this.turnLabel.textContent = `Turn ${turn} — ${mine ? 'your move' : 'opponent'}`;
+    this.turnLabel.textContent = t('hud.turnLine', {
+      n: turn,
+      who: t(mine ? 'hud.yourMove' : 'hud.theirMove'),
+    });
     this.endTurn.disabled = !mine;
     this.endTurn.classList.toggle('waiting', !mine);
-    this.endTurn.textContent = mine ? 'End Turn' : 'Opponent…';
+    this.endTurn.textContent = t(mine ? 'hud.endTurn' : 'hud.opponentTurn');
   }
 
   /** Sweeping "Your Turn" / "Opponent's Turn" plate. */
   showTurnBanner(mine: boolean): void {
     const plate = this.banner.querySelector('.plate') as HTMLElement;
-    plate.textContent = mine ? 'Your Turn' : "Opponent's Turn";
+    plate.textContent = t(mine ? 'hud.yourTurn' : 'hud.enemyTurn');
     this.banner.classList.toggle('enemy', !mine);
     this.banner.classList.remove('show');
     // Force a reflow so the animation restarts even on consecutive turns.
@@ -391,7 +397,7 @@ export class Hud {
     this.result.className = `hud-result show ${kind === 'draw' ? 'lose' : kind}`;
     const h1 = this.result.querySelector('h1')!;
     const p = this.result.querySelector('p')!;
-    h1.textContent = kind === 'win' ? 'Victory' : kind === 'lose' ? 'Defeat' : 'Draw';
+    h1.textContent = t(kind === 'win' ? 'hud.win' : kind === 'lose' ? 'hud.lose' : 'hud.draw');
     p.textContent = subtitle;
   }
 

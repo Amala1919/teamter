@@ -7,6 +7,7 @@ import { UI } from '../art/theme';
 import { CardGrid, DEFAULT_FILTERS, applyFilters, buildFilterBar, type GridFilters } from './cardgrid';
 import { CardDetail } from './detail';
 import { el, ensureScreenStyles } from './style';
+import { cardName, t } from '../i18n';
 
 export class CollectionScreen {
   readonly root: HTMLDivElement;
@@ -20,21 +21,21 @@ export class CollectionScreen {
     ensureScreenStyles();
     this.all = builtCards()
       .filter((c) => !c.token)
-      .sort((a, b) => a.cost - b.cost || a.cardClass.localeCompare(b.cardClass) || a.name.localeCompare(b.name));
+      .sort((a, b) => a.cost - b.cost || a.cardClass.localeCompare(b.cardClass) || cardName(a).localeCompare(cardName(b), 'ja'));
 
     this.countLabel = el('div', { class: 'sv-subtitle' });
 
-    const back = el('button', { class: 'sv-btn' }, '← Back');
+    const back = el('button', { class: 'sv-btn', 'data-act': 'back' }, t('collection.back'));
     back.addEventListener('click', () => this.onBack());
 
     const bar = el(
       'div',
       { class: 'sv-topbar' },
       back,
-      el('div', { class: 'sv-title' }, 'Collection'),
+      el('div', { class: 'sv-title' }, t('collection.title')),
       this.countLabel,
       el('div', { class: 'sv-spacer' }),
-      el('div', { class: 'sv-subtitle' }, 'Right-click or long-press a card for details'),
+      el('div', { class: 'sv-subtitle' }, t('collection.hint')),
     );
 
     const filterBar = buildFilterBar(this.filters, (next) => {
@@ -58,7 +59,8 @@ export class CollectionScreen {
     this.grid.setCards(shown);
     const partial = shown.filter((c) => c.implemented === false).length;
     this.countLabel.textContent =
-      `${shown.length} of ${this.all.length}` + (partial > 0 ? ` · ${partial} partial` : '');
+      t('collection.count', { n: shown.length, total: this.all.length }) +
+      (partial > 0 ? t('collection.partialCount', { n: partial }) : '');
     this.countLabel.style.color = partial > 0 ? '#FFC08A' : UI.textDim;
   }
 

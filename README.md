@@ -20,9 +20,13 @@ npm run dev
 
 Then open **http://localhost:5173**.
 
-That is the whole setup — the card database ships in the repository
-(`src/data/generated/cards.json`), all artwork is generated at runtime, and all
-audio is synthesised, so there is nothing to download or unpack.
+That is the whole setup — the card database and the illustration subject map
+ship in the repository (`src/data/generated/`), the artwork around those
+subjects is generated at runtime, and all audio is synthesised, so there is
+nothing to download or unpack.
+
+The interface is **Japanese** by default, matching the card database. Append
+`?lang=en` to any URL for English.
 
 ### Production build
 
@@ -45,7 +49,7 @@ desktop browser.
 | Attack | Drag one of your followers onto an enemy follower or leader |
 | Evolve | Click the **Evolve** button that appears over the follower |
 | Enhance | Drop the card, then pick the cost you want to pay |
-| Inspect a card | Right-click, or long-press on touch |
+| Read a card | Right-click or long-press it — including the opponent's board, whose cards are otherwise too small to read. Tapping a card you cannot act on opens it straight away. |
 | End your turn | The **End Turn** button, bottom right |
 
 Seven starter decks — one per class — are created the first time you open the
@@ -85,6 +89,7 @@ Useful for jumping straight to a screen while working on it:
 | `/?battle=1&me=dragon&foe=forest` | Straight into a match |
 | `/?demo=13&me=dragon&foe=forest` | A match fast-forwarded to turn 13 |
 | `/gallery.html?n=8&scale=0.8` | A grid of card faces, no game |
+| `/?lang=en` | Any of the above in English |
 
 ### Regenerating the card database
 
@@ -96,6 +101,17 @@ curl -o .cache/en.json https://raw.githubusercontent.com/user6174/shadowverse-js
 curl -o .cache/ja.json https://raw.githubusercontent.com/user6174/shadowverse-json/master/ja/all.json
 npm run cards:build
 ```
+
+### Regenerating the illustration subject map
+
+Only needed when the card database or the keyword tables change:
+
+```bash
+node tools/build-cardart.mjs
+```
+
+It prints how each card was matched and names any icon in the tables that does
+not exist upstream.
 
 ---
 
@@ -119,8 +135,17 @@ npm run cards:build
 Official Shadowverse card illustrations were **not obtainable** in the
 environment this was built in — the network policy blocks every host that
 serves them. Card *data* was reachable through a mirror of the official Portal
-API, so names, stats and rules text are accurate; the illustrations are all
-generated procedurally by this project, deterministically per card.
+API, so names, stats and rules text are accurate.
+
+Each card's illustration is therefore built from a copyright-free drawn
+subject placed in a generated scene. The subjects are **[Game
+Icons](https://game-icons.net/)** (CC BY 3.0, by the game-icons.net
+contributors); `tools/build-cardart.mjs` matches every card to one by name —
+proper nouns first, then a hand-authored noun table, then the card's tribe,
+then a curated pool for its class and type. `src/art/illustration.ts` lights,
+models and rim-lights that shape inside a procedurally graded sky, horizon,
+architecture and atmosphere. The result is deterministic per card, so art never
+shifts between sessions. Full attribution is in `ASSET_LICENSES.md`.
 
 The renderer is nonetheless built to prefer official art if it is ever
 supplied: drop images into `public/assets/official/` and pass them through

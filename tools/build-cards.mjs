@@ -154,6 +154,7 @@ function convert(id, v, isToken) {
     evoText: clean(v.evoEffect_),
     evoTextJa: clean(jaRec?.evoEffect_),
     flavor: clean(v.baseFlair_).split('\n')[0] ?? '',
+    flavorJa: clean(jaRec?.baseFlair_).split('\n')[0] ?? '',
     artSeed: hash(`${id}:${name}`),
   };
   if (TRAITS.has(v.trait_)) out.traits = [v.trait_];

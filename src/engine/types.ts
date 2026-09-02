@@ -434,7 +434,9 @@ export interface CardDef {
   text: string;
   textJa?: string;
   evoText?: string;
+  evoTextJa?: string;
   flavor?: string;
+  flavorJa?: string;
 
   /** Target requested when the card itself is played. */
   targeting?: TargetSpec;
