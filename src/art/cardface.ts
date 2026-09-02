@@ -337,11 +337,13 @@ function drawRulesText(
     ...Object.values(KEYWORD_LABEL_JA),
   ];
 
-  // Fit the whole block by shrinking until it fits the box.
+  // Fit the whole block by shrinking until it fits the box. The floor is low
+  // because a handful of cards (Minthe of the Underworld, Dragonsong Flute)
+  // print far more text than the frame was designed for.
   const lines = text.split('\n');
   let size = 19 * s;
   let wrapped: { text: string; bold: boolean }[][] = [];
-  for (; size >= 11 * s; size -= 0.5 * s) {
+  for (; size >= 9 * s; size -= 0.5 * s) {
     ctx.font = `${size}px ${FONT.ui}`;
     wrapped = [];
     for (const line of lines) {
@@ -353,6 +355,12 @@ function drawRulesText(
   const lh = size * 1.3;
   let y = box.y + (box.h - wrapped.length * lh) / 2 + lh * 0.5;
   ctx.save();
+  // Even at the floor a few cards do not fit. Clipping keeps the overflow
+  // inside the text box instead of spilling over the stat plates; the full
+  // text is always readable in the card detail view and the battle inspector.
+  ctx.beginPath();
+  ctx.rect(box.x, box.y, box.w, box.h);
+  ctx.clip();
   ctx.textBaseline = 'middle';
   for (const runs of wrapped) {
     // Measure to centre the whole line, keeping mixed-weight runs aligned.
@@ -401,6 +409,9 @@ function tokenize(line: string, keywords: string[]): Run[] {
   return out.length > 0 ? out : [{ text: line, bold: false }];
 }
 
+/** Characters that may not open a line in Japanese (simplified kinsoku). */
+const NO_LINE_START = '。、，．」』）｝】〕・ー々ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮ！？：；';
+
 /** Word-wraps a run sequence, preserving each run's weight across breaks. */
 function wrapRuns(ctx: CanvasRenderingContext2D, runs: Run[], maxW: number, size: number, s: number): Run[][] {
   const out: Run[][] = [];
@@ -414,10 +425,18 @@ function wrapRuns(ctx: CanvasRenderingContext2D, runs: Run[], maxW: number, size
   for (const run of runs) {
     ctx.font = `${run.bold ? 700 : 400} ${size}px ${FONT.ui}`;
     // Japanese has no spaces, so fall back to per-character breaking.
-    const parts = /[^\x00-\x7F]/.test(run.text) ? [...run.text] : run.text.split(/(\s+)/);
+    const cjk = /[^\x00-\x7F]/.test(run.text);
+    const parts = cjk ? [...run.text] : run.text.split(/(\s+)/);
     let buf = '';
     for (const part of parts) {
       const w = ctx.measureText(part).width;
+      // Simplified kinsoku: closing punctuation and small kana may not open a
+      // line, so a sentence never ends with a lone 。 on a line of its own.
+      if (cjk && NO_LINE_START.includes(part)) {
+        buf += part;
+        width += w;
+        continue;
+      }
       if (width + w > maxW && (buf.trim() || line.length > 0)) {
         if (buf) line.push({ text: buf, bold: run.bold });
         push();
@@ -448,7 +467,7 @@ function wrapCentered(
   const parts = cjk ? [...text] : text.split(/\s+/);
   const join = (a: string, b: string) => (cjk || !a ? a + b : `${a} ${b}`);
   // Simplified kinsoku: these may not open a line.
-  const noStart = '。、，．」』）｝】〕・ー々ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮ！？';
+  const noStart = NO_LINE_START;
 
   const lines: string[] = [];
   let cur = '';
