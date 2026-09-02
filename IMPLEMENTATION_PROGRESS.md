@@ -20,7 +20,7 @@ card inspector, the compiler-coverage push and the leader animations.
 | 7 — Evolution, effects, particles, audio | **Done.** Bloom, particles, camera shake, synthesised audio, leader animation. |
 | 8 — Deck builder and collection | **Done.** Decks persist to localStorage and are validated live. |
 | 9 — Visual comparison and QA | **Partial.** Iterated by screenshot; no side-by-side against real captures — official screenshots are unreachable from this environment. |
-| 10 — Optimisation and final polish | **Partial.** Card-face painting is 41% faster and the grid no longer paints a screenful in one callback; the bundle is 224 kB smaller. Nothing profiled beyond that. |
+| 10 — Optimisation and final polish | **Partial.** Card-face painting is measured by `tools/bench.mjs`: p50 2.3 ms at grid scale, 2.6 ms at board scale. Name fitting on a repaint went from 550 µs to 3 µs a card. The grid no longer paints a screenful in one callback, and the bundle is 224 kB smaller. The battle scene itself has never been profiled. |
 
 ## What works
 
@@ -82,10 +82,10 @@ but these groups still repeat:
 1. **Grants that last while a card stays in play.** An expiry keyed to another
    entity's lifetime rather than to a turn index; Captain Lecia and Timeless
    Witch are blocked on it alone.
-2. **Optimisation (milestone 10), continued.** A card face is 7.0 ms to paint
-   at collection scale, of which 4.6 ms is the illustration; the three
-   full-canvas rim-light passes are the obvious next target. The battle scene
-   itself has never been profiled.
+2. **Optimisation (milestone 10), continued.** `tools/bench.mjs` reports p50
+   2.3 ms at grid scale and 2.6 ms at board scale; the p95 tail (~5 ms grid,
+   ~20 ms board) is the remaining target, and the battle scene itself has never
+   been profiled.
 3. **Leader voice lines**, the last part of the original's presentation with no
    equivalent here.
 
@@ -150,6 +150,11 @@ exercised it:
 - "At the end of this turn" and "at the end of your turn" read the same to the
   compiler, so Mysterian Grimoire's one-shot leader effect would have discarded
   the player's spells at the end of every turn for the rest of the match.
+- Fitting a card name walked the font size down half a point at a time, up to
+  eighty `ctx.font` assignments a card, each a font lookup — 380 ms on a long
+  Japanese name, and it landed on the card *face*, so it looked like the
+  illustration was at fault. It is a binary search now, with the full size
+  tried first so a short name still costs one measurement.
 - Temporary grants all expired at the end of whatever turn happened to be
   ending, so nothing could last through the opponent's turn. Each grant now
   carries its own expiry, which also means a this-turn grant landing on a

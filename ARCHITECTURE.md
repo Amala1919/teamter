@@ -157,6 +157,7 @@ match. A seed reproduces a match exactly, which is what makes the soak test in
 | `npm run cards:report -- --lines` | Card-text compiler coverage, and what is still unparsed |
 | `npm run typecheck` | `tsc --noEmit` |
 | `node tools/shoot.mjs <path> <out.png>` | Screenshot a page for visual review |
+| `node tools/bench.mjs [samples]` | Card-face paint cost in the browser, at grid, board and inspector scale |
 | `node tools/build-cardart.mjs` | Regenerates the subject table and card-to-icon map in `src/data/generated/cardart.json` |
 | `node tools/smoke.mjs` | End-to-end browser test against a running dev server |
 
