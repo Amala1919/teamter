@@ -338,6 +338,8 @@ export type Effect =
   /** Necromancy N: spend N shadows if available, then run `then`. */
   | { k: 'necromancy'; n: number; then: Effect[]; else?: Effect[] }
   /** No-op used to keep card text honest when an effect is purely cosmetic. */
+  /** "Last Words: Win the match." — ends the game outright. */
+  | { k: 'win'; side?: 'ally' | 'enemy' }
   | { k: 'noop' };
 
 // ---------------------------------------------------------------------------
@@ -423,6 +425,13 @@ export interface AuraDef {
   keywords?: Keyword[];
   /** Flat reduction applied to every instance of damage taken. */
   damageReduce?: number;
+  /**
+   * Ceiling on any single instance of damage — "Can't take more than 3 damage
+   * at a time". Distinct from `damageReduce`, which subtracts.
+   */
+  damageCap?: number;
+  /** Applies to the controller's leader rather than to entities. */
+  leader?: boolean;
   /** Applies to cards in hand rather than on the field (cost reduction auras). */
   costDelta?: number;
   cond?: Condition;

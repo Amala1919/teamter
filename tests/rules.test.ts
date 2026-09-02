@@ -549,3 +549,50 @@ describe('cost modification', () => {
     expect(g.costOf(uid)).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Damage ceilings and outright wins
+// ---------------------------------------------------------------------------
+
+describe('a damage ceiling', () => {
+  it('caps a single instance rather than subtracting from it', () => {
+    const g = newGame();
+    const uid = place(g, 0, 't_big');
+    // Luxhorn Sarissa's line: "Can't take more than 3 damage at a time."
+    g.ent(uid).grantedKeywords = [];
+    const src = g.ent(place(g, 0, 't_vanilla'));
+    // Stand in the aura by hand: the compiler emits exactly this shape.
+    (g.def(src) as { auras?: unknown[] }).auras = [{ target: { scope: 'self' }, damageCap: 3 }];
+    const dealt = g.dealDamage(src, 9, null, true);
+    expect(dealt).toBe(3);
+  });
+
+  it('caps damage to the leader too', () => {
+    const g = newGame();
+    const src = g.ent(place(g, 0, 't_vanilla'));
+    (g.def(src) as { auras?: unknown[] }).auras = [
+      { target: { scope: 'self' }, leader: true, damageCap: 3 },
+    ];
+    const before = g.player(0).defense;
+    g.damageLeader(0, 8, null);
+    expect(g.player(0).defense).toBe(before - 3);
+  });
+});
+
+describe('the win effect', () => {
+  it('ends the match for the controller', () => {
+    const g = newGame();
+    const src = g.ent(place(g, 0, 't_vanilla'));
+    g.runEffects([{ k: 'win' }], {
+      source: src,
+      controller: 0,
+      targets: [],
+      ti: 0,
+      option: 0,
+      vars: {},
+      depth: 0,
+    });
+    expect(g.state.winner).toBe(0);
+    expect(g.state.phase).toBe('over');
+  });
+});

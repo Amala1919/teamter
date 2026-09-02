@@ -279,6 +279,21 @@ export class Game {
     return n;
   }
 
+  /** The smallest single-instance damage ceiling that applies, if any. */
+  damageCap(e: Entity | { leaderOf: PlayerId }): number | null {
+    let cap: number | null = null;
+    for (const a of this.activeAuras()) {
+      if (a.aura.damageCap === undefined) continue;
+      const applies =
+        'leaderOf' in e
+          ? !!a.aura.leader && a.src.owner === e.leaderOf
+          : this.matchesAura(a, e);
+      if (!applies) continue;
+      cap = cap === null ? a.aura.damageCap : Math.min(cap, a.aura.damageCap);
+    }
+    return cap;
+  }
+
   private activeAuras(): { src: Entity; aura: AuraDef }[] {
     const out: { src: Entity; aura: AuraDef }[] = [];
     for (const p of [0, 1] as PlayerId[]) {
@@ -895,6 +910,8 @@ export class Game {
     if (amount <= 0 || e.zone !== 'field') return 0;
     if (fromEffect && this.stats(e).keywords.has('effectImmune')) return 0;
     amount = Math.max(0, amount - this.damageReduction(e));
+    const cap = this.damageCap(e);
+    if (cap !== null) amount = Math.min(amount, cap);
     if (amount === 0) return 0;
     if (e.barrierCharges > 0) {
       e.barrierCharges--;
@@ -909,6 +926,9 @@ export class Game {
   }
 
   damageLeader(p: PlayerId, amount: number, source: Entity | null): number {
+    if (amount <= 0) return 0;
+    const cap = this.damageCap({ leaderOf: p });
+    if (cap !== null) amount = Math.min(amount, cap);
     if (amount <= 0) return 0;
     const ps = this.player(p);
     ps.defense -= amount;
@@ -1121,6 +1141,12 @@ export class Game {
   private runEffect(eff: Effect, ctx: ResolveCtx): void {
     const g = this;
     switch (eff.k) {
+      case 'win': {
+        const winner = eff.side === 'enemy' ? other(ctx.controller) : ctx.controller;
+        this.finish(winner);
+        return;
+      }
+
       case 'noop':
         return;
 

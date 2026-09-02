@@ -209,6 +209,22 @@ describe('sentence forms the printed text keeps using', () => {
     expect(eff).toMatchObject({ pick: 'lowestCost', random: true });
   });
 
+  it('reads a list of three summons as three summons', () => {
+    // "Summon a Club Soldier, a Heart Guardian, and a Spade Raider."
+    const summons = flatten(abilityEffects('council_of_card_knights')).filter((e) => e.k === 'summon');
+    expect(summons.map((e) => (e.k === 'summon' ? e.defId : ''))).toEqual([
+      'club_soldier',
+      'heart_guardian',
+      'spade_raider',
+    ]);
+  });
+
+  it('reads a list of keywords after a stat change', () => {
+    // Wight King: "Necromancy (4) - Gain +1/+1, Ward and Bane."
+    const grant = flatten(abilityEffects('wight_king')).find((e) => e.k === 'grant');
+    expect(grant).toMatchObject({ keywords: ['ward', 'bane'] });
+  });
+
   it('compares the two leaders for "if their defense is higher than yours"', () => {
     const [eff] = abilityEffects('succubus');
     expect(eff.k).toBe('if');
@@ -247,6 +263,12 @@ describe('the compiled cards actually run', () => {
     'rahab',
     'sky_sprite',
     'elder_tortoise',
+    'council_of_card_knights',
+    'mutagenic_bolt',
+    'wight_king',
+    'valhallan_general',
+    'astaroths_reckoning',
+    'luxhorn_sarissa',
   ];
 
   for (const id of ids) {

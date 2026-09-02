@@ -461,6 +461,16 @@ function bindX(line: string, ctx: CompileCtx): string {
   return line.replace(m[0], '').trim();
 }
 
+/** "Ward and Bane", "Rush, and Bane" — the keywords named in a list. */
+function keywordList(text: string): Keyword[] {
+  return text
+    .split(/,|\band\b/i)
+    .map((w) => w.trim().toLowerCase())
+    .filter(Boolean)
+    .map((w) => KEYWORD_WORDS[w])
+    .filter((k): k is Keyword => !!k);
+}
+
 /** A stat change token with its sign: "-2" in "Give an enemy follower -2/-0". */
 function signed(sign: string, token: string, ctx: CompileCtx): Amount | null {
   const v = amt(token, ctx);
@@ -572,6 +582,45 @@ const RULES_TABLE: Rule[] = [
       return [
         { k: 'buff', target: t, atk: a, def: d, duration: temp ? 'turn' : 'permanent' },
         { k: 'grant', target: t, keywords: [KEYWORD_WORDS[m[3].toLowerCase()]], duration: temp ? 'turn' : 'permanent' },
+      ];
+    },
+  },
+  {
+    // "Give an allied follower +3/+3 and Rush." — the ditransitive order with a
+    // keyword rider.
+    re: new RegExp(
+      `^give (?![-+])(.+?) \\+${N}/\\+${N} and (${KW_ALT})(?: until the end of (?:the|this|your) turn)?$`,
+      'i',
+    ),
+    build: (m, ctx) => {
+      const t = parseSelector(m[1], ctx);
+      const a = amt(m[2], ctx);
+      const d = amt(m[3], ctx);
+      if (!t || a === null || d === null) return null;
+      const temp = /until the end of/i.test(m[0]);
+      const duration = temp ? ('turn' as const) : ('permanent' as const);
+      return [
+        { k: 'buff', target: t, atk: a, def: d, duration },
+        { k: 'grant', target: t, keywords: [KEYWORD_WORDS[m[4].toLowerCase()]], duration },
+      ];
+    },
+  },
+  {
+    // "Gain +1/+1, Ward and Bane." — any number of keywords after the stats.
+    re: new RegExp(
+      `^gain \\+${N}/\\+${N},? (?:and )?((?:${KW_ALT})(?:,? (?:and )?(?:${KW_ALT}))*)(?: until the end of (?:the|this|your) turn)?$`,
+      'i',
+    ),
+    build: (m, ctx) => {
+      const a = amt(m[1], ctx);
+      const d = amt(m[2], ctx);
+      const keywords = keywordList(m[3]);
+      if (a === null || d === null || keywords.length === 0) return null;
+      const temp = /until the end of/i.test(m[0]);
+      const duration = temp ? ('turn' as const) : ('permanent' as const);
+      return [
+        { k: 'buff', target: { scope: 'self' }, atk: a, def: d, duration },
+        { k: 'grant', target: { scope: 'self' }, keywords, duration },
       ];
     },
   },
@@ -806,6 +855,22 @@ const RULES_TABLE: Rule[] = [
       return x === null ? null : [{ k: 'gainPP', amount: x }];
     },
   },
+  { re: /^win the (?:match|game)$/i, build: () => [{ k: 'win' }] },
+  {
+    // "Deal damage to the enemy leader until their defense drops to 0."
+    re: /^deal damage to the enemy leader until (?:their|its) defense drops to (\d+)$/i,
+    build: (m) => [
+      {
+        k: 'damage',
+        target: { scope: 'leader', side: 'enemy' },
+        amount: {
+          k: 'max',
+          a: 0,
+          b: { k: 'sum', of: [{ k: 'leaderDefense', side: 'enemy' }, -num(m[1])] },
+        },
+      },
+    ],
+  },
   { re: /^gain (\d+) evolution points?$/i, build: (m) => [{ k: 'gainEP', amount: num(m[1]) }] },
   { re: /^recover (\d+) evolution points?$/i, build: (m) => [{ k: 'gainEP', amount: num(m[1]) }] },
 
@@ -939,7 +1004,7 @@ const RULES_TABLE: Rule[] = [
   },
   { re: /^evolve$/i, build: () => [{ k: 'evolveTarget', target: { scope: 'self' } }] },
   {
-    re: /^transform (.+?) into (?:an?|the) ([\w' -]+)$/i,
+    re: /^transform (.+?) into (?:(?:an?|the) )?([\w' -]+)$/i,
     build: (m, ctx) => {
       const t = parseSelector(m[1], ctx);
       const id = cardId(m[2], ctx);
@@ -1118,7 +1183,10 @@ function compileSentences(
 function splitConjunction(sentence: string, ctx: CompileCtx): Effect[] | null {
   const peeled = peelCondition(sentence);
   const body = tidy(peeled.body);
-  for (const sep of [', and then ', ' and then ', ', and ', ' and ']) {
+  // A bare comma is last: it only splits when both halves parse on their own,
+  // which is what makes "Summon a Club Soldier, a Heart Guardian, and a Spade
+  // Raider" work without mis-splitting ordinary commas.
+  for (const sep of [', and then ', ' and then ', ', and ', ' and ', ', ']) {
     let idx = body.toLowerCase().indexOf(sep);
     while (idx > 0) {
       const left = body.slice(0, idx);
@@ -1126,9 +1194,11 @@ function splitConjunction(sentence: string, ctx: CompileCtx): Effect[] | null {
       const a = parseSentence(left, ctx);
       if (a) {
         // "Summon a Pirate and a Viking" — the right half has no verb of its
-        // own, so it borrows the left one.
+        // own, so it borrows the left one. The right half may itself be a list,
+        // as in "a Club Soldier, a Heart Guardian, and a Spade Raider".
         const verb = left.match(/^(\w+)\s/);
-        const b = parseSentence(right, ctx) ?? (verb ? parseSentence(`${verb[1]} ${right}`, ctx) : null);
+        const tryBoth = (text: string) => parseSentence(text, ctx) ?? splitConjunction(text, ctx);
+        const b = tryBoth(right) ?? (verb ? tryBoth(`${verb[1]} ${right}`) : null);
         if (b) {
           const both = bindOtherToCondition([...a, ...b], peeled.cond);
           return peeled.cond ? [{ k: 'if', cond: peeled.cond, then: both }] : both;
@@ -1528,6 +1598,25 @@ function matchStatic(line: string, res: CompileResult): boolean {
       });
       return true;
     }
+  }
+
+  // "Can't take more than 3 damage at a time." — a ceiling on each instance,
+  // not a flat reduction.
+  const capSelf = l.match(/^can'?t take more than (\d+) damage at a time$/);
+  if (capSelf) {
+    res.auras.push({ target: { scope: 'self' }, damageCap: num(capSelf[1]) });
+    return true;
+  }
+  const capLeader = l.match(
+    /^(?:while this (?:amulet|follower) is in play, )?your leader (?:and all allied followers(?: in play and that come into play)? )?can'?t take more than (\d+) damage at a time$/,
+  );
+  if (capLeader) {
+    const n = num(capLeader[1]);
+    res.auras.push({ target: { scope: 'self' }, leader: true, damageCap: n });
+    if (/allied followers/.test(l)) {
+      res.auras.push({ target: { scope: 'all', side: 'ally', kind: 'follower' }, damageCap: n });
+    }
+    return true;
   }
 
   // Unconditional cost reduction printed as a static line.
