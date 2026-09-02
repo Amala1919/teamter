@@ -31,6 +31,12 @@ export interface CompileCtx {
   selfId: string;
   /** Value bound by an "X equals ..." sentence on the current line. */
   x?: Amount;
+  /**
+   * Set when the line's X reads a stat off "that follower" — the thing an
+   * earlier sentence acted on. Those effects have to be wrapped in `withTarget`
+   * so the entity is still readable after it has been destroyed or banished.
+   */
+  usesOther?: boolean;
 }
 
 export interface CompileResult {
@@ -375,8 +381,38 @@ function parseCountPhrase(phrase: string, ctx: CompileCtx): Amount | null {
   if (m) return { k: 'cardsPlayed' };
   m = p.match(/^(?:the number of )?cards? discarded$/);
   if (m) return { k: 'ctx', name: 'discarded' };
-  m = p.match(/^the attack of the strongest allied follower(?: in play)?$/);
-  if (m) return { k: 'ctx', name: 'strongestAlly' };
+  // "the attack of the strongest enemy follower in play"
+  m = p.match(/^the (attack|defense|cost) of the (strongest|weakest) (.+?)(?: in play)?$/);
+  if (m) {
+    const sel = parseSelector(m[3], ctx);
+    if (sel) {
+      return {
+        k: 'statOf',
+        of: { ...sel, scope: 'all' },
+        stat: m[1] === 'attack' ? 'atk' : m[1] === 'defense' ? 'def' : 'cost',
+        pick: m[2] === 'strongest' ? 'max' : 'min',
+      };
+    }
+  }
+
+  // "this follower's attack" — the ability's own source.
+  m = p.match(/^this (?:follower|card|amulet)'s (attack|defense)$/);
+  if (m) return m[1] === 'attack' ? { k: 'sourceAtk' } : { k: 'sourceDef' };
+
+  // "that follower's attack" — whatever an earlier sentence acted on. The
+  // caller has to bind it with `withTarget`; the flag says so.
+  m = p.match(/^(?:that|the selected|the) (?:follower|card|amulet)'s (attack|defense|cost)$/);
+  if (m) {
+    ctx.usesOther = true;
+    return m[1] === 'attack' ? { k: 'otherAtk' } : m[1] === 'defense' ? { k: 'otherDef' } : { k: 'otherCost' };
+  }
+
+  // "the number of other Neutral cards in your hand"
+  m = p.match(/^(?:the number of )?(?:other )?(.+?) (?:cards? )?in your hand$/);
+  if (m) {
+    const sel = parseSelector(m[1], ctx);
+    if (sel) return { k: 'count', of: { ...sel, scope: 'all', side: 'ally', zone: 'hand' } };
+  }
 
   m = p.match(/^(?:the number of )?(.+?) in play$/);
   if (m) {
@@ -841,7 +877,11 @@ function splitSentences(line: string): string[] {
     .filter(Boolean);
 }
 
-function compileSentences(text: string, ctx: CompileCtx): Effect[] | null {
+function compileSentences(
+  text: string,
+  ctx: CompileCtx,
+  opts: { bindOther?: boolean } = {},
+): Effect[] | null {
   const bound = bindX(text, ctx);
   const sentences = splitSentences(bound);
   if (sentences.length === 0) return null;
@@ -903,7 +943,17 @@ function compileSentences(text: string, ctx: CompileCtx): Effect[] | null {
     if (!joined) return null;
     out.push(...joined);
   }
-  return out.length > 0 ? out : null;
+  if (out.length === 0) return null;
+
+  // "Destroy an allied follower. Restore X defense to your leader. X equals
+  // that follower's defense." — the stat has to be read from the follower that
+  // was just destroyed, so the whole line runs bound to it.
+  if (ctx.usesOther && opts.bindOther !== false) {
+    const sel = primaryTarget(out);
+    if (!sel) return null;
+    return [{ k: 'withTarget', target: sel, body: out }];
+  }
+  return out;
 }
 
 /** Splits "Destroy an allied follower and summon a Lich." into two effects. */
@@ -958,7 +1008,65 @@ function patchPrimary(effects: Effect[], patch: (e: Effect) => Effect | null): E
   return done ? out : null;
 }
 
-/** Handles "Deal 5 damage instead", "Give +4/+4 instead", "Summon 2 instead". */
+/**
+ * The selector the first targeting effect in `effects` acts on. "Banish it
+ * instead" means "banish whatever the sentence I am replacing acted on", so the
+ * pronoun resolves to this rather than to any text.
+ */
+function primaryTarget(effects: Effect[]): Selector | null {
+  // "that follower" is never the leader, so a leader-only selector does not
+  // count as the thing a later sentence is talking about.
+  const picksEntities = (sel: Selector) =>
+    sel.scope !== 'leader' && !sel.leaderOnly;
+
+  for (const e of effects) {
+    if ('target' in e && e.target && picksEntities(e.target as Selector)) return e.target as Selector;
+    if (e.k === 'if') {
+      const inner = primaryTarget(e.then) ?? (e.else ? primaryTarget(e.else) : null);
+      if (inner) return inner;
+    }
+    if (e.k === 'necromancy' || e.k === 'earthRite') {
+      const inner = primaryTarget(e.then) ?? (e.else ? primaryTarget(e.else) : null);
+      if (inner) return inner;
+    }
+    if (e.k === 'repeat') {
+      const inner = primaryTarget(e.body);
+      if (inner) return inner;
+    }
+  }
+  return null;
+}
+
+/**
+ * "Destroy it instead", "Banish it instead", "Return it to the opponent's hand
+ * instead" — a new verb applied to the target the replaced effect already had.
+ */
+function pronounInstead(clause: string, sel: Selector, ctx: CompileCtx): Effect[] | null {
+  const c = tidy(clause);
+  if (/^destroy (?:it|them)$/i.test(c)) return [{ k: 'destroy', target: sel }];
+  if (/^banish (?:it|them)$/i.test(c)) return [{ k: 'banish', target: sel }];
+  if (/^return (?:it|them) to (?:the opponent's|your|the player's|its owner's) hand$/i.test(c)) {
+    return [{ k: 'returnToHand', target: sel }];
+  }
+  const t = c.match(/^transform (?:it|them) into (?:an?|the) (.+)$/i);
+  if (t) {
+    const id = cardId(t[1], ctx);
+    if (id) return [{ k: 'transform', target: sel, into: id }];
+  }
+  const d = c.match(new RegExp(`^deal ${N} damage to (?:it|them)$`, 'i'));
+  if (d) {
+    const v = amt(d[1], ctx);
+    if (v !== null) return [{ k: 'damage', target: sel, amount: v }];
+  }
+  return null;
+}
+
+/**
+ * Handles "Deal 5 damage instead", "Give +4/+4 instead", "Summon 2 instead" —
+ * and, failing those, an "instead" clause that replaces the whole effect rather
+ * than one of its numbers ("Banish it instead", "Destroy an enemy follower or
+ * amulet instead").
+ */
 function applyInstead(base: Effect[], clause: string, ctx: CompileCtx): Effect[] | null {
   const c = tidy(clause);
 
@@ -986,7 +1094,22 @@ function applyInstead(base: Effect[], clause: string, ctx: CompileCtx): Effect[]
     const n = num(m[1]);
     return patchPrimary(base, (e) => (e.k === 'summon' ? { ...e, count: n } : null));
   }
-  return null;
+  m = c.match(new RegExp(`^draw ${N}(?: cards?)?$`, 'i'));
+  if (m) {
+    const v = amt(m[1], ctx);
+    if (v !== null) {
+      const patched = patchPrimary(base, (e) => (e.k === 'draw' ? { ...e, amount: v } : null));
+      if (patched) return patched;
+    }
+  }
+
+  // Not a numeric variation: the clause replaces the effect outright.
+  const sel = primaryTarget(base);
+  if (sel) {
+    const pronoun = pronounInstead(c, sel, ctx);
+    if (pronoun) return pronoun;
+  }
+  return parseSentence(c, ctx) ?? splitConjunction(c, ctx);
 }
 
 /** Handles "Spellboost: Deal 1 more." style scaling of an existing ability. */
@@ -1280,11 +1403,23 @@ export function compileCardText(text: string, baseCtx: CompileCtx): CompileResul
     // Enhance is an alternative printed cost on its own line.
     const enh = line.match(/^enhance \((\d+)\):\s*(.*)$/i);
     if (enh) {
+      // "Enhance (5): Destroy it instead." varies the line above rather than
+      // describing a separate body, so it is resolved against that line.
+      const insteadEnh = enh[2].match(/^(.*)\binstead\.?$/i);
+      const prevEnh = res.abilities[res.abilities.length - 1];
+      if (insteadEnh && prevEnh) {
+        const upgraded = applyInstead(prevEnh.effects, insteadEnh[1], ctx);
+        if (upgraded) {
+          res.enhance.push({ cost: num(enh[1]), effects: upgraded, text: line });
+          continue;
+        }
+      }
       const effects = compileSentences(enh[2], ctx);
       if (effects) res.enhance.push({ cost: num(enh[1]), effects, text: line });
       else res.unparsed.push(line);
       continue;
     }
+
 
     // Spellboost and Rally modify the line above them.
     const sb = line.match(/^spellboost:\s*(.*)$/i);
@@ -1376,6 +1511,26 @@ export function compileCardText(text: string, baseCtx: CompileCtx): CompileResul
       continue;
     }
 
+    // A line that is nothing but "<clause> instead.", optionally conditional,
+    // varies the previous line's ability rather than adding one of its own.
+    // Only a single unprefixed sentence qualifies: the keyword forms above
+    // ("Necromancy (6): Deal 3 damage instead.") are already handled, and a
+    // multi-sentence line resolves its own "instead" inside compileSentences.
+    if (splitSentences(line).length === 1 && !matchPrefix(line)) {
+      const peeled = peelCondition(line.replace(/\.$/, ''));
+      const m = tidy(peeled.body).match(/^(.*)\binstead$/i);
+      const prev = res.abilities[res.abilities.length - 1];
+      if (m && prev) {
+        const upgraded = applyInstead(prev.effects, m[1], ctx);
+        if (upgraded) {
+          prev.effects = peeled.cond
+            ? [{ k: 'if', cond: peeled.cond, then: upgraded, else: prev.effects }]
+            : upgraded;
+          continue;
+        }
+      }
+    }
+
     const prefix = matchPrefix(line);
     if (prefix) {
       const nested = prefix.rest.match(/^enhance \((\d+)\)\s*[-:]\s*(.*)$/i);
@@ -1405,6 +1560,20 @@ export function compileCardText(text: string, baseCtx: CompileCtx): CompileResul
       const effects = compileSentences(line, ctx);
       if (effects) {
         res.abilities.push({ on: baseCtx.selfType === 'spell' ? 'fanfare' : 'countdownEnd', effects });
+        continue;
+      }
+    }
+
+    // "Banish an enemy follower." / "Restore X defense to your leader. X equals
+    // that follower's defense." — the second line reads a stat off the first
+    // line's target, so the two become one ability bound to that entity.
+    const carryCtx: CompileCtx = { ...baseCtx };
+    const carried = compileSentences(line, carryCtx, { bindOther: false });
+    if (carried && carryCtx.usesOther) {
+      const prev = res.abilities[res.abilities.length - 1];
+      const sel = prev ? primaryTarget(prev.effects) : null;
+      if (prev && sel) {
+        prev.effects = [{ k: 'withTarget', target: sel, body: [...prev.effects, ...carried] }];
         continue;
       }
     }

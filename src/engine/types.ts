@@ -198,6 +198,11 @@ export interface Selector {
 export type Amount =
   | number
   | { k: 'count'; of: Selector }
+  /**
+   * A stat read off the entities a selector picks: "X equals the attack of the
+   * strongest enemy follower in play" is `statOf` with `pick: 'max'`.
+   */
+  | { k: 'statOf'; of: Selector; stat: 'atk' | 'def' | 'cost'; pick: 'max' | 'min' | 'sum' }
   | { k: 'shadows' }
   | { k: 'spellboost' }
   | { k: 'cardsPlayed' }

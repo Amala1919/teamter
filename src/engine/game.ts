@@ -1705,6 +1705,17 @@ export class Game {
     switch (a.k) {
       case 'count':
         return this.resolveSelector(a.of, { ...ctx, ti: 0 }).length;
+      case 'statOf': {
+        const picked = this.resolveSelector(a.of, { ...ctx, ti: 0 }).filter(isEntity);
+        const values = picked.map((e) => {
+          if (a.stat === 'cost') return this.def(e).cost;
+          const st = this.stats(e);
+          return a.stat === 'atk' ? st.atk : st.def;
+        });
+        if (values.length === 0) return 0;
+        if (a.pick === 'sum') return values.reduce((s, v) => s + v, 0);
+        return a.pick === 'max' ? Math.max(...values) : Math.min(...values);
+      }
       case 'shadows':
         return this.player(ctx.controller).shadows;
       case 'spellboost':
