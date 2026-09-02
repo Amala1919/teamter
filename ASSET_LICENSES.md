@@ -43,7 +43,7 @@ art.
 | **Licence** | **CC BY 3.0** — <https://creativecommons.org/licenses/by/3.0/>, licence text at <https://github.com/game-icons/icons/blob/master/license.txt> |
 | **Attribution required** | Yes. Credited in-app (`credits.art` in `src/i18n.ts`), in `README.md`, and here. |
 | **In this repo** | `src/data/generated/cardart.json` — the card-to-icon map plus the SVG path data for only the icons actually referenced |
-| **Modifications** | Path data extracted from the SVG bodies at build time (`tools/build-cardart.mjs`); at render time each icon is scaled, optionally mirrored, tilted a few degrees, filled as a dark silhouette, then lit, interior-shaded and rim-lit by `src/art/illustration.ts`. The original outlines are unmodified; everything around them is generated. |
+| **Modifications** | Path data extracted from the SVG bodies at build time (`tools/build-cardart.mjs`) and coordinates rounded to one decimal — a fifth of a pixel at the size these are drawn. At render time each icon is scaled, optionally mirrored, tilted a few degrees, filled as a dark silhouette, then lit, interior-shaded and rim-lit by `src/art/illustration.ts`. The outlines are otherwise unmodified; everything around them is generated. |
 
 Each card is matched to an icon by name — proper nouns first (Athena to a
 crested helmet), then a hand-authored noun table (a "Ninja Master" to a ninja),

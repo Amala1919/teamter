@@ -265,17 +265,53 @@ function scumble(s: Scene, count: number, color: string, alpha: number, mode: Gl
   ctx.restore();
 }
 
+/**
+ * Film grain, as a repeating tile rather than a per-pixel pass.
+ *
+ * Reading the whole canvas back with getImageData and walking it a pixel at a
+ * time was about a fifth of the cost of painting a card, and grain does not
+ * need to be unique per card — only unaligned, which a random offset gives.
+ */
+const GRAIN_TILE = 128;
+let grainTile: HTMLCanvasElement | null = null;
+let grainPattern: CanvasPattern | null = null;
+
 function grain(s: Scene, strength: number): void {
   const { ctx, w, h, rng } = s;
-  const img = ctx.getImageData(0, 0, w, h);
-  const d = img.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const n = (rng.next() - 0.5) * strength;
-    d[i] += n;
-    d[i + 1] += n;
-    d[i + 2] += n;
+  if (!grainTile) {
+    grainTile = document.createElement('canvas');
+    grainTile.width = GRAIN_TILE;
+    grainTile.height = GRAIN_TILE;
+    const gc = grainTile.getContext('2d');
+    if (gc) {
+      const img = gc.createImageData(GRAIN_TILE, GRAIN_TILE);
+      const d = img.data;
+      // Mid-grey plus signed noise: 'overlay' then lightens and darkens around
+      // it exactly as the additive version did.
+      for (let i = 0; i < d.length; i += 4) {
+        const v = 128 + (Math.random() - 0.5) * 255;
+        d[i] = v;
+        d[i + 1] = v;
+        d[i + 2] = v;
+        d[i + 3] = 255;
+      }
+      gc.putImageData(img, 0, 0);
+    }
+    grainPattern = null;
   }
-  ctx.putImageData(img, 0, 0);
+  if (!grainPattern) grainPattern = ctx.createPattern(grainTile, 'repeat');
+  if (!grainPattern) return;
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'overlay';
+  ctx.globalAlpha = strength / 255;
+  // Offset so the tile seam never lands in the same place twice.
+  const ox = -rng.int(GRAIN_TILE);
+  const oy = -rng.int(GRAIN_TILE);
+  ctx.translate(ox, oy);
+  ctx.fillStyle = grainPattern;
+  ctx.fillRect(0, 0, w - ox, h - oy);
+  ctx.restore();
 }
 
 function vignette(s: Scene, strength: number): void {

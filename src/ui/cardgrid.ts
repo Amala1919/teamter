@@ -68,6 +68,11 @@ export class CardGrid {
   private readonly observer: IntersectionObserver;
   private cards: CardDef[] = [];
   private opts: CardGridOptions;
+  /** The card each slot shows, so painting does not search the list. */
+  private readonly slotCard = new WeakMap<HTMLElement, CardDef>();
+  /** Slots waiting to be painted, drained a few per frame. */
+  private queue: HTMLElement[] = [];
+  private raf = 0;
 
   constructor(opts: CardGridOptions = {}) {
     this.opts = opts;
@@ -81,12 +86,29 @@ export class CardGrid {
         for (const entry of entries) {
           if (!entry.isIntersecting) continue;
           const slot = entry.target as HTMLElement;
-          this.paint(slot);
           this.observer.unobserve(slot);
+          this.queue.push(slot);
         }
+        // A fast scroll can reveal thirty slots in one callback. Painting them
+        // all here would drop a frame; the queue spreads them out instead.
+        this.schedule();
       },
       { root: this.root, rootMargin: '400px 0px' },
     );
+  }
+
+  /** Paints a few queued slots per frame, so scrolling never stalls. */
+  private schedule(): void {
+    if (this.raf || this.queue.length === 0) return;
+    this.raf = requestAnimationFrame(() => {
+      this.raf = 0;
+      const budget = 3;
+      for (let i = 0; i < budget && this.queue.length > 0; i++) {
+        const slot = this.queue.shift();
+        if (slot?.isConnected) this.paint(slot);
+      }
+      this.schedule();
+    });
   }
 
   setCards(cards: CardDef[]): void {
@@ -101,6 +123,7 @@ export class CardGrid {
 
   private render(): void {
     this.observer.disconnect();
+    this.queue = [];
     this.root.replaceChildren();
 
     if (this.cards.length === 0) {
@@ -111,6 +134,7 @@ export class CardGrid {
     for (const card of this.cards) {
       const slot = el('div', { class: 'sv-cardslot' });
       slot.dataset.id = card.id;
+      this.slotCard.set(slot, card);
       slot.append(el('div', { class: 'placeholder' }));
 
       slot.addEventListener('click', (e) => this.opts.onPick?.(card, e));
@@ -135,7 +159,7 @@ export class CardGrid {
   }
 
   private paint(slot: HTMLElement): void {
-    const card = this.cards.find((c) => c.id === slot.dataset.id);
+    const card = this.slotCard.get(slot);
     if (!card || slot.querySelector('canvas')) return;
     const canvas = cardFaceCanvas(card, { scale: 0.42 });
     // The cache hands back one canvas per card; the grid needs its own copy so
@@ -168,6 +192,9 @@ export class CardGrid {
 
   dispose(): void {
     this.observer.disconnect();
+    if (this.raf) cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    this.queue = [];
     this.root.remove();
   }
 }

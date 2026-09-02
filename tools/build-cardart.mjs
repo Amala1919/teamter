@@ -618,9 +618,17 @@ for (const [id, icon] of Object.entries(BANNERS)) {
   used.add(icon);
 }
 
-/** Extracts just the path data; every Game Icon is a single filled path. */
+/**
+ * Extracts just the path data; every Game Icon is a single filled path.
+ *
+ * Coordinates are rounded to one decimal. The icons are drawn on a 512 grid and
+ * shown at most 452 px wide, so a tenth of a unit is a fifth of a pixel — well
+ * below anything visible — and it takes about a fifth off the shipped size.
+ */
 function pathsOf(body) {
-  return [...body.matchAll(/\sd="([^"]+)"/g)].map((m) => m[1]);
+  return [...body.matchAll(/\sd="([^"]+)"/g)].map((m) =>
+    m[1].replace(/-?\d+\.\d+/g, (n) => String(Math.round(parseFloat(n) * 10) / 10)),
+  );
 }
 
 const icons = {};

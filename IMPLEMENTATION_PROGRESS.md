@@ -20,7 +20,7 @@ card inspector, the compiler-coverage push and the leader animations.
 | 7 — Evolution, effects, particles, audio | **Done.** Bloom, particles, camera shake, synthesised audio, leader animation. |
 | 8 — Deck builder and collection | **Done.** Decks persist to localStorage and are validated live. |
 | 9 — Visual comparison and QA | **Partial.** Iterated by screenshot; no side-by-side against real captures — official screenshots are unreachable from this environment. |
-| 10 — Optimisation and final polish | **Not started.** |
+| 10 — Optimisation and final polish | **Partial.** Card-face painting is 41% faster and the grid no longer paints a screenful in one callback; the bundle is 224 kB smaller. Nothing profiled beyond that. |
 
 ## What works
 
@@ -81,9 +81,10 @@ groups still repeat:
    thing attached to a leader. Between them these two unlock the largest
    remaining clusters, and both need a new place to hang abilities that are not
    on a card definition.
-2. **Optimisation (milestone 10).** The card-face bundle is 911 kB; the
-   illustration pipeline paints several full-canvas layers per card. Neither
-   has been profiled.
+2. **Optimisation (milestone 10), continued.** A card face is 7.0 ms to paint
+   at collection scale, of which 4.6 ms is the illustration; the three
+   full-canvas rim-light passes are the obvious next target. The battle scene
+   itself has never been profiled.
 3. **Leader voice lines**, the last part of the original's presentation with no
    equivalent here.
 
@@ -128,3 +129,8 @@ exercised it:
 - `Effects.lunge` reset the attacker with `setTimeout`, so a lunge could land
   after the battle screen had been disposed and ignored any animation speed-up.
   It is frame-driven now.
+- Film grain read the whole canvas back with `getImageData` and walked it a
+  pixel at a time, for every card, which was two fifths of the cost of painting
+  a card face. It is a repeating tile with a random offset now.
+- Rules text longer than the frame was designed for spilled over the stat
+  plates instead of staying in its box.
