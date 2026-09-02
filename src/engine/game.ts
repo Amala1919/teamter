@@ -83,6 +83,8 @@ export class Game {
 
   /** Set while a Fanfare/Last Words chain is resolving. */
   private triggerDepth = 0;
+  /** Set while an aura's own condition is being tested; see `activeAuras`. */
+  private auraDepth = 0;
   private pendingDeaths: number[] = [];
 
   constructor(decks: [DeckList, DeckList], opts: GameOptions = {}) {
@@ -248,7 +250,9 @@ export class Game {
     for (const k of e.grantedKeywords) keywords.add(k);
     for (const k of e.tempKeywords) keywords.add(k);
 
-    if (e.zone === 'field') {
+    // `auraDepth` is non-zero only while an aura's own condition is being
+    // tested; see `testAuraCondition`.
+    if (e.zone === 'field' && this.auraDepth === 0) {
       for (const aura of this.activeAuras()) {
         if (!this.matchesAura(aura, e)) continue;
         atk += aura.aura.atk ?? 0;
@@ -306,12 +310,40 @@ export class Game {
         if (src.silenced) continue;
         const d = this.def(src);
         for (const aura of d.auras ?? []) {
-          if (aura.cond && !this.testCondition(aura.cond, { source: src, controller: src.owner, targets: [], ti: 0, option: 0, vars: {}, depth: 0 })) continue;
+          if (aura.cond && !this.testAuraCondition(aura.cond, src)) continue;
           out.push({ src, aura });
         }
       }
     }
     return out;
+  }
+
+  /**
+   * Tests an aura's condition with aura effects switched off underneath it.
+   *
+   * An aura whose condition counts the board — Bahamut's "can't attack the
+   * enemy leader if 2 or more enemy followers are in play" — resolves a
+   * selector, and resolving a selector reads `stats` to check for Ambush,
+   * which asks for the active auras again. Left alone that recurses until the
+   * stack gives out. Conditions therefore see printed-and-buffed stats, never
+   * aura-modified ones; auras cannot depend on each other, which is both
+   * terminating and what the printed cards mean.
+   */
+  private testAuraCondition(cond: Condition, src: Entity): boolean {
+    this.auraDepth++;
+    try {
+      return this.testCondition(cond, {
+        source: src,
+        controller: src.owner,
+        targets: [],
+        ti: 0,
+        option: 0,
+        vars: {},
+        depth: 0,
+      });
+    } finally {
+      this.auraDepth--;
+    }
   }
 
   private matchesAura(a: { src: Entity; aura: AuraDef }, e: Entity): boolean {

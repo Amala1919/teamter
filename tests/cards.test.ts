@@ -116,3 +116,28 @@ describe('the whole card pool', () => {
     }
   });
 });
+
+describe('auras whose condition reads the board', () => {
+  it('does not recurse when the condition counts followers', () => {
+    // Bahamut carries "Can't attack the enemy leader if 2 or more enemy
+    // followers are in play". Counting resolves a selector, resolving a
+    // selector reads stats to check for Ambush, and stats asks for the active
+    // auras — which tests this condition again. Reading its stats at all is
+    // the regression.
+    const g = new Game([buildStarterDeck('dragon', 3), buildStarterDeck('shadow', 9)], {
+      seed: 99,
+      first: 0,
+      skipMulligan: true,
+    });
+    const bahamut = g.summonToken('bahamut', 0, false);
+    expect(bahamut).not.toBeNull();
+
+    // No enemy followers: the aura is off and the leader is attackable.
+    expect(() => g.stats(bahamut!)).not.toThrow();
+    expect(g.stats(bahamut!).keywords.has('cantAttackLeader')).toBe(false);
+
+    g.summonToken('goblin', 1, false);
+    g.summonToken('goblin', 1, false);
+    expect(g.stats(bahamut!).keywords.has('cantAttackLeader')).toBe(true);
+  });
+});

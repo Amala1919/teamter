@@ -147,6 +147,26 @@ function cardId(name: string, ctx: CompileCtx): string | null {
  * Parses phrases such as "all other allied Officer followers with Ward" into a
  * selector. Returns null when the phrase is outside the grammar.
  */
+/**
+ * The engine id for a card named in rules text, trying the plural forms the
+ * printed text actually uses. Returns null when the phrase names no card.
+ */
+function namedCard(
+  noun: string,
+  ctx: CompileCtx | undefined,
+): { id: string; plural: boolean } | null {
+  if (!ctx) return null;
+  const tries: [string, boolean][] = [[noun, false]];
+  if (noun.endsWith('ies')) tries.push([`${noun.slice(0, -3)}y`, true]);
+  if (noun.endsWith('es')) tries.push([noun.slice(0, -2), true]);
+  if (noun.endsWith('s')) tries.push([noun.slice(0, -1), true]);
+  for (const [t, plural] of tries) {
+    const id = ctx.names.get(t);
+    if (id) return { id, plural };
+  }
+  return null;
+}
+
 export function parseSelector(raw: string, _ctx?: CompileCtx): Selector | null {
   let s = tidy(raw).toLowerCase();
   if (!s) return null;
@@ -204,14 +224,18 @@ export function parseSelector(raw: string, _ctx?: CompileCtx): Selector | null {
   let scope: Selector['scope'] = 'target';
   let count = 1;
   let random = false;
+  let plural = false;
+  let determined = false;
 
   if (/^(all|each|every)\s+/.test(s)) {
     scope = 'all';
+    determined = true;
     s = s.replace(/^(all|each|every)\s+/, '');
   } else {
     const d = s.match(/^(\d+|a|an|the|two|three|another|other)\s+/);
     if (d) {
       const w = d[1];
+      determined = true;
       if (w !== 'the' && w !== 'another' && w !== 'other') count = num(w, 1);
       if (w === 'another' || w === 'other') filter.notSelf = true;
       s = s.slice(d[0].length);
@@ -229,6 +253,23 @@ export function parseSelector(raw: string, _ctx?: CompileCtx): Selector | null {
     }
   }
 
+  // State qualifiers. The printed text puts these on either side of the
+  // allegiance word — "an evolved allied follower", "an allied damaged
+  // follower" — so the peel runs before and after it.
+  const peelState = (): void => {
+    for (let i = 0; i < 2; i++) {
+      if (/^evolved\s+/.test(s)) {
+        filter.evolved = true;
+        s = s.replace(/^evolved\s+/, '');
+      }
+      if (/^damaged\s+/.test(s)) {
+        filter.damaged = true;
+        s = s.replace(/^damaged\s+/, '');
+      }
+    }
+  };
+  peelState();
+
   // Side.
   let side: Selector['side'] = 'both';
   if (/^(enemy|opposing)\s+/.test(s)) {
@@ -238,6 +279,7 @@ export function parseSelector(raw: string, _ctx?: CompileCtx): Selector | null {
     side = 'ally';
     s = s.replace(/^(allied|friendly|your)\s+/, '');
   }
+  peelState();
 
   // Trait / class.
   for (const t of TRAIT_WORDS) {
@@ -258,6 +300,7 @@ export function parseSelector(raw: string, _ctx?: CompileCtx): Selector | null {
   // Head noun.
   let kind: Selector['kind'] = 'follower';
   let includeLeader = false;
+  plural = /s$/.test(s);
   switch (s) {
     case 'follower':
     case 'followers':
@@ -285,9 +328,24 @@ export function parseSelector(raw: string, _ctx?: CompileCtx): Selector | null {
     case 'leader':
     case 'leaders':
       return { scope: 'leader', side };
-    default:
-      return null;
+    default: {
+      // A card named outright — "allied Zombies", "an allied Forest Bat".
+      // These are nearly always tokens the same card also creates, so the
+      // definition id is an exact match and the head noun carries no kind.
+      const named = namedCard(s, _ctx);
+      if (named === null) return null;
+      filter.defId = named.id;
+      kind = 'any';
+      plural = named.plural;
+      break;
+    }
   }
+
+  // A bare plural with no determiner means every one of them: "Give +0/+1 and
+  // Ward to allied Zombies" buffs the whole graveyard's worth, not one the
+  // player picks. Without this they compile to a single chosen target, which
+  // is a different card.
+  if (plural && !determined && scope === 'target') scope = 'all';
 
   const sel: Selector = { scope, side, kind };
   if (count > 1) sel.count = count;

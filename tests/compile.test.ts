@@ -343,3 +343,40 @@ describe('the compiled cards actually run', () => {
     });
   }
 });
+
+describe('selector qualifiers', () => {
+  it('reads "an evolved allied follower" as a state filter, not a card name', () => {
+    // "Fanfare: Gain +1/+0 and Ambush if an evolved allied follower is in play."
+    const [eff] = abilityEffects('swift_infiltrator');
+    expect(eff.k).toBe('if');
+    if (eff.k !== 'if') return;
+    expect(eff.cond).toMatchObject({
+      k: 'exists',
+      sel: { scope: 'all', side: 'ally', kind: 'follower', filter: { evolved: true } },
+    });
+    // Both halves of "gain X and <keyword>" survive the condition.
+    expect(flatten(eff.then).find((e) => e.k === 'buff')).toMatchObject({ atk: 1, def: 0 });
+    expect(flatten(eff.then).find((e) => e.k === 'grant')).toMatchObject({ keywords: ['ambush'] });
+  });
+
+  it('matches a card named in rules text by its definition id', () => {
+    // "Fanfare: Give +1/+0 to allied Forest Bats."
+    const buff = flatten(abilityEffects('midnight_vampire')).find((e) => e.k === 'buff');
+    expect(buff).toMatchObject({
+      target: { side: 'ally', filter: { defId: 'forest_bat' } },
+      atk: 1,
+    });
+  });
+
+  it('treats a bare plural as every one of them, not one the player picks', () => {
+    // "Necromancy (6): Give +0/+1 and Ward to allied Zombies." Compiled as a
+    // chosen target this buffs exactly one Zombie, which is a different card.
+    for (const eff of flatten(abilityEffects('deaths_breath'))) {
+      if (eff.k !== 'buff' && eff.k !== 'grant') continue;
+      expect(eff.target).toMatchObject({ scope: 'all', filter: { defId: 'zombie' } });
+    }
+    // A singular one still asks the player.
+    const single = flatten(abilityEffects('curse_of_rebirth')).find((e) => e.k === 'buff');
+    expect(single).toMatchObject({ target: { scope: 'target' } });
+  });
+});

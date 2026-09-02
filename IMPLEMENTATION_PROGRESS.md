@@ -11,12 +11,12 @@ card inspector, the compiler-coverage push and the leader animations.
 | Milestone | Status |
 |---|---|
 | 0 — Research and specification | **Done.** `docs/research/RULES_RESEARCH.md` (909 lines, sourced, with uncertainty flagged) and `docs/research/VISUAL_RESEARCH.md` (1176 lines). |
-| 1 — Rules engine, deterministic simulation | **Done.** 179 unit tests; 400-game AI-vs-AI soak with 0 failures. |
+| 1 — Rules engine, deterministic simulation | **Done.** 183 unit tests; 400-game AI-vs-AI soak with 0 failures. |
 | 2 — Card data and the Standard set | **Done.** All 888 cards (825 collectible + 63 tokens) from Basic through Wonderland Dreams, from the official card database, in both languages. |
 | 3 — Three.js battle screen and card renderer | **Done.** |
 | 4 — Playable battle flow | **Done,** including the mulligan. |
 | 5 — UI reproduction and feel | **Done.** Battle HUD, menu, mulligan, deck builder, collection, card detail, in-battle inspector. |
-| 6 — All cards through Wonderland Dreams | **Partial.** All cards are present and playable; **79.6%** have every printed line implemented. |
+| 6 — All cards through Wonderland Dreams | **Partial.** All cards are present and playable; **81.1%** have every printed line implemented. |
 | 7 — Evolution, effects, particles, audio | **Done.** Bloom, particles, camera shake, synthesised audio, leader animation. |
 | 8 — Deck builder and collection | **Done.** Decks persist to localStorage and are validated live. |
 | 9 — Visual comparison and QA | **Partial.** Iterated by screenshot; no side-by-side against real captures — official screenshots are unreachable from this environment. |
@@ -47,7 +47,7 @@ card inspector, the compiler-coverage push and the leader animations.
 
 ## Known gaps
 
-### Card implementation — 185 of 888 cards
+### Card implementation — 168 of 888 cards
 
 Cards with at least one printed line the compiler does not understand carry
 `implemented: false` and `missingText`, and are excluded from generated decks.
@@ -55,8 +55,8 @@ They are still playable but do less than they say, and the collection, deck
 builder and card detail all say so.
 
 `npm run cards:report -- --lines 60` prints the work queue. What is left is a
-genuine long tail — the largest remaining cluster is four cards — but these
-groups still repeat:
+genuine long tail — every remaining unparsed line is now unique to one card —
+but these groups still repeat:
 
 - **Durations longer than a turn.** "Until the end of your opponent's turn",
   "until this follower leaves play", "until the start of your next turn". A
@@ -143,5 +143,14 @@ exercised it:
 - Princess Snow White's hand-written entry dropped the "Then remove all its
   effects" clause, so the copy it summons kept the same Last Words and
   resurrected itself forever. The AI soak found it as a game that never ended.
+- "Give +0/+1 and Ward to allied Zombies" compiled to a single player-chosen
+  Zombie. A bare plural with no determiner carries no `all`, so it fell through
+  to the default scope and quietly became a different card. Every card that
+  names a tribe or a token in the plural was affected.
+- An aura whose condition counts the board recursed until the stack gave out:
+  counting resolves a selector, resolving one reads `stats` to check for
+  Ambush, and `stats` asks for the active auras again. Bahamut was the only
+  card that could reach it, and only once its Fanfare stopped asking for a
+  target. Aura conditions now see pre-aura stats.
 - "Reduce damage to 0" and "Reduce damage from effects to 0" compiled to the
   same keyword, so Athena's followers still died in a trade.
