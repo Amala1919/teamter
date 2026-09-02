@@ -137,15 +137,24 @@ environment this was built in — the network policy blocks every host that
 serves them. Card *data* was reachable through a mirror of the official Portal
 API, so names, stats and rules text are accurate.
 
-Each card's illustration is therefore built from a copyright-free drawn
-subject placed in a generated scene. The subjects are **[Game
-Icons](https://game-icons.net/)** (CC BY 3.0, by the game-icons.net
-contributors); `tools/build-cardart.mjs` matches every card to one by name —
-proper nouns first, then a hand-authored noun table, then the card's tribe,
-then a curated pool for its class and type. `src/art/illustration.ts` lights,
-models and rim-lights that shape inside a procedurally graded sky, horizon,
-architecture and atmosphere. The result is deterministic per card, so art never
-shifts between sessions. Full attribution is in `ASSET_LICENSES.md`.
+Each card's illustration is therefore drawn here, in a generated scene.
+`tools/build-cardart.mjs` matches every card to a subject by name — proper
+nouns first, then a hand-authored noun table, then the card's tribe, then a
+curated pool for its class and type — and classifies it:
+
+- **464 cards depict a person.** `src/art/portrait.ts` draws an original
+  cel-shaded anime figure: face, eyes, hair, costume by archetype, headgear,
+  wings and a weapon held in a drawn fist, rolled from the card's seed, class
+  and cost.
+- **226 depict a beast.** `src/art/creature.ts` draws dragons, wolves, birds,
+  serpents, skeletons, ghosts, golems, slimes, insects, demons and imps.
+- **214 are spells, amulets or objects.** Those use a silhouette from **[Game
+  Icons](https://game-icons.net/)** (CC BY 3.0, by the game-icons.net
+  contributors), lit and modelled.
+
+`src/art/illustration.ts` seats the subject inside a procedurally graded sky,
+horizon, architecture and atmosphere. The result is deterministic per card, so
+art never shifts between sessions. Full attribution is in `ASSET_LICENSES.md`.
 
 The renderer is nonetheless built to prefer official art if it is ever
 supplied: drop images into `public/assets/official/` and pass them through

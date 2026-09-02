@@ -141,26 +141,49 @@ function drawDragon(ctx: CanvasRenderingContext2D, c: Creature, rng: Rand, light
   const j = c.jitter;
   const ornate = c.spec.ornate ?? 0.6;
 
-  // Neck, running down out of frame behind the head.
-  cel(
-    ctx,
-    (g) =>
-      blob(
-        g,
-        [
-          [-0.55, 0.4],
-          [-1.5, 2.0],
-          [-1.7, 4.4],
-          [1.0, 4.4],
-          [0.7, 2.0],
-          [0.5, 0.5],
-        ],
-        0.88,
-      ),
-    c.hide,
-    { x: -1.8, y: 0.4, w: 3, h: 4 },
-    { angle: light, coverage: 0.42, line: c.lineColor, lineWidth: 0.07 },
-  );
+  // Neck: tapering from the jaw down out of frame, not a slab.
+  const neck = (g: CanvasRenderingContext2D) =>
+    blob(
+      g,
+      [
+        [-0.6, 0.35],
+        [-1.25, 1.7],
+        [-1.55, 3.4],
+        [-1.4, 4.6],
+        [0.9, 4.6],
+        [0.8, 3.2],
+        [0.55, 1.6],
+        [0.45, 0.5],
+      ],
+      0.9,
+    );
+  cel(ctx, neck, c.hide, { x: -1.6, y: 0.3, w: 2.6, h: 4.3 }, {
+    angle: light,
+    coverage: 0.3,
+    line: c.lineColor,
+    lineWidth: 0.07,
+  });
+
+  // Belly plates down the front of the neck.
+  within(ctx, neck, (g) => {
+    g.fillStyle = rgba(c.belly.base, 0.9);
+    for (let i = 0; i < 6; i++) {
+      const y = 1.0 + i * 0.62;
+      g.beginPath();
+      g.ellipse(0.15 - i * 0.08, y, 0.5 + i * 0.05, 0.24, 0.08, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.strokeStyle = rgba(c.lineColor, 0.35);
+    g.lineWidth = 0.05;
+    for (let i = 0; i < 6; i++) {
+      const y = 1.0 + i * 0.62;
+      stroke(g, [
+        [-0.4 - i * 0.1, y + 0.22],
+        [0.6 - i * 0.05, y + 0.2],
+      ]);
+      g.stroke();
+    }
+  });
 
   // Skull: a long wedge with a heavy brow.
   const skull = (g: CanvasRenderingContext2D) => {
@@ -174,11 +197,24 @@ function drawDragon(ctx: CanvasRenderingContext2D, c: Creature, rng: Rand, light
   };
   cel(ctx, skull, c.hide, { x: -1.5, y: -1.3, w: 3.6, h: 2.1 }, {
     angle: light,
-    coverage: 0.4,
+    coverage: 0.26,
     line: c.lineColor,
     lineWidth: 0.075,
     rim: rgba('#FFFFFF', 0.35),
     rimWidth: 0.05,
+  });
+
+  // Scale texture over the skull.
+  within(ctx, skull, (g) => {
+    g.strokeStyle = rgba(c.hide.shade, 0.55);
+    g.lineWidth = 0.04;
+    for (let i = 0; i < 14; i++) {
+      const x = rng.range(-1.2, 1.6);
+      const y = rng.range(-1.0, 0.4);
+      g.beginPath();
+      g.arc(x, y, rng.range(0.09, 0.17), Math.PI * 0.15, Math.PI * 0.85);
+      g.stroke();
+    }
   });
 
   // Snout underside, lighter.
@@ -204,7 +240,7 @@ function drawDragon(ctx: CanvasRenderingContext2D, c: Creature, rng: Rand, light
     },
     c.hide,
     { x: 0, y: 0.4, w: 2, h: 0.8 },
-    { angle: light, coverage: 0.5, line: c.lineColor, lineWidth: 0.06 },
+    { angle: light, coverage: 0.44, line: c.lineColor, lineWidth: 0.06 },
   );
   teeth(ctx, c, [0.55, 0.56], [1.8, 0.7], 4, 0.14);
 
@@ -224,27 +260,27 @@ function drawDragon(ctx: CanvasRenderingContext2D, c: Creature, rng: Rand, light
   }
 
   // Frill spines down the neck.
-  for (let i = 0; i < 5; i++) {
-    const y = 0.9 + i * 0.75;
+  for (let i = 0; i < 6; i++) {
+    const y = 0.9 + i * 0.72;
     cel(
       ctx,
-      (g) => sliver(g, [-0.9 - i * 0.15, y], [-1.7 - i * 0.3, y - 0.5], 0.12, 0.1),
+      (g) => sliver(g, [-0.85 - i * 0.13, y], [-1.65 - i * 0.28, y - 0.5], 0.12, 0.1),
       c.accent,
       { x: -2.2, y: y - 0.7, w: 1.6, h: 1 },
       { angle: light, coverage: 0.45, line: c.lineColor, lineWidth: 0.05 },
     );
   }
 
-  beastEye(ctx, c, 0.35 + j, -0.32, 0.19, true);
+  beastEye(ctx, c, 0.35 + j, -0.32, 0.23, true);
 
   // Brow ridge over the eye — what makes a dragon look angry rather than sleepy.
   ctx.save();
   ctx.strokeStyle = c.lineColor;
-  ctx.lineWidth = 0.11;
+  ctx.lineWidth = 0.12;
   stroke(ctx, [
-    [-0.15 + j, -0.62],
-    [0.45 + j, -0.6],
-    [0.85 + j, -0.42],
+    [-0.15 + j, -0.66],
+    [0.45 + j, -0.64],
+    [0.9 + j, -0.44],
   ]);
   ctx.stroke();
   ctx.restore();
@@ -258,7 +294,6 @@ function drawDragon(ctx: CanvasRenderingContext2D, c: Creature, rng: Rand, light
     },
     rgba(c.lineColor, 0.7),
   );
-  void rng;
 }
 
 function drawWolf(ctx: CanvasRenderingContext2D, c: Creature, rng: Rand, light: number): void {
@@ -333,202 +368,575 @@ function drawWolf(ctx: CanvasRenderingContext2D, c: Creature, rng: Rand, light: 
 
 function drawSkeleton(ctx: CanvasRenderingContext2D, c: Creature, rng: Rand, light: number): void {
   const bone = c.hide;
+  const dark = 'rgba(11,8,15,0.94)';
+  /** A bone is a *volume*, not a stroke: every one of these is a filled, shaded form. */
+  const boneForm = (
+    path: (g: CanvasRenderingContext2D) => void,
+    b: { x: number; y: number; w: number; h: number },
+    coverage = 0.4,
+  ) => {
+    cel(ctx, path, bone, b, {
+      angle: light,
+      coverage,
+      line: c.lineColor,
+      lineWidth: 0.065,
+      edge: 0.03,
+    });
+  };
+  const boneSliver = (from: Pt, to: Pt, width: number, bend = 0) => {
+    const b = {
+      x: Math.min(from[0], to[0]) - width,
+      y: Math.min(from[1], to[1]) - width,
+      w: Math.abs(to[0] - from[0]) + width * 2,
+      h: Math.abs(to[1] - from[1]) + width * 2,
+    };
+    boneForm((g) => sliver(g, from, to, width, bend), b, 0.46);
+  };
 
-  // Ribcage and shoulders.
-  cel(
-    ctx,
-    (g) => blob(g, [[-1.5, 1.5], [-1.9, 2.6], [-1.5, 4.4], [1.5, 4.4], [1.9, 2.6], [1.5, 1.5]], 0.85),
-    ramp(shift(bone.base, 0, 0, -0.12), 0.9),
-    { x: -2, y: 1.4, w: 4, h: 3 },
-    { angle: light, coverage: 0.46, line: c.lineColor, lineWidth: 0.07 },
-  );
-  ctx.save();
-  ctx.strokeStyle = rgba(c.lineColor, 0.65);
-  ctx.lineCap = 'round';
-  for (let i = 0; i < 4; i++) {
-    const y = 2.1 + i * 0.5;
-    ctx.lineWidth = 0.1;
-    stroke(ctx, [
-      [-1.1, y],
-      [0, y + 0.22],
-      [1.1, y],
-    ]);
-    ctx.stroke();
-  }
-  ctx.lineWidth = 0.13;
-  stroke(ctx, [
-    [0, 1.7],
-    [0, 4.2],
-  ]);
-  ctx.stroke();
-  ctx.restore();
-
-  // Skull.
-  const skull = (g: CanvasRenderingContext2D) => {
+  // ---- Ribcage ------------------------------------------------------------
+  // One shaded mass with the intercostal gaps carved out of it. Ribs drawn as
+  // separate arcs read as a xylophone; carving the dark between them reads as
+  // a chest. The gaps stop short of both the contour and the sternum, because
+  // that is where ribs actually meet bone — a gap that runs edge to edge turns
+  // the cage into a barrel.
+  const cage = (g: CanvasRenderingContext2D) => {
     g.beginPath();
-    g.moveTo(-1.0, -0.2);
-    g.bezierCurveTo(-1.05, -1.2, 1.05, -1.2, 1.0, -0.2);
-    g.bezierCurveTo(0.95, 0.35, 0.6, 0.55, 0.42, 0.6);
-    g.lineTo(0.42, 1.05);
-    g.lineTo(-0.42, 1.05);
-    g.lineTo(-0.42, 0.6);
-    g.bezierCurveTo(-0.6, 0.55, -0.95, 0.35, -1.0, -0.2);
+    g.moveTo(-0.78, 2.62);
+    g.bezierCurveTo(-1.24, 2.72, -1.5, 3.2, -1.42, 3.72);
+    g.bezierCurveTo(-1.34, 4.4, -0.9, 5.0, -0.34, 5.3);
+    g.quadraticCurveTo(0, 5.42, 0.34, 5.3);
+    g.bezierCurveTo(0.9, 5.0, 1.34, 4.4, 1.42, 3.72);
+    g.bezierCurveTo(1.5, 3.2, 1.24, 2.72, 0.78, 2.62);
+    g.quadraticCurveTo(0, 2.86, -0.78, 2.62);
     g.closePath();
   };
-  cel(ctx, skull, bone, { x: -1.1, y: -1.3, w: 2.2, h: 2.4 }, {
+  boneForm(cage, { x: -1.5, y: 2.6, w: 3.0, h: 2.8 }, 0.44);
+  within(ctx, cage, (g) => {
+    g.fillStyle = dark;
+    for (let i = 0; i < 4; i++) {
+      const y = 3.02 + i * 0.52;
+      const reach = 1.16 - i * 0.06;
+      const sag = 0.3;
+      const th = 0.19;
+      for (const s2 of [-1, 1]) {
+        g.beginPath();
+        g.moveTo(s2 * 0.2, y);
+        g.quadraticCurveTo(s2 * 0.8, y + sag, s2 * reach, y + sag * 1.5);
+        g.lineTo(s2 * reach, y + sag * 1.5 + th);
+        g.quadraticCurveTo(s2 * 0.8, y + sag + th, s2 * 0.2, y + th);
+        g.closePath();
+        g.fill();
+      }
+    }
+    // The hollow behind the ribs, so the cage has an inside.
+    g.fillStyle = 'rgba(10,7,14,0.45)';
+    g.beginPath();
+    g.ellipse(0, 4.1, 0.72, 1.2, 0, 0, Math.PI * 2);
+    g.fill();
+  });
+  // Sternum, laid back over the carved gaps.
+  boneForm(
+    (g) => {
+      g.beginPath();
+      g.moveTo(-0.22, 2.72);
+      g.quadraticCurveTo(0, 2.6, 0.22, 2.72);
+      g.lineTo(0.14, 4.5);
+      g.quadraticCurveTo(0, 4.7, -0.14, 4.5);
+      g.closePath();
+    },
+    { x: -0.24, y: 2.6, w: 0.48, h: 2.1 },
+    0.5,
+  );
+
+  // ---- Neck, then the shoulder girdle over the top of the cage ------------
+  for (let i = 0; i < 3; i++) {
+    const y = 1.64 + i * 0.3;
+    boneForm(
+      (g) => {
+        g.beginPath();
+        g.moveTo(-0.24 - i * 0.04, y - 0.1);
+        g.quadraticCurveTo(0, y - 0.22, 0.24 + i * 0.04, y - 0.1);
+        g.quadraticCurveTo(0.3 + i * 0.04, y + 0.1, 0, y + 0.13);
+        g.quadraticCurveTo(-0.3 - i * 0.04, y + 0.1, -0.24 - i * 0.04, y - 0.1);
+        g.closePath();
+      },
+      { x: -0.34, y: y - 0.24, w: 0.68, h: 0.4 },
+      0.48,
+    );
+  }
+  for (const s2 of [-1, 1]) {
+    // Clavicle, scapula head, humerus — an arm hangs off a girdle, not a socket
+    // drawn on the ribs.
+    boneSliver([s2 * 0.14, 2.34], [s2 * 1.66, 2.6], 0.13, s2 * -0.2);
+    boneForm(
+      (g) => {
+        g.beginPath();
+        g.ellipse(s2 * 1.82, 2.78, 0.36, 0.42, s2 * 0.34, 0, Math.PI * 2);
+      },
+      { x: s2 * 1.82 - 0.4, y: 2.36, w: 0.8, h: 0.86 },
+      0.44,
+    );
+    // Humerus, then an elbow and forearm, so the arm is a limb and not a pin.
+    boneSliver([s2 * 1.88, 2.98], [s2 * 2.14, 4.34], 0.21, s2 * 0.13);
+    boneForm(
+      (g) => {
+        g.beginPath();
+        g.ellipse(s2 * 2.14, 4.38, 0.22, 0.2, 0, 0, Math.PI * 2);
+      },
+      { x: s2 * 2.14 - 0.24, y: 4.16, w: 0.48, h: 0.44 },
+      0.46,
+    );
+    boneSliver([s2 * 2.12, 4.5], [s2 * 1.86, 5.9], 0.16, s2 * -0.1);
+  }
+
+  // ---- Mandible, behind the cranium so the cranium overhangs it ------------
+  boneForm(
+    (g) => {
+      g.beginPath();
+      g.moveTo(-0.82, 0.34);
+      g.bezierCurveTo(-0.9, 1.12, -0.52, 1.44, 0, 1.44);
+      g.bezierCurveTo(0.52, 1.44, 0.9, 1.12, 0.82, 0.34);
+      g.lineTo(0.58, 0.34);
+      g.bezierCurveTo(0.62, 1.0, 0.36, 1.16, 0, 1.16);
+      g.bezierCurveTo(-0.36, 1.16, -0.62, 1.0, -0.58, 0.34);
+      g.closePath();
+    },
+    { x: -0.9, y: 0.3, w: 1.8, h: 1.2 },
+    0.44,
+  );
+
+  // ---- Cranium ------------------------------------------------------------
+  const skull = (g: CanvasRenderingContext2D) => {
+    g.beginPath();
+    g.moveTo(-1.04, 0.02);
+    g.bezierCurveTo(-1.3, -1.02, -0.78, -1.66, 0, -1.66);
+    g.bezierCurveTo(0.78, -1.66, 1.3, -1.02, 1.04, 0.02);
+    // Zygomatic arch out, then in to the maxilla.
+    g.bezierCurveTo(1.0, 0.44, 0.82, 0.6, 0.6, 0.66);
+    g.bezierCurveTo(0.64, 0.96, 0.42, 1.08, 0, 1.08);
+    g.bezierCurveTo(-0.42, 1.08, -0.64, 0.96, -0.6, 0.66);
+    g.bezierCurveTo(-0.82, 0.6, -1.0, 0.44, -1.04, 0.02);
+    g.closePath();
+  };
+  cel(ctx, skull, bone, { x: -1.3, y: -1.7, w: 2.6, h: 2.8 }, {
     angle: light,
-    coverage: 0.38,
+    coverage: 0.33,
     line: c.lineColor,
-    lineWidth: 0.07,
+    lineWidth: 0.075,
+    edge: 0.04,
     rim: rgba('#FFFFFF', 0.4),
     rimWidth: 0.05,
   });
 
-  // Sockets, with the light burning inside them.
-  for (const s of [-1, 1]) {
+  within(ctx, skull, (g) => {
+    // Temporal hollow and brow ridge: the two planes that make a skull a skull.
+    g.fillStyle = rgba(bone.shade, 0.85);
+    for (const s2 of [-1, 1]) {
+      g.beginPath();
+      g.ellipse(s2 * 0.92, -0.55, 0.42, 0.55, s2 * 0.25, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.beginPath();
+    g.moveTo(-1.0, -0.72);
+    g.bezierCurveTo(-0.5, -0.92, 0.5, -0.92, 1.0, -0.72);
+    g.lineTo(1.0, -0.5);
+    g.bezierCurveTo(0.5, -0.66, -0.5, -0.66, -1.0, -0.5);
+    g.closePath();
+    g.fill();
+    // Cranial suture.
+    g.strokeStyle = rgba(c.lineColor, 0.28);
+    g.lineWidth = 0.045;
+    stroke(g, [
+      [-0.95, -0.72],
+      [-0.45, -1.3],
+      [0.2, -1.5],
+      [0.85, -1.15],
+    ]);
+    g.stroke();
+  });
+
+  // ---- Sockets, nose, teeth ----------------------------------------------
+  for (const s2 of [-1, 1]) {
     flat(
       ctx,
       (g) => {
         g.beginPath();
-        g.ellipse(s * 0.42, -0.18, 0.3, 0.34, s * 0.15, 0, Math.PI * 2);
+        g.moveTo(s2 * 0.16, -0.42);
+        g.bezierCurveTo(s2 * 0.34, -0.72, s2 * 0.82, -0.72, s2 * 0.86, -0.34);
+        g.bezierCurveTo(s2 * 0.9, 0.02, s2 * 0.6, 0.24, s2 * 0.38, 0.12);
+        g.bezierCurveTo(s2 * 0.2, 0.02, s2 * 0.14, -0.2, s2 * 0.16, -0.42);
+        g.closePath();
       },
-      '#140E18',
+      '#120C18',
+      rgba(c.lineColor, 0.8),
+      0.05,
     );
-    beastEye(ctx, c, s * 0.42, -0.14, 0.13, false);
+    beastEye(ctx, c, s2 * 0.5, -0.24, 0.15, false);
+    // Cheekbone.
+    ctx.strokeStyle = rgba(c.lineColor, 0.35);
+    ctx.lineWidth = 0.05;
+    stroke(ctx, [
+      [s2 * 0.94, 0.06],
+      [s2 * 0.66, 0.38],
+      [s2 * 0.44, 0.44],
+    ]);
+    ctx.stroke();
   }
   flat(
     ctx,
     (g) => {
       g.beginPath();
-      g.moveTo(0, 0.12);
-      g.lineTo(0.14, 0.42);
-      g.lineTo(-0.14, 0.42);
+      g.moveTo(0, 0.18);
+      g.bezierCurveTo(0.14, 0.34, 0.19, 0.5, 0.15, 0.58);
+      g.bezierCurveTo(0.07, 0.5, -0.07, 0.5, -0.15, 0.58);
+      g.bezierCurveTo(-0.19, 0.5, -0.14, 0.34, 0, 0.18);
       g.closePath();
     },
-    '#140E18',
+    '#120C18',
   );
-  // Jaw line and teeth.
-  ctx.save();
-  ctx.strokeStyle = rgba(c.lineColor, 0.7);
-  ctx.lineWidth = 0.05;
-  for (let i = 0; i < 6; i++) {
-    const x = -0.36 + (i / 5) * 0.72;
-    stroke(ctx, [
-      [x, 0.6],
-      [x, 1.02],
-    ]);
-    ctx.stroke();
-  }
-  ctx.restore();
+
+  // The mouth: a dark gap with bone standing in it, not seven scratches.
+  flat(
+    ctx,
+    (g) => {
+      g.beginPath();
+      g.moveTo(-0.56, 0.8);
+      g.quadraticCurveTo(0, 0.9, 0.56, 0.8);
+      g.quadraticCurveTo(0.5, 1.18, 0, 1.24);
+      g.quadraticCurveTo(-0.5, 1.18, -0.56, 0.8);
+      g.closePath();
+    },
+    '#0E0914',
+  );
+  within(
+    ctx,
+    (g) => {
+      g.beginPath();
+      g.moveTo(-0.56, 0.8);
+      g.quadraticCurveTo(0, 0.9, 0.56, 0.8);
+      g.quadraticCurveTo(0.5, 1.18, 0, 1.24);
+      g.quadraticCurveTo(-0.5, 1.18, -0.56, 0.8);
+      g.closePath();
+    },
+    (g) => {
+      for (let i = 0; i < 6; i++) {
+        const x = -0.46 + (i / 5) * 0.92;
+        g.fillStyle = i % 2 === 0 ? bone.base : bone.shade;
+        g.beginPath();
+        g.rect(x - 0.07, 0.76, 0.14, 0.2);
+        g.fill();
+        g.fillStyle = i % 2 === 0 ? bone.shade : bone.base;
+        g.beginPath();
+        g.rect(x - 0.07, 1.02, 0.14, 0.22);
+        g.fill();
+      }
+      g.strokeStyle = rgba(c.lineColor, 0.55);
+      g.lineWidth = 0.04;
+      stroke(g, [
+        [-0.6, 0.98],
+        [0, 1.04],
+        [0.6, 0.98],
+      ]);
+      g.stroke();
+    },
+  );
   void rng;
 }
 
 function drawGhost(ctx: CanvasRenderingContext2D, c: Creature, rng: Rand, light: number): void {
-  // A body that dissolves into tatters at the bottom.
-  const tail: Pt[] = [[-1.3, -0.2], [-1.6, 1.6]];
-  for (let i = 0; i <= 6; i++) {
-    const u = i / 6;
-    tail.push([-1.5 + u * 3.0, 3.4 + Math.sin(u * Math.PI * 3) * 0.55]);
-  }
-  tail.push([1.6, 1.6], [1.3, -0.2]);
+  const shroud = ramp(shift(c.hide.base, 0, 0.04, -0.24), 0.9);
 
+  // The shroud: shoulders, then a body that frays into separate tatters. A
+  // single closed outline with a wavy hem reads as a lozenge with a scalloped
+  // bottom, so the tatters are drawn as their own hanging shapes.
   ctx.save();
-  ctx.globalAlpha = 0.88;
-  cel(ctx, (g) => blob(g, tail, 0.9), c.hide, { x: -1.7, y: -0.4, w: 3.4, h: 4.2 }, {
+  ctx.globalAlpha = 0.9;
+  const cloth = (g: CanvasRenderingContext2D) =>
+    blob(
+      g,
+      [
+        // Shoulders, kept as corners: smoothed away, the shroud becomes an egg.
+        [-0.8, -0.3],
+        [-1.72, 0.34],
+        [-1.55, 1.2],
+        [-2.02, 2.35],
+        [-1.72, 3.5],
+        [0, 3.9],
+        [1.72, 3.5],
+        [2.02, 2.35],
+        [1.55, 1.2],
+        [1.72, 0.34],
+        [0.8, -0.3],
+      ],
+      0.62,
+    );
+  cel(ctx, cloth, shroud, { x: -2.1, y: -0.6, w: 4.2, h: 4.5 }, {
     angle: light,
     coverage: 0.44,
-    line: rgba(c.lineColor, 0.6),
+    line: rgba(c.lineColor, 0.55),
     lineWidth: 0.06,
+  });
+  // Tatters hanging off the hem.
+  for (let i = 0; i < 7; i++) {
+    const u = i / 6;
+    const x = -1.75 + u * 3.5;
+    const len = rng.range(0.7, 1.9);
+    cel(
+      ctx,
+      (g) => sliver(g, [x, 3.1], [x + rng.range(-0.35, 0.35), 3.5 + len], rng.range(0.14, 0.3), rng.range(-0.25, 0.25)),
+      shroud,
+      { x: x - 0.5, y: 3.0, w: 1, h: len + 0.9 },
+      { angle: light, coverage: 0.46, line: rgba(c.lineColor, 0.45), lineWidth: 0.05 },
+    );
+  }
+  // Folds falling from the shoulders.
+  within(ctx, cloth, (g) => {
+    g.strokeStyle = rgba(shroud.shade, 0.8);
+    g.lineCap = 'round';
+    for (let i = 0; i < 5; i++) {
+      const x = -1.3 + (i / 4) * 2.6;
+      g.lineWidth = rng.range(0.05, 0.1);
+      stroke(g, [
+        [x * 0.5, 0.1],
+        [x * 0.85, 1.7],
+        [x, 3.4],
+      ]);
+      g.stroke();
+    }
   });
   ctx.restore();
 
-  // Hood/head.
-  cel(
-    ctx,
-    (g) => blob(g, [[-1.15, 0.1], [-1.2, -0.9], [0, -1.55], [1.2, -0.9], [1.15, 0.1], [0, 0.5]], 0.9),
-    ramp(shift(c.hide.base, 0, 0.05, -0.16), 0.9),
-    { x: -1.3, y: -1.6, w: 2.6, h: 2.2 },
-    { angle: light, coverage: 0.42, line: rgba(c.lineColor, 0.7), lineWidth: 0.06 },
-  );
+  // The cowl: a peaked hood whose opening is a void with two lights in it.
+  const hood = (g: CanvasRenderingContext2D) => {
+    g.beginPath();
+    g.moveTo(-1.18, 0.35);
+    g.bezierCurveTo(-1.32, -0.85, -0.85, -1.75, 0.06, -1.9);
+    g.bezierCurveTo(0.95, -1.75, 1.32, -0.85, 1.18, 0.35);
+    g.bezierCurveTo(0.8, 0.72, -0.8, 0.72, -1.18, 0.35);
+    g.closePath();
+  };
+  cel(ctx, hood, ramp(shift(c.hide.base, 0, 0.06, -0.2), 0.95), { x: -1.35, y: -2.0, w: 2.7, h: 2.8 }, {
+    angle: light,
+    coverage: 0.42,
+    line: rgba(c.lineColor, 0.7),
+    lineWidth: 0.065,
+  });
   flat(
     ctx,
     (g) => {
       g.beginPath();
-      g.ellipse(0, -0.35, 0.82, 0.72, 0, 0, Math.PI * 2);
+      g.moveTo(-0.86, -0.62);
+      g.bezierCurveTo(-0.95, -1.35, -0.5, -1.6, 0.04, -1.6);
+      g.bezierCurveTo(0.58, -1.6, 0.95, -1.35, 0.86, -0.62);
+      g.bezierCurveTo(0.6, 0.24, -0.6, 0.24, -0.86, -0.62);
+      g.closePath();
     },
-    rgba('#0E0A14', 0.88),
+    '#0B0812',
   );
-  beastEye(ctx, c, -0.34, -0.35, 0.16, false);
-  beastEye(ctx, c, 0.34, -0.35, 0.16, false);
+  beastEye(ctx, c, -0.34, -0.7, 0.17, false);
+  beastEye(ctx, c, 0.34, -0.7, 0.17, false);
+
+  // Skeletal hands reaching out of the sleeves at the shroud's edge.
+  const boneTones = ramp('#DCD4C0', 0.9);
+  for (const s of [-1, 1]) {
+    cel(
+      ctx,
+      (g) => sliver(g, [s * 1.78, 1.85], [s * 1.42, 2.62], 0.19, s * 0.08),
+      boneTones,
+      { x: s > 0 ? 1.2 : -2.0, y: 1.7, w: 0.8, h: 1.1 },
+      { angle: light, coverage: 0.44, line: rgba(c.lineColor, 0.65), lineWidth: 0.05 },
+    );
+    for (let i = 0; i < 3; i++) {
+      cel(
+        ctx,
+        (g) => sliver(g, [s * (1.48 - i * 0.06), 2.5], [s * (1.16 + i * 0.3), 3.05 + i * 0.16], 0.085, s * 0.07),
+        boneTones,
+        { x: s > 0 ? 1.0 : -1.9, y: 2.4, w: 0.9, h: 0.9 },
+        { angle: light, coverage: 0.44, line: rgba(c.lineColor, 0.6), lineWidth: 0.042 },
+      );
+    }
+  }
 
   // Wisps drifting off it.
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 14; i++) {
     ctx.fillStyle = rgba(c.hide.light, rng.range(0.1, 0.35));
     ctx.beginPath();
-    ctx.ellipse(rng.range(-2, 2), rng.range(-1.5, 3.5), rng.range(0.05, 0.16), rng.range(0.05, 0.16), 0, 0, Math.PI * 2);
+    ctx.ellipse(rng.range(-2.4, 2.4), rng.range(-2, 4), rng.range(0.05, 0.17), rng.range(0.05, 0.17), 0, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();
 }
 
 function drawGolem(ctx: CanvasRenderingContext2D, c: Creature, rng: Rand, light: number): void {
-  // Blocky mass: slabs rather than curves.
-  const slab = (x: number, y: number, w: number, h: number, rot: number) =>
+  const j = c.jitter;
+  /** A block of stone: cel-shaded, then a chipped facet cut off one corner. */
+  const rock = (pts: Pt[], facet?: Pt[]) => {
+    const xs = pts.map((q) => q[0]);
+    const ys = pts.map((q) => q[1]);
+    const path = (g: CanvasRenderingContext2D) => {
+      g.beginPath();
+      g.moveTo(pts[0][0], pts[0][1]);
+      for (const q of pts.slice(1)) g.lineTo(q[0], q[1]);
+      g.closePath();
+    };
     cel(
       ctx,
-      (g) => {
-        g.save();
-        g.translate(x, y);
-        g.rotate(rot);
-        g.beginPath();
-        g.moveTo(-w, -h);
-        g.lineTo(w * 0.86, -h * 0.92);
-        g.lineTo(w, h);
-        g.lineTo(-w * 0.9, h * 0.94);
-        g.closePath();
-        g.restore();
-      },
+      path,
       c.hide,
-      { x: x - w, y: y - h, w: w * 2, h: h * 2 },
-      { angle: light, coverage: 0.42, line: c.lineColor, lineWidth: 0.08, rim: rgba('#FFFFFF', 0.3), rimWidth: 0.05 },
+      {
+        x: Math.min(...xs),
+        y: Math.min(...ys),
+        w: Math.max(...xs) - Math.min(...xs),
+        h: Math.max(...ys) - Math.min(...ys),
+      },
+      {
+        angle: light,
+        coverage: 0.4,
+        line: c.lineColor,
+        lineWidth: 0.08,
+        edge: 0,
+        rim: rgba('#FFFFFF', 0.3),
+        rimWidth: 0.05,
+      },
     );
+    if (facet) {
+      within(ctx, path, (g) => {
+        g.fillStyle = rgba(c.hide.light, 0.4);
+        g.beginPath();
+        g.moveTo(facet[0][0], facet[0][1]);
+        for (const q of facet.slice(1)) g.lineTo(q[0], q[1]);
+        g.closePath();
+        g.fill();
+        g.strokeStyle = rgba(c.lineColor, 0.4);
+        g.lineWidth = 0.055;
+        g.stroke();
+      });
+    }
+  };
 
-  slab(0, 2.6, 1.9, 1.5, 0.03);
-  for (const s of [-1, 1]) slab(s * 2.1, 2.3, 0.7, 1.2, s * 0.16);
-  slab(c.jitter, -0.3, 1.05, 1.0, 0.04);
+  // Arms hang off boulder shoulders; the torso is laid over their inner edge so
+  // the figure is one mass rather than five slabs in a row.
+  for (const s of [-1, 1]) {
+    rock([
+      [s * 1.5, 1.5],
+      [s * 3.05, 1.85],
+      [s * 3.2, 3.5],
+      [s * 2.75, 5.4],
+      [s * 1.7, 5.2],
+      [s * 1.95, 3.3],
+    ]);
+    // A fist of three knuckle blocks.
+    rock([
+      [s * 1.68, 5.1],
+      [s * 2.85, 5.3],
+      [s * 2.95, 6.15],
+      [s * 1.72, 6.0],
+    ], [[s * 1.72, 5.55], [s * 2.9, 5.72], [s * 2.9, 5.86], [s * 1.72, 5.7]]);
+    rock([
+      [s * 1.25, 1.0],
+      [s * 2.7, 1.25],
+      [s * 3.0, 2.3],
+      [s * 1.55, 2.5],
+    ], [[s * 1.3, 1.06], [s * 2.68, 1.3], [s * 2.5, 1.72], [s * 1.4, 1.6]]);
+  }
 
-  // The rune-light in its chest and eyes.
-  ctx.save();
-  ctx.shadowColor = rgba(c.accent.light, 0.9);
-  ctx.shadowBlur = 20;
+  rock(
+    [
+      [-1.9, 1.15],
+      [-0.95, 0.62],
+      [0.95, 0.62],
+      [1.9, 1.15],
+      [1.55, 3.6],
+      [1.15, 5.6],
+      [-1.15, 5.6],
+      [-1.55, 3.6],
+    ],
+    [
+      [-1.86, 1.18],
+      [-0.9, 0.68],
+      [-0.55, 1.5],
+      [-1.42, 3.4],
+    ],
+  );
+
+  // Head: a small block sunk between the shoulders, with a heavy brow.
+  rock(
+    [
+      [-0.92 + j, -0.2],
+      [-0.72 + j, -1.35],
+      [0.74 + j, -1.4],
+      [0.94 + j, -0.25],
+      [0.62 + j, 0.78],
+      [-0.6 + j, 0.75],
+    ],
+    [[-0.9 + j, -0.24], [-0.7 + j, -1.3], [-0.3 + j, -1.32], [-0.44 + j, 0.6]],
+  );
   flat(
     ctx,
     (g) => {
       g.beginPath();
-      g.moveTo(0, 2.0);
-      g.lineTo(0.42, 2.55);
-      g.lineTo(0, 3.1);
-      g.lineTo(-0.42, 2.55);
+      g.moveTo(-0.9 + j, -0.6);
+      g.lineTo(0.92 + j, -0.66);
+      g.lineTo(0.86 + j, -0.28);
+      g.lineTo(-0.84 + j, -0.22);
+      g.closePath();
+    },
+    rgba(c.hide.shade, 0.95),
+  );
+
+  // The rune-light: eyes, a chest core, and the seams it leaks along.
+  ctx.save();
+  ctx.shadowColor = rgba(c.accent.light, 0.9);
+  ctx.shadowBlur = 22;
+  flat(
+    ctx,
+    (g) => {
+      g.beginPath();
+      g.moveTo(0, 1.9);
+      g.lineTo(0.5, 2.7);
+      g.lineTo(0, 3.5);
+      g.lineTo(-0.5, 2.7);
       g.closePath();
     },
     c.accent.light,
   );
   ctx.restore();
-  beastEye(ctx, c, c.jitter - 0.4, -0.35, 0.15, false);
-  beastEye(ctx, c, c.jitter + 0.4, -0.35, 0.15, false);
-
-  // Cracks.
   ctx.save();
-  ctx.strokeStyle = rgba(c.lineColor, 0.5);
-  ctx.lineWidth = 0.06;
-  for (let i = 0; i < 5; i++) {
-    const x = rng.range(-1.7, 1.7);
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = rgba(c.accent.light, 0.75);
+  ctx.lineCap = 'round';
+  for (const s of [-1, 1]) {
+    ctx.lineWidth = 0.09;
     stroke(ctx, [
-      [x, 1.4],
-      [x + rng.range(-0.3, 0.3), 2.4],
-      [x + rng.range(-0.4, 0.4), 3.6],
+      [s * 0.42, 2.6],
+      [s * 0.95, 2.2],
+      [s * 1.3, 1.4],
+    ]);
+    ctx.stroke();
+    ctx.lineWidth = 0.07;
+    stroke(ctx, [
+      [s * 0.34, 3.1],
+      [s * 0.8, 3.7],
+      [s * 1.0, 4.8],
+    ]);
+    ctx.stroke();
+  }
+  ctx.restore();
+  beastEye(ctx, c, j - 0.36, -0.42, 0.14, false);
+  beastEye(ctx, c, j + 0.36, -0.42, 0.14, false);
+
+  // Cracks in the stone, kept off the glowing seams.
+  ctx.save();
+  ctx.strokeStyle = rgba(c.lineColor, 0.45);
+  for (let i = 0; i < 5; i++) {
+    const x = rng.range(-1.5, 1.5);
+    ctx.lineWidth = rng.range(0.04, 0.08);
+    stroke(ctx, [
+      [x, 1.3 + rng.range(0, 0.6)],
+      [x + rng.range(-0.35, 0.35), 3.0],
+      [x + rng.range(-0.5, 0.5), 4.6],
     ]);
     ctx.stroke();
   }
@@ -591,63 +999,203 @@ function drawSlime(ctx: CanvasRenderingContext2D, c: Creature, rng: Rand, light:
 }
 
 function drawImp(ctx: CanvasRenderingContext2D, c: Creature, rng: Rand, light: number): void {
-  // Small body, big head — a gremlin silhouette.
-  cel(
-    ctx,
-    (g) => blob(g, [[-1.15, 1.3], [-1.5, 2.6], [-1.2, 4.2], [1.2, 4.2], [1.5, 2.6], [1.15, 1.3]], 0.88),
-    c.hide,
-    { x: -1.6, y: 1.2, w: 3.2, h: 3 },
-    { angle: light, coverage: 0.44, line: c.lineColor, lineWidth: 0.07 },
-  );
+  const j = c.jitter;
+  const skin = c.hide;
 
-  const head = (g: CanvasRenderingContext2D) =>
-    blob(g, [[-1.15 + c.jitter, -0.5], [-0.7, -1.3], [0.7, -1.3], [1.15 + c.jitter, -0.5], [0.6, 0.9], [-0.6, 0.9]], 0.9);
-  cel(ctx, head, c.hide, { x: -1.3, y: -1.4, w: 2.6, h: 2.4 }, {
+  // Ears first, so the head overlaps their roots. A gremlin's ear is a swept
+  // blade with a thin cartilage ridge, not a triangle stuck on the side.
+  for (const s of [-1, 1]) {
+    const ear = (g: CanvasRenderingContext2D) => {
+      g.beginPath();
+      g.moveTo(s * 0.85, -0.5);
+      g.bezierCurveTo(s * 1.5, -1.15, s * 2.15, -1.5, s * 2.42, -1.42);
+      g.bezierCurveTo(s * 2.3, -0.95, s * 1.85, -0.2, s * 1.02, 0.32);
+      g.closePath();
+    };
+    cel(ctx, ear, skin, { x: s > 0 ? 0.8 : -2.5, y: -1.6, w: 1.7, h: 2.0 }, {
+      angle: light,
+      coverage: 0.46,
+      line: c.lineColor,
+      lineWidth: 0.06,
+    });
+    within(ctx, ear, (g) => {
+      g.fillStyle = rgba(shift(skin.base, 0.02, 0.06, -0.16), 0.9);
+      g.beginPath();
+      g.moveTo(s * 1.0, -0.44);
+      g.bezierCurveTo(s * 1.55, -0.95, s * 2.0, -1.2, s * 2.16, -1.16);
+      g.bezierCurveTo(s * 2.0, -0.86, s * 1.6, -0.35, s * 1.06, 0.06);
+      g.closePath();
+      g.fill();
+    });
+  }
+
+  // Skinny arms reaching in front of the belly.
+  for (const s of [-1, 1]) {
+    for (const [from, to, w] of [
+      [[s * 0.95, 2.35], [s * 1.72, 3.35], 0.19],
+      [[s * 1.72, 3.35], [s * 0.95, 4.05], 0.15],
+    ] as [Pt, Pt, number][]) {
+      cel(ctx, (g) => sliver(g, from, to, w, s * 0.12), skin, {
+        x: Math.min(from[0], to[0]) - 0.3,
+        y: Math.min(from[1], to[1]) - 0.3,
+        w: Math.abs(to[0] - from[0]) + 0.6,
+        h: Math.abs(to[1] - from[1]) + 0.6,
+      }, { angle: light, coverage: 0.46, line: c.lineColor, lineWidth: 0.055 });
+    }
+    // A three-fingered hand.
+    for (let i = 0; i < 3; i++) {
+      cel(
+        ctx,
+        (g) => sliver(g, [s * (0.98 - i * 0.02), 3.95], [s * (0.64 + i * 0.16), 4.42 + i * 0.1], 0.075, s * 0.06),
+        skin,
+        { x: s > 0 ? 0.5 : -1.2, y: 3.9, w: 0.7, h: 0.7 },
+        { angle: light, coverage: 0.46, line: c.lineColor, lineWidth: 0.045 },
+      );
+    }
+  }
+
+  // Narrow chest over a pot belly — the classic imp build.
+  const body = (g: CanvasRenderingContext2D) =>
+    blob(
+      g,
+      [
+        [-0.78, 1.5],
+        [-1.06, 2.35],
+        [-1.34, 3.4],
+        [-1.02, 4.5],
+        [0, 4.85],
+        [1.02, 4.5],
+        [1.34, 3.4],
+        [1.06, 2.35],
+        [0.78, 1.5],
+      ],
+      0.9,
+    );
+  cel(ctx, body, skin, { x: -1.4, y: 1.4, w: 2.8, h: 3.5 }, {
     angle: light,
-    coverage: 0.4,
+    coverage: 0.42,
     line: c.lineColor,
     lineWidth: 0.07,
+  });
+  within(ctx, body, (g) => {
+    // Belly highlight and a ribbed chest, so the torso is not a bag.
+    g.fillStyle = rgba(skin.light, 0.32);
+    g.beginPath();
+    g.ellipse(0.05, 3.85, 0.72, 0.62, 0, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = rgba(c.lineColor, 0.35);
+    g.lineWidth = 0.055;
+    for (let i = 0; i < 3; i++) {
+      const y = 2.15 + i * 0.34;
+      for (const s of [-1, 1]) {
+        stroke(g, [
+          [s * 0.16, y],
+          [s * 0.72, y + 0.16],
+          [s * 1.0, y + 0.4],
+        ]);
+        g.stroke();
+      }
+    }
+    // A rag knotted at the waist.
+    g.fillStyle = rgba(shift(c.accent.base, 0, 0.05, -0.14), 0.95);
+    g.beginPath();
+    g.moveTo(-1.5, 4.3);
+    g.quadraticCurveTo(0, 4.05, 1.5, 4.3);
+    g.lineTo(1.5, 5.1);
+    g.lineTo(-1.5, 5.1);
+    g.closePath();
+    g.fill();
+  });
+
+  // Head: a wedge, wide at the temples, tapering past a jutting jaw.
+  const head = (g: CanvasRenderingContext2D) => {
+    g.beginPath();
+    g.moveTo(-1.02 + j, -0.42);
+    g.bezierCurveTo(-1.06 + j, -1.24, -0.55 + j, -1.55, 0.05 + j, -1.52);
+    g.bezierCurveTo(0.66 + j, -1.5, 1.06 + j, -1.16, 1.0 + j, -0.4);
+    g.bezierCurveTo(0.96 + j, 0.16, 0.78 + j, 0.55, 0.5 + j, 0.72);
+    g.bezierCurveTo(0.36 + j, 1.12, -0.2 + j, 1.24, -0.5 + j, 0.96);
+    g.bezierCurveTo(-0.86 + j, 0.66, -1.0 + j, 0.2, -1.02 + j, -0.42);
+    g.closePath();
+  };
+  cel(ctx, head, skin, { x: -1.2, y: -1.6, w: 2.4, h: 2.9 }, {
+    angle: light,
+    coverage: 0.38,
+    line: c.lineColor,
+    lineWidth: 0.075,
     rim: rgba('#FFFFFF', 0.3),
     rimWidth: 0.05,
   });
+  within(ctx, head, (g) => {
+    // Brow ridge — the one shape that turns a blob into a face.
+    g.fillStyle = rgba(skin.shade, 0.9);
+    g.beginPath();
+    g.moveTo(-1.1 + j, -0.86);
+    g.bezierCurveTo(-0.6 + j, -1.1, 0.6 + j, -1.1, 1.1 + j, -0.8);
+    g.lineTo(1.1 + j, -0.5);
+    g.bezierCurveTo(0.55 + j, -0.72, -0.55 + j, -0.72, -1.1 + j, -0.5);
+    g.closePath();
+    g.fill();
+    // Cheek hollow.
+    g.fillStyle = rgba(skin.shade, 0.55);
+    for (const s of [-1, 1]) {
+      g.beginPath();
+      g.ellipse(s * 0.72 + j, 0.12, 0.24, 0.34, s * 0.3, 0, Math.PI * 2);
+      g.fill();
+    }
+  });
 
-  // Big pointed ears and small horns.
+  // Horns, swept back over the skull.
   for (const s of [-1, 1]) {
     cel(
       ctx,
-      (g) => {
-        g.beginPath();
-        g.moveTo(s * 1.0, -0.55);
-        g.lineTo(s * 2.3, -1.35);
-        g.lineTo(s * 1.05, 0.25);
-        g.closePath();
-      },
-      c.hide,
-      { x: s > 0 ? 0.9 : -2.4, y: -1.4, w: 1.5, h: 1.7 },
-      { angle: light, coverage: 0.45, line: c.lineColor, lineWidth: 0.06 },
-    );
-    cel(
-      ctx,
-      (g) => sliver(g, [s * 0.5, -1.15], [s * 0.75, -1.95], 0.11, s * 0.12),
+      (g) => sliver(g, [s * 0.52 + j, -1.3], [s * 0.92 + j, -2.34], 0.14, s * 0.26),
       ramp('#D8CDBE', 0.9),
-      { x: s > 0 ? 0.3 : -0.9, y: -2, w: 0.7, h: 1 },
+      { x: s > 0 ? 0.3 : -1.1, y: -2.4, w: 0.8, h: 1.2 },
       { angle: light, coverage: 0.42, line: c.lineColor, lineWidth: 0.05 },
     );
   }
 
-  beastEye(ctx, c, -0.4 + c.jitter, -0.35, 0.19, true);
-  beastEye(ctx, c, 0.42 + c.jitter, -0.35, 0.19, true);
+  beastEye(ctx, c, -0.42 + j, -0.3, 0.2, true);
+  beastEye(ctx, c, 0.44 + j, -0.3, 0.2, true);
+  // A snub nose with two nostrils.
   ctx.save();
-  ctx.strokeStyle = rgba(c.lineColor, 0.8);
-  ctx.lineWidth = 0.07;
+  ctx.strokeStyle = rgba(c.lineColor, 0.7);
+  ctx.lineWidth = 0.055;
   stroke(ctx, [
-    [-0.45, 0.32],
-    [0, 0.5],
-    [0.45, 0.3],
+    [-0.04 + j, 0.02],
+    [0.14 + j, 0.3],
+    [-0.02 + j, 0.36],
   ]);
   ctx.stroke();
   ctx.restore();
-  teeth(ctx, c, [-0.3, 0.42], [0.3, 0.42], 3, 0.11);
+  // A wide, uneven grin with an underbite.
+  flat(
+    ctx,
+    (g) => {
+      g.beginPath();
+      g.moveTo(-0.56 + j, 0.5);
+      g.quadraticCurveTo(0 + j, 0.42, 0.56 + j, 0.52);
+      g.quadraticCurveTo(0.1 + j, 1.0, -0.56 + j, 0.5);
+      g.closePath();
+    },
+    '#3A1420',
+    rgba(c.lineColor, 0.8),
+    0.06,
+  );
+  for (const s of [-1, 1]) {
+    flat(
+      ctx,
+      (g) => {
+        g.beginPath();
+        g.moveTo(s * 0.4 + j, 0.78);
+        g.lineTo(s * 0.28 + j, 0.5);
+        g.lineTo(s * 0.5 + j, 0.5);
+        g.closePath();
+      },
+      '#F2ECD8',
+    );
+  }
   void rng;
 }
 

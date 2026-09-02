@@ -16,7 +16,22 @@
  * "Ninja Master" is a masked figure with a blade — deterministically, and the
  * same on every run.
  */
-import { blob, cel, flat, mix, ramp, rgba, shift, sliver, stroke, within, type Pt, type Ramp } from './celshade';
+import {
+  blob,
+  cel,
+  clampLightness,
+  flat,
+  mix,
+  ramp,
+  rgba,
+  separate,
+  shift,
+  sliver,
+  stroke,
+  within,
+  type Pt,
+  type Ramp,
+} from './celshade';
 
 // ---------------------------------------------------------------------------
 // What a character is
@@ -186,7 +201,9 @@ export function rollPortrait(rng: Rand, spec: CharacterSpec, cardClass: string, 
   };
   const hairBase = rng.bool(0.78) ? rng.pick(classHair[cardClass] ?? HAIRS) : rng.pick(HAIRS);
 
-  const clothBase = rng.pick(CLOTH[cardClass] ?? CLOTH.neutral);
+  // A near-black garment on a dark card is a hole in the illustration: the
+  // torso loses its silhouette and the figure ends at the chin.
+  const clothBase = separate(rng.pick(CLOTH[cardClass] ?? CLOTH.neutral), '#000000', 0.2);
   const trimBase =
     cardClass === 'haven' || cardClass === 'sword'
       ? rng.pick(['#E8C24A', '#F5E4A8', '#D8DEE8'])
@@ -204,13 +221,22 @@ export function rollPortrait(rng: Rand, spec: CharacterSpec, cardClass: string, 
   return {
     spec,
     skin: ramp(skinBase, 0.75),
-    hair: ramp(hairBase, 1.1),
+    // Very dark hair loses its locks entirely against a dark background; very
+    // pale hair goes the other way and every lock turns into a white blade with
+    // no shading left in it. Both ends get pulled back into the usable band.
+    hair: ramp(clampLightness(shift(hairBase, 0, 0, 0.06), 0.26, 0.8), 1.1),
     hairStyle,
     fringe: rng.pick(['straight', 'parted', 'swept', 'spiky'] as const),
     eye: undead ? rng.pick(['#C4462F', '#8B5CC7', '#C9A227']) : rng.pick(EYES),
     cloth: ramp(clothBase),
-    trim: ramp(trimBase, 0.8),
-    metal: ramp(rng.pick(['#B9C3D0', '#C9A227', '#8E97A8', '#D8B865']), 1.15),
+    // Trim and armour are drawn *on* the garment. If they land within a couple
+    // of steps of its lightness the costume detail disappears and the torso is
+    // one flat slab, which is exactly what makes card art look cheap.
+    trim: ramp(separate(trimBase, clothBase, 0.18), 0.8),
+    metal: ramp(
+      separate(rng.pick(['#B9C3D0', '#C9A227', '#8E97A8', '#D8B865']), clothBase, 0.22),
+      1.15,
+    ),
     turn: rng.range(-0.18, 0.18),
     face: sharpFaced(a) ? (rng.bool(0.82) ? 'sharp' : 'soft') : rng.bool(0.3) ? 'sharp' : 'soft',
     // Bigger, costlier cards look more formidable.
@@ -441,8 +467,14 @@ function drawBackHair(ctx: CanvasRenderingContext2D, p: Portrait, rng: Rand, lig
   if (style === 'short') return;
 
   const drop = style === 'long' || style === 'braid' ? 3.5 : style === 'bob' ? 1.5 : 2.6;
-  const spread = style === 'wild' ? 1.85 : 1.45;
-  const tones = { base: p.hair.shade, shade: shift(p.hair.shade, 0, 0.02, -0.1), light: p.hair.light };
+  // Wider than the head, but not so much wider that the part left visible above
+  // the shoulders is a plain dome with the face parked in front of it.
+  const spread = style === 'wild' ? 1.66 : 1.3;
+  const tones = {
+    base: shift(p.hair.shade, 0, 0.02, -0.05),
+    shade: shift(p.hair.shade, 0, 0.04, -0.15),
+    light: p.hair.base,
+  };
 
   // The mass, then pointed tips hanging off it. A rounded blob reads as a
   // helmet; hair ends in points.
@@ -450,15 +482,19 @@ function drawBackHair(ctx: CanvasRenderingContext2D, p: Portrait, rng: Rand, lig
     blob(
       c,
       [
-        [-0.9, -1.1],
-        [-spread, -0.2],
-        [-spread * 1.02, drop * 0.55],
-        [-spread * 0.6, drop * 0.92],
+        // Narrow at the crown so the mass tucks behind the head instead of
+        // doming over it, widest at cheek height, then tapering to the tips.
+        [-0.48, -1.42],
+        [-spread * 0.84, -0.62],
+        [-spread, 0.55],
+        [-spread * 1.02, drop * 0.6],
+        [-spread * 0.62, drop * 0.94],
         [0, drop],
-        [spread * 0.6, drop * 0.92],
-        [spread * 1.02, drop * 0.55],
-        [spread, -0.2],
-        [0.9, -1.1],
+        [spread * 0.62, drop * 0.94],
+        [spread * 1.02, drop * 0.6],
+        [spread, 0.55],
+        [spread * 0.84, -0.62],
+        [0.48, -1.42],
       ],
       0.9,
     );
@@ -550,6 +586,9 @@ function drawBackHair(ctx: CanvasRenderingContext2D, p: Portrait, rng: Rand, lig
 
 function drawFrontHair(ctx: CanvasRenderingContext2D, p: Portrait, rng: Rand, light: number): void {
   const t = p.turn;
+  // A closed helm covers the hairline; a fringe under it shows through the eye
+  // opening as a row of pale spikes.
+  const helmeted = (p.spec.headgear ?? 'none') === 'helm';
 
   // The cap over the skull, reaching low enough that the fringe grows out of
   // it rather than being stuck on below it.
@@ -562,12 +601,39 @@ function drawFrontHair(ctx: CanvasRenderingContext2D, p: Portrait, rng: Rand, li
     c.bezierCurveTo(-0.62 + t * 0.3, -0.62, -1.0 + t * 0.2, -0.42, -1.1 + t * 0.2, 0.1);
     c.closePath();
   };
-  cel(ctx, cap, p.hair, { x: -1.25, y: -1.6, w: 2.5, h: 1.8 }, {
-    angle: light,
-    coverage: 0.44,
-    line: p.lineColor,
-    lineWidth: 0.055,
-  });
+  if (!helmeted) {
+    cel(ctx, cap, p.hair, { x: -1.25, y: -1.6, w: 2.5, h: 1.8 }, {
+      angle: light,
+      coverage: 0.44,
+      line: p.lineColor,
+      lineWidth: 0.055,
+    });
+    // The gloss band across the crown: one arc, broken into segments, following
+    // the curve of the skull. Free-floating ellipses read as paint spatter.
+    // It belongs to the cap, so it goes down *before* the fringe — painted over
+    // the locks it turns them into a row of pale tabs.
+    within(ctx, cap, (c) => {
+      c.fillStyle = rgba(p.hair.light, 0.5);
+      const top: Pt[] = [];
+      const bot: Pt[] = [];
+      for (let i = 0; i <= 12; i++) {
+        const u = i / 12;
+        const x = -0.98 + u * 1.96 + t * 0.25;
+        const off = Math.abs(x - t * 0.25);
+        const y = -1.06 + off * off * 0.26;
+        // A wave, so the band is not a flat stripe.
+        const wob = Math.sin(u * Math.PI * 3.1) * 0.04;
+        top.push([x, y - 0.08 + wob]);
+        bot.push([x, y + 0.08 + wob]);
+      }
+      c.beginPath();
+      c.moveTo(top[0][0], top[0][1]);
+      for (const q of top.slice(1)) c.lineTo(q[0], q[1]);
+      for (const q of bot.reverse()) c.lineTo(q[0], q[1]);
+      c.closePath();
+      c.fill();
+    });
+  }
 
   // Fringe. Locks are wide and overlap by about half, drawn outward from the
   // parting so the later ones sit over the earlier ones.
@@ -576,72 +642,55 @@ function drawFrontHair(ctx: CanvasRenderingContext2D, p: Portrait, rng: Rand, li
   const order: number[] = [];
   for (let i = 0; i < n; i++) order.push(i);
   order.sort((a, b) => Math.abs(b - (n - 1) / 2) - Math.abs(a - (n - 1) / 2));
-  for (const i of order) {
+  for (const i of helmeted ? [] : order) {
     const u = i / (n - 1);
     const x = -1.05 + u * 2.1 + t * 0.25;
     const off = x - t * 0.25;
     if (Math.abs(off - partAt) < 0.2) continue;
-    const rootY = -1.2 + Math.abs(off) * 0.16;
-    const sweep = p.fringe === 'swept' ? 0.34 : p.fringe === 'spiky' ? rng.range(-0.24, 0.24) : 0;
+    // Roots sit up under the crown so a lock is long enough to *hang*: a short,
+    // wide one is a plank, and eleven of them are a picket fence.
+    const rootY = -1.34 + Math.abs(off) * 0.1;
+    const sweep = p.fringe === 'swept' ? 0.38 : p.fringe === 'spiky' ? rng.range(-0.28, 0.28) : 0;
     // Locks stop just above the eyes; one or two hang past them for interest.
-    const long = rng.bool(0.22);
-    const len = (long ? rng.range(1.1, 1.45) : rng.range(0.62, 0.95)) * (p.fringe === 'spiky' ? rng.range(0.85, 1.15) : 1);
-    const tipX = x + sweep + off * 0.28;
+    // Eyes sit at y≈0.2 with their tops near −0.2, so a lock that reaches much
+    // past y≈0 is hanging in front of the face rather than framing it.
+    const long = rng.bool(0.16);
+    const len = (long ? rng.range(1.26, 1.46) : rng.range(0.86, 1.16)) * (p.fringe === 'spiky' ? rng.range(0.9, 1.12) : 1);
+    const tipX = x + sweep + off * 0.22;
     const tipY = rootY + len;
-    const w = rng.range(0.22, 0.32);
-    const lock = (c: CanvasRenderingContext2D) => sliver(c, [x, rootY], [tipX, tipY], w, rng.range(-0.14, 0.14));
+    const w = rng.range(0.18, 0.27);
+    const lock = (c: CanvasRenderingContext2D) => sliver(c, [x, rootY], [tipX, tipY], w, rng.range(-0.16, 0.16));
     cel(ctx, lock, p.hair, { x: x - 0.5, y: rootY - 0.2, w: 1, h: len + 0.4 }, {
       angle: light,
       coverage: 0.46,
       line: p.lineColor,
       lineWidth: 0.042,
+      edge: 0,
     });
     // The gloss, drawn inside the lock so it can never land on skin.
     within(ctx, lock, (c) => {
-      c.fillStyle = rgba(p.hair.light, 0.72);
+      c.fillStyle = rgba(p.hair.light, 0.68);
       c.beginPath();
-      c.ellipse(x + sweep * 0.3, rootY + 0.42, w * 0.72, 0.17, 0, 0, Math.PI * 2);
+      c.ellipse(x + sweep * 0.24, rootY + 0.52, w * 0.6, 0.22, 0, 0, Math.PI * 2);
       c.fill();
     });
   }
 
-  // Side locks framing the cheeks.
+  // Side locks framing the cheeks. They stop around the jaw: run them to the
+  // collarbone and they read as tusks rather than hair.
   for (const s of [-1, 1]) {
-    const len = p.hairStyle === 'bob' ? 1.4 : 2.0;
+    const len = p.hairStyle === 'bob' ? 1.15 : 1.6;
     const lock = (c: CanvasRenderingContext2D) =>
-      sliver(c, [s * (1.02 + t * 0.2), -0.72], [s * (0.9 + t * 0.35), len], 0.19, s * 0.16);
+      sliver(c, [s * (1.02 + t * 0.2), -0.72], [s * (0.94 + t * 0.3), len], 0.17, s * 0.14);
     cel(ctx, lock, p.hair, { x: s > 0 ? 0.6 : -1.3, y: -0.8, w: 0.8, h: len + 0.9 }, {
       angle: light,
       coverage: 0.46,
       line: p.lineColor,
       lineWidth: 0.045,
+      edge: 0,
     });
   }
 
-  // The gloss band across the crown: one arc, broken into segments, following
-  // the curve of the skull. Free-floating ellipses read as paint spatter.
-  within(ctx, cap, (c) => {
-    c.fillStyle = rgba(p.hair.light, 0.5);
-    c.filter = 'blur(0.02px)';
-    const top: Pt[] = [];
-    const bot: Pt[] = [];
-    for (let i = 0; i <= 12; i++) {
-      const u = i / 12;
-      const x = -0.98 + u * 1.96 + t * 0.25;
-      const off = Math.abs(x - t * 0.25);
-      const y = -1.12 + off * off * 0.22;
-      // A wave, so the band is not a flat stripe.
-      const wob = Math.sin(u * Math.PI * 3.1) * 0.035;
-      top.push([x, y - 0.07 + wob]);
-      bot.push([x, y + 0.07 + wob]);
-    }
-    c.beginPath();
-    c.moveTo(top[0][0], top[0][1]);
-    for (const q of top.slice(1)) c.lineTo(q[0], q[1]);
-    for (const q of bot.reverse()) c.lineTo(q[0], q[1]);
-    c.closePath();
-    c.fill();
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -921,6 +970,14 @@ function drawBody(ctx: CanvasRenderingContext2D, p: Portrait, rng: Rand, light: 
 // Headgear, wings, weapon
 // ---------------------------------------------------------------------------
 
+/**
+ * A hood or hat sits directly over the hair, so it has to differ from it. A
+ * dark hood on dark hair is one silhouette with a face in it.
+ */
+function hoodTone(p: Portrait): string {
+  return separate(shift(p.cloth.base, 0, 0.04, -0.1), p.hair.base, 0.14);
+}
+
 function drawHeadgear(ctx: CanvasRenderingContext2D, p: Portrait, light: number): void {
   const g = p.spec.headgear ?? 'none';
   const t = p.turn;
@@ -1012,7 +1069,7 @@ function drawHeadgear(ctx: CanvasRenderingContext2D, p: Portrait, light: number)
             ],
             0.9,
           ),
-        ramp(shift(p.cloth.base, 0, 0.04, -0.12)),
+        ramp(hoodTone(p)),
         { x: -1.5, y: -1.9, w: 3, h: 2.5 },
         { angle: light, coverage: 0.46, line: p.lineColor, lineWidth: 0.06 },
       );
@@ -1025,7 +1082,7 @@ function drawHeadgear(ctx: CanvasRenderingContext2D, p: Portrait, light: number)
           c.beginPath();
           c.ellipse(t * 0.4, -1.12, 1.85, 0.42, 0, 0, Math.PI * 2);
         },
-        ramp(shift(p.cloth.base, 0, 0.05, -0.14)),
+        ramp(hoodTone(p)),
         { x: -1.9, y: -1.6, w: 3.8, h: 0.9 },
         { angle: light, coverage: 0.44, line: p.lineColor, lineWidth: 0.06 },
       );
@@ -1038,7 +1095,7 @@ function drawHeadgear(ctx: CanvasRenderingContext2D, p: Portrait, light: number)
           c.bezierCurveTo(0.5 + t * 0.4, -2.3, 0.72 + t * 0.4, -1.5, 0.85 + t * 0.4, -1.18);
           c.closePath();
         },
-        ramp(shift(p.cloth.base, 0, 0.05, -0.08)),
+        ramp(shift(hoodTone(p), 0, 0, 0.05)),
         { x: -1, y: -3.2, w: 2, h: 2.1 },
         { angle: light, coverage: 0.44, line: p.lineColor, lineWidth: 0.06 },
       );
@@ -1051,10 +1108,11 @@ function drawHeadgear(ctx: CanvasRenderingContext2D, p: Portrait, light: number)
         c.moveTo(-1.16 + t * 0.2, 0.3);
         c.bezierCurveTo(-1.26 + t * 0.2, -0.9, -0.72 + t * 0.4, -1.62, t * 0.5, -1.62);
         c.bezierCurveTo(0.72 + t * 0.4, -1.62, 1.26 + t * 0.2, -0.9, 1.16 + t * 0.2, 0.3);
-        c.lineTo(0.82 + t * 0.3, 0.3);
-        c.lineTo(0.82 + t * 0.3, -0.28);
-        c.lineTo(-0.82 + t * 0.3, -0.28);
-        c.lineTo(-0.82 + t * 0.3, 0.3);
+        // One wide opening. Splitting it with a nose guard turns the helm into
+        // a pair of goggles at this size.
+        c.lineTo(0.9 + t * 0.3, 0.34);
+        c.bezierCurveTo(0.92 + t * 0.3, -0.3, 0.6 + t * 0.35, -0.56, t * 0.4, -0.56);
+        c.bezierCurveTo(-0.6 + t * 0.35, -0.56, -0.92 + t * 0.3, -0.3, -0.9 + t * 0.3, 0.34);
         c.closePath();
       };
       cel(ctx, shell, p.metal, { x: -1.3, y: -1.7, w: 2.6, h: 2.1 }, {
@@ -1069,9 +1127,9 @@ function drawHeadgear(ctx: CanvasRenderingContext2D, p: Portrait, light: number)
         c.strokeStyle = rgba(p.trim.base, 0.95);
         c.lineWidth = 0.13;
         stroke(c, [
-          [-1.2 + t * 0.2, -0.42],
-          [t * 0.4, -0.62],
-          [1.2 + t * 0.2, -0.42],
+          [-1.2 + t * 0.2, -0.66],
+          [t * 0.4, -0.86],
+          [1.2 + t * 0.2, -0.66],
         ]);
         c.stroke();
       });

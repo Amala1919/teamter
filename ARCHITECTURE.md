@@ -24,7 +24,7 @@ flows one way back up.
 | Layer | Path | Knows about |
 |---|---|---|
 | Card data | `src/data/generated/cards.json` | nothing — plain records |
-| Illustration subjects | `src/data/generated/cardart.json` | nothing — an id-to-icon map plus path data |
+| Illustration subjects | `src/data/generated/cardart.json` | nothing — an id-to-subject table, an id-to-icon map and path data |
 | Compiler | `src/data/compile.ts` | the effect DSL |
 | Registry | `src/engine/registry.ts` | `CardDef` |
 | Rules engine | `src/engine/game.ts` | cards, state, its own event stream |
@@ -103,6 +103,24 @@ The card database carries both languages already, so a card's name and rules
 text are never translated by this project — they are read from the field the
 current language names.
 
+### Illustrations are drawn, not composed
+
+`src/art` has three layers under `illustration.ts`, and they are separate on
+purpose:
+
+| Module | Responsibility |
+|---|---|
+| `celshade.ts` | The drawing vocabulary — HSL ramps, the cel shader, smoothed blobs, tapered slivers, and the colour-separation rules |
+| `portrait.ts` | Anime characters: 20 archetypes, weapons, headgear, wings |
+| `creature.ts` | 11 creature kinds |
+
+Both figure modules work in **head units** — the head is 2 units wide with its
+origin at the centre — so `illustration.ts` seats any of them with one
+transform and never needs to know how a figure is built. Neither imports the
+other; both import only `celshade.ts`. The subject a card gets is decided
+offline by `tools/build-cardart.mjs` and read back through
+`subjectKindFor(cardId)`, so the renderer makes no naming decisions at runtime.
+
 ### Deterministic randomness
 
 Every random decision goes through `Rng` (`src/engine/rng.ts`), seeded per
@@ -120,8 +138,7 @@ match. A seed reproduces a match exactly, which is what makes the soak test in
 | `npm run cards:report -- --lines` | Card-text compiler coverage, and what is still unparsed |
 | `npm run typecheck` | `tsc --noEmit` |
 | `node tools/shoot.mjs <path> <out.png>` | Screenshot a page for visual review |
-
-| `node tools/build-cardart.mjs` | Regenerates the card-to-icon map in `src/data/generated/cardart.json` |
+| `node tools/build-cardart.mjs` | Regenerates the subject table and card-to-icon map in `src/data/generated/cardart.json` |
 | `node tools/smoke.mjs` | End-to-end browser test against a running dev server |
 
 `gallery.html` renders a grid of card faces without booting the game; the main

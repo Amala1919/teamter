@@ -80,6 +80,33 @@ export function shift(hex: string, dh: number, ds = 0, dl = 0): string {
   return hslToHex(h + dh, s + ds, l + dl);
 }
 
+/** Lightness of a colour, 0..1. */
+export function lightness(hex: string): number {
+  return rgbToHsl(...hexToRgb(hex))[2];
+}
+
+/** Holds a colour inside a lightness band, keeping its hue and saturation. */
+export function clampLightness(hex: string, lo: number, hi: number): string {
+  const l = lightness(hex);
+  if (l >= lo && l <= hi) return hex;
+  return shift(hex, 0, 0, (l < lo ? lo : hi) - l);
+}
+
+/**
+ * Pushes `colour` away from `against` until they differ in lightness by at
+ * least `gap`. Two forms drawn on top of one another in near-identical tones
+ * merge into a single slab no matter how well either is shaded, so every place
+ * one colour is laid over another goes through here.
+ */
+export function separate(colour: string, against: string, gap: number): string {
+  const a = lightness(colour);
+  const b = lightness(against);
+  if (Math.abs(a - b) >= gap) return colour;
+  // Move away from `against`, unless that would run off the end of the range.
+  const up = b + gap <= 0.92 && (a >= b || b - gap < 0.08);
+  return shift(colour, 0.015, 0.02, up ? b + gap - a : b - gap - a);
+}
+
 /**
  * The three tones a cel-shaded surface needs. Anime shadow is not "the same
  * colour, darker": it rotates toward the cool end and gains saturation, which
@@ -188,6 +215,44 @@ export interface CelOptions {
   rimWidth?: number;
   /** Softens the shadow edge slightly — used on skin, never on metal. */
   soft?: number;
+  /**
+   * How much the terminator wanders, as a fraction of the form's diagonal.
+   * A perfectly straight terminator is the single thing that makes cel shading
+   * read as "flat fill with a ruler through it" — worse still, every form in a
+   * figure gets its edge at the same place and they line up into one seam down
+   * the middle of the illustration. A little wander breaks both. Metal and gems
+   * pass 0 on purpose; skin and cloth want the default.
+   */
+  edge?: number;
+  /** Phase for the wander, so two adjacent forms do not undulate in step. */
+  seed?: number;
+}
+
+/**
+ * The shadow half-plane, in the rotated frame where the light comes from +x:
+ * everything left of a gently wandering vertical edge.
+ */
+function halfPlane(ctx: CanvasRenderingContext2D, r: number, amp: number, seed: number): void {
+  ctx.beginPath();
+  if (amp <= 0) {
+    ctx.rect(-r, -r, r, r * 2);
+    return;
+  }
+  const n = 8;
+  const at = (t: number): number =>
+    amp * (Math.sin(seed + t * 5.1) * 0.62 + Math.sin(seed * 1.61 + t * 12.7) * 0.38);
+  ctx.moveTo(-r, -r);
+  ctx.lineTo(at(0), -r);
+  for (let i = 1; i < n; i++) {
+    const t = i / n;
+    const y = -r + t * 2 * r;
+    const nt = (i + 1) / n;
+    const ny = -r + nt * 2 * r;
+    ctx.quadraticCurveTo(at(t), y, (at(t) + at(nt)) / 2, (y + ny) / 2);
+  }
+  ctx.lineTo(at(1), r);
+  ctx.lineTo(-r, r);
+  ctx.closePath();
 }
 
 export function cel(
@@ -219,7 +284,9 @@ export function cel(
   ctx.rotate(angle);
   if (opts.soft) ctx.filter = `blur(${opts.soft}px)`;
   ctx.fillStyle = tones.shade;
-  ctx.fillRect(-r, -r, r, r * 2);
+  const seed = opts.seed ?? (bounds.x * 3.7 + bounds.y * 8.3 + bounds.w * 1.9);
+  halfPlane(ctx, r, (opts.edge ?? 0.055) * r, seed);
+  ctx.fill();
   ctx.restore();
 
   if (opts.rim && opts.rimWidth) {

@@ -715,9 +715,13 @@ export function drawIllustration(
     const shot = rng.pick(['close', 'bust', 'bust', 'wide'] as const);
     const beast = subject.kind === 'creature';
     const unit =
-      h * (shot === 'close' ? 0.2 : shot === 'bust' ? 0.172 : 0.15) * (beast ? 0.82 : 1);
+      h *
+      (shot === 'close' ? 0.2 : shot === 'bust' ? 0.172 : 0.15) *
+      // Creatures carry their own body in the same units, so they need less
+      // scale than a bust does or they fill the frame edge to edge.
+      (beast ? 0.8 : 1);
     const px = w * (shot === 'wide' ? rng.range(0.4, 0.6) : rng.around(0.5, 0.03));
-    const py = h * (shot === 'close' ? 0.36 : shot === 'bust' ? 0.32 : 0.3);
+    const py = h * (shot === 'close' ? 0.36 : shot === 'bust' ? 0.32 : 0.3) * (beast ? 0.94 : 1);
 
     // A glow behind the figure separates it from the scene. Card art almost
     // always has one; without it a dark character sits in a dark background.

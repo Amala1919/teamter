@@ -89,14 +89,24 @@ rather than cut mid-sentence.
 
 ### Card illustrations
 
-The art window holds a subject in a generated scene. The **subject** is a
-hand-drawn shape from the Game Icons collection (CC BY 3.0 — see
-`ASSET_LICENSES.md`), matched to the card by name in
-`tools/build-cardart.mjs`; official Shadowverse illustrations are unreachable
-from this environment, so a real drawing beats a shape assembled from ellipses.
+The art window holds a subject in a generated scene. Official Shadowverse
+illustrations are unreachable from this environment (see `ASSET_LICENSES.md`),
+so the subject is drawn here, and what gets drawn depends on what the card
+depicts:
 
-Everything around it is generated per card, seeded from `artSeed`, so two cards
-sharing an icon never look alike:
+| Subject | Cards | Drawn by |
+|---|---|---|
+| Character | 464 | `src/art/portrait.ts` |
+| Creature | 226 | `src/art/creature.ts` |
+| Emblem | 214 | A Game Icons silhouette (CC BY 3.0), lit and modelled |
+
+`tools/build-cardart.mjs` matches each card to an icon by name, then classifies
+that icon: a name that denotes a person becomes a character spec (archetype,
+weapon, headgear, wings), a name that denotes a beast becomes a creature spec.
+Only spells, amulets and objects still draw the icon itself.
+
+Everything around the subject is generated per card, seeded from `artSeed`, so
+two cards sharing a subject never look alike:
 
 | Layer | What it does |
 |---|---|
@@ -105,15 +115,47 @@ sharing an icon never look alike:
 | Ridges | Two to four receding silhouettes, roughness by class |
 | Architecture | Pillars, arches, spires, trees, standing stones or banners |
 | Contact shadow | A blurred ellipse under the subject, tying it to the ground |
-| Subject | The icon, filled near-black, mirrored and tilted a few degrees |
-| Interior modelling | A vertical falloff plus a bounce from the key light, clipped to the silhouette |
-| Rim light | The silhouette drawn offset toward the light with the original punched out — a crescent, not an outline |
+| Subject | The figure, creature or icon |
 | Foreground | One dark ridge across the bottom for depth |
 | Atmosphere | Motes, scumbling, vignette, grain |
+
+An emblem subject additionally gets interior modelling (a vertical falloff plus
+a bounce from the key light, clipped to the silhouette) and a rim light — the
+silhouette drawn offset toward the light with the original punched out, a
+crescent rather than an outline. Figures do their own shading.
 
 The subject is scaled to the framing (portrait, close, vista or arcane) and
 then **clamped into the visible part of the panel**: the name band covers the
 bottom, so nothing may hang below 0.76 of the art window's height.
+
+### How a figure is drawn
+
+Anime art is not a gradient renderer. Every form in `portrait.ts` and
+`creature.ts` is the same four things — a flat base colour, one hard-edged
+shadow shape, sometimes one hard-edged highlight, and a line on the contour —
+put down by `cel()` in `src/art/celshade.ts`. The rules that keep 690 figures
+from looking mass-produced are all in that one file:
+
+- **The shadow rotates.** It is not the base colour darkened; it turns toward
+  the cool end and gains saturation, which is what stops flat fills reading as
+  grey paint (`ramp()`).
+- **The light snaps to one side.** `illustration.ts` computes a light angle from
+  the scene's key light and then rounds it to 0 or π. A diagonal terminator
+  across a face reads as a scar.
+- **The terminator wanders.** A perfectly straight shadow edge reads as a ruler
+  laid across a flat fill, and worse, every form in a figure gets its edge at
+  the same place and they line up into one seam down the middle. `cel()` gives
+  the half-plane a gentle undulation, phased per form. Metal and gems opt out
+  with `edge: 0`.
+- **No two stacked forms share a lightness.** Armour drawn on a garment, a hood
+  over hair, a lock over a cheek: if the two land within a couple of steps of
+  each other the detail disappears and the figure is one slab. `separate()`
+  pushes them apart, and `clampLightness()` keeps hair out of the near-white
+  and near-black ends where it has no shading left in it.
+
+Everything is laid out in **head units** — the head is 2 units wide with its
+origin at the centre — so one transform seats any figure in the art window at
+any of the framings.
 
 ### Card names
 

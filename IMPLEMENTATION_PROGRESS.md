@@ -35,8 +35,10 @@ card inspector, the compiler-coverage push and the leader animations.
   ceilings, outright wins.
 - **Japanese interface** by default (`?lang=en` for English), including
   Japanese line breaking and simplified kinsoku in card text.
-- **Card artwork** built from real drawn subjects (Game Icons, CC BY 3.0) lit
-  and composited into a generated scene, deterministic per card.
+- **Card artwork** drawn per card: an original cel-shaded anime figure for the
+  464 cards that depict a person, an original creature for the 226 that depict
+  a beast, and a Game Icons silhouette (CC BY 3.0) for the 214 spells, amulets
+  and objects — each composited into a generated scene, deterministic per card.
 - **In-battle card inspector**: any card in a public zone can be opened full
   size with its live stats, evolved state, remaining countdown and current
   keywords — right-click, long-press, or tap a card you cannot act on.
@@ -98,9 +100,10 @@ Two constraints shaped the project and will shape anyone continuing it:
 - **Network egress is restricted** to package registries and
   `raw.githubusercontent.com`. Card *data* was reachable through a GitHub
   mirror of the official Portal API; card *artwork*, the Fandom wiki, and every
-  official Shadowverse host were not. Illustration subjects therefore come from
-  the copyright-free Game Icons collection and everything around them is
-  generated (see `ASSET_LICENSES.md`); the renderer is built to prefer official
+  official Shadowverse host were not. Illustrations are therefore drawn by this
+  project — original cel-shaded characters and creatures, with the
+  copyright-free Game Icons collection covering only spells, amulets and
+  objects (see `ASSET_LICENSES.md`); the renderer is built to prefer official
   art if it is ever supplied.
 - **This project is personal-use only.** Do not distribute, publish, host
   publicly or package it.

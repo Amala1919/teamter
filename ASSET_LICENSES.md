@@ -24,25 +24,33 @@ are blocked by the network egress policy (403 on CONNECT); only
 `raw.githubusercontent.com` and package registries are reachable. No mirror of
 the era's card images was reachable either.
 
-Every illustration in the game is therefore built from a **copyright-free
-subject** (Game Icons, below) composited into a **procedurally generated scene**
-(next section). The renderer is nonetheless built to prefer official art if it
-is ever supplied: drop images into `public/assets/official/` keyed by card id
-and pass them through `CardFaceOptions.officialArt`, and the card-name renderer
-will draw the name onto the frame's name band exactly as it does over generated
-art.
+Every illustration in the game is therefore **drawn by this project**: a
+cel-shaded anime character or creature for cards that depict a being, and a
+Game Icons silhouette for the rest, composited into a procedurally generated
+scene. The split, over the 904 cards that carry key art:
+
+| Subject | Cards | Drawn by |
+|---|---|---|
+| Character | 464 | `src/art/portrait.ts` — original, no third-party content |
+| Creature | 226 | `src/art/creature.ts` — original, no third-party content |
+| Emblem | 214 | A Game Icons silhouette (below), lit and modelled |
+
+The renderer is nonetheless built to prefer official art if it is ever
+supplied: drop images into `public/assets/official/` keyed by card id and pass
+them through `CardFaceOptions.officialArt`, and the card-name renderer will
+draw the name onto the frame's name band exactly as it does over generated art.
 
 ## Third-party artwork — Game Icons
 
 | | |
 |---|---|
-| **What** | 4133 hand-drawn fantasy icons; 196 of them are used as the *subject* of card illustrations, class banners and leader portraits |
+| **What** | 4133 hand-drawn fantasy icons; 195 of them are used — as the *subject* of the 214 emblem cards (spells, amulets and anything that is a thing rather than a being), and for class banners and leader portraits |
 | **Name** | Game Icons |
 | **Source** | <https://game-icons.net/> — obtained as the npm package [`@iconify-json/game-icons`](https://www.npmjs.com/package/@iconify-json/game-icons), which mirrors <https://github.com/game-icons/icons> |
 | **Author** | Game-icons.net contributors (Lorc, Delapouite, John Colburn, Felbrigg, Skoll, and others — see the upstream repository for per-icon authorship) |
 | **Licence** | **CC BY 3.0** — <https://creativecommons.org/licenses/by/3.0/>, licence text at <https://github.com/game-icons/icons/blob/master/license.txt> |
 | **Attribution required** | Yes. Credited in-app (`credits.art` in `src/i18n.ts`), in `README.md`, and here. |
-| **In this repo** | `src/data/generated/cardart.json` — the card-to-icon map plus the SVG path data for only the icons actually referenced |
+| **In this repo** | `src/data/generated/cardart.json` — the card-to-icon map, the per-card subject table, plus the SVG path data for only the icons actually referenced |
 | **Modifications** | Path data extracted from the SVG bodies at build time (`tools/build-cardart.mjs`) and coordinates rounded to one decimal — a fifth of a pixel at the size these are drawn. At render time each icon is scaled, optionally mirrored, tilted a few degrees, filled as a dark silhouette, then lit, interior-shaded and rim-lit by `src/art/illustration.ts`. The outlines are otherwise unmodified; everything around them is generated. |
 
 Each card is matched to an icon by name — proper nouns first (Athena to a
@@ -50,13 +58,22 @@ crested helmet), then a hand-authored noun table (a "Ninja Master" to a ninja),
 then the card's tribe, then a curated pool for its class and card type. The
 mapping is deterministic, so a card's subject never changes between sessions.
 
+The icon is then classified: names that denote a *person* become a character
+spec (archetype, weapon, headgear, wings) and names that denote a *beast*
+become a creature spec, both of which are drawn from scratch rather than from
+the icon. Only what is left — a spell's sigil, an amulet, a weapon on its own —
+still draws the licensed silhouette itself.
+
 ## Generated assets (original to this project)
 
 All authored by this project, no third-party content:
 
 | Asset | Where | How |
 |---|---|---|
-| Card illustration scenes | `src/art/illustration.ts` | Seeded procedural key art: graded sky, ridge lines, background architecture, contact shadow, interior modelling, rim light, foreground occlusion, atmosphere and grain. The *subject* inside the scene is a Game Icons shape (above); everything else is generated. Deterministic per card via `artSeed`. |
+| Card illustration scenes | `src/art/illustration.ts` | Seeded procedural key art: graded sky, ridge lines, background architecture, contact shadow, rim light, foreground occlusion, atmosphere and grain. Deterministic per card via `artSeed`. |
+| Character illustrations (464 cards) | `src/art/portrait.ts` | An original cel-shaded anime figure per card: face, eyes, brows, hair (cap, crown gloss, fringe locks, side locks, back mass, tails), body, costume by archetype, collar, pauldrons, headgear, wings and a weapon held in a drawn fist. Rolled deterministically from the card's seed, class and cost. |
+| Creature illustrations (226 cards) | `src/art/creature.ts` | Original cel-shaded dragons, wolves, birds, serpents, skeletons, ghosts, golems, slimes, insects, demons and imps. |
+| Cel-shading vocabulary | `src/art/celshade.ts` | HSL ramps, the wandering-terminator half-plane, smoothed blobs, tapered slivers, and the lightness-separation rules that stop one form merging into another. |
 | Card frames, cost orbs, stat plates, rarity gems | `src/art/cardface.ts` | Canvas 2D |
 | Board plaques and keyword icons | `src/art/boardcard.ts` | Canvas 2D |
 | Card name typesetting | `src/art/cardname.ts` | Canvas 2D |
