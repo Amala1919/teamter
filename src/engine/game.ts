@@ -172,6 +172,9 @@ export class Game {
       setDef: null,
       grantedKeywords: [],
       tempKeywords: [],
+      grantedAbilities: [],
+      tempAbilities: [],
+      silenced: false,
       removedKeywords: [],
       attacksThisTurn: 0,
       enteredTurn: -1,
@@ -239,8 +242,9 @@ export class Game {
     atk += e.buffAtk + e.tempAtk;
     maxDef += e.buffDef + e.tempDef;
 
-    const keywords = new Set<Keyword>(d.keywords ?? []);
-    if (e.evolved) for (const k of d.evoKeywords ?? []) keywords.add(k);
+    // A silenced follower keeps its stats but loses everything printed on it.
+    const keywords = new Set<Keyword>(e.silenced ? [] : (d.keywords ?? []));
+    if (e.evolved && !e.silenced) for (const k of d.evoKeywords ?? []) keywords.add(k);
     for (const k of e.grantedKeywords) keywords.add(k);
     for (const k of e.tempKeywords) keywords.add(k);
 
@@ -299,6 +303,7 @@ export class Game {
     for (const p of [0, 1] as PlayerId[]) {
       for (const uid of this.player(p).field) {
         const src = this.ent(uid);
+        if (src.silenced) continue;
         const d = this.def(src);
         for (const aura of d.auras ?? []) {
           if (aura.cond && !this.testCondition(aura.cond, { source: src, controller: src.owner, targets: [], ti: 0, option: 0, vars: {}, depth: 0 })) continue;
@@ -492,6 +497,7 @@ export class Game {
       e.tempAtk = 0;
       e.tempDef = 0;
       e.tempKeywords = [];
+      e.tempAbilities = [];
     }
     for (const uid of [...this.player(other(s.active)).field]) {
       const e = this.state.entities.get(uid);
@@ -499,6 +505,7 @@ export class Game {
       e.tempAtk = 0;
       e.tempDef = 0;
       e.tempKeywords = [];
+      e.tempAbilities = [];
     }
 
     this.emit({ t: 'turnEnd', player: s.active, turn: s.turn });
@@ -868,7 +875,9 @@ export class Game {
     const def = this.ent(target);
     this.emit({ t: 'attack', attacker: uid, defender: target });
 
-    this.fireEntityTriggers(atk, 'strike');
+    // Strike carries the follower being attacked, so "Follower Strike: Destroy
+    // the enemy follower" knows which one it means.
+    this.fireEntityTriggers(atk, 'strike', def);
     this.fireEntityTriggers(atk, 'clash', def);
     this.fireEntityTriggers(def, 'clash', atk);
     if (atk.zone !== 'field' || def.zone !== 'field') {
@@ -908,7 +917,9 @@ export class Game {
   /** Applies damage to a follower or amulet; returns damage actually dealt. */
   dealDamage(e: Entity, amount: number, source: Entity | null, fromEffect = false): number {
     if (amount <= 0 || e.zone !== 'field') return 0;
-    if (fromEffect && this.stats(e).keywords.has('effectImmune')) return 0;
+    const kw = this.stats(e).keywords;
+    if (kw.has('damageImmune')) return 0;
+    if (fromEffect && kw.has('effectImmune')) return 0;
     amount = Math.max(0, amount - this.damageReduction(e));
     const cap = this.damageCap(e);
     if (cap !== null) amount = Math.min(amount, cap);
@@ -1109,7 +1120,11 @@ export class Game {
 
   private runAbilities(e: Entity, kind: TriggerKind, ctx: ResolveCtx): void {
     const d = this.def(e);
-    const abilities = (d.abilities ?? []).filter((a) => a.on === kind);
+    const abilities = [
+      ...(e.silenced ? [] : (d.abilities ?? [])),
+      ...e.grantedAbilities,
+      ...e.tempAbilities,
+    ].filter((a) => a.on === kind);
     if (abilities.length === 0) return;
     if (this.triggerDepth > 24) return;
     this.triggerDepth++;
@@ -1271,6 +1286,31 @@ export class Game {
         return;
       }
 
+      case 'grantAbility': {
+        const perm = (eff.duration ?? 'permanent') === 'permanent';
+        for (const t of this.resolveSelector(eff.target, ctx).filter(isEntity)) {
+          const into = perm ? t.grantedAbilities : t.tempAbilities;
+          for (const ability of eff.abilities) into.push(ability);
+          this.emit({ t: 'grant', uid: t.uid, keywords: [] });
+        }
+        return;
+      }
+
+      case 'silence': {
+        for (const t of this.resolveSelector(eff.target, ctx).filter(isEntity)) {
+          t.silenced = true;
+          t.grantedKeywords = [];
+          t.tempKeywords = [];
+          t.grantedAbilities = [];
+          t.tempAbilities = [];
+          t.barrierCharges = 0;
+          t.ambushed = false;
+          this.emit({ t: 'log', text: `${this.def(t).name} lost its abilities` });
+        }
+        this.checkState();
+        return;
+      }
+
       case 'revoke': {
         for (const t of this.resolveSelector(eff.target, ctx).filter(isEntity)) {
           for (const k of eff.keywords) {
@@ -1284,7 +1324,12 @@ export class Game {
       case 'summon': {
         const n = eff.count ? this.amount(eff.count, ctx) : 1;
         const owner = eff.side === 'enemy' ? other(ctx.controller) : ctx.controller;
-        for (let i = 0; i < n; i++) this.summonToken(eff.defId, owner);
+        for (let i = 0; i < n; i++) {
+          const summoned = this.summonToken(eff.defId, owner);
+          // "Summon a Pluto and give it +X/+Y" — the rest of the effect list
+          // refers to what was just summoned, so bind it as the context's other.
+          if (summoned) ctx.other = summoned;
+        }
         return;
       }
 
@@ -1887,6 +1932,7 @@ export class Game {
     e.setDef = null;
     e.grantedKeywords = [];
     e.tempKeywords = [];
+    e.tempAbilities = [];
     e.removedKeywords = [];
     e.attacksThisTurn = 0;
     e.canAttackFollowersEarly = false;

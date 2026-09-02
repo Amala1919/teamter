@@ -98,7 +98,10 @@ const KW_ALT = 'ward|storm|rush|bane|drain|ambush';
  */
 const EFFECT_PHRASES: [RegExp, Keyword][] = [
   [/^can't be targeted by enemy (?:effects|spells)$/i, 'untargetable'],
-  [/^reduce damage (?:from effects )?to 0$/i, 'effectImmune'],
+  [/^reduce damage from effects to 0$/i, 'effectImmune'],
+  // Without the qualifier this stops combat damage too, which is a different
+  // thing entirely — Athena would otherwise not survive a trade.
+  [/^reduce damage to 0$/i, 'damageImmune'],
   [/^can't be destroyed by effects$/i, 'indestructible'],
   [/^can't be attacked$/i, 'cantBeAttacked'],
   [/^can't attack$/i, 'cantAttack'],
@@ -668,6 +671,38 @@ const RULES_TABLE: Rule[] = [
     },
   },
   {
+    /**
+     * "Give all other allied followers the following effect until the end of
+     * the turn - Reduce damage to 0."
+     *
+     * The clause after the dash is itself card text, so it is compiled the same
+     * way any line is: as a keyword if it names one, otherwise as a whole
+     * ability handed to the target.
+     */
+    re: /^give (.+?) the following effects?( until [^-:—]+?)?\s*[-:—]\s*(.+)$/i,
+    build: (m, ctx) => {
+      const t = parseSelector(m[1], ctx);
+      if (!t) return null;
+
+      // Only two durations are expressible. "Until the end of your opponent's
+      // turn" and "until this follower leaves play" outlive both, and the
+      // engine has nowhere to hang them — such a card stays partial rather
+      // than quietly getting a shorter effect than it prints.
+      const until = (m[2] ?? '').trim().toLowerCase();
+      let duration: 'turn' | 'permanent';
+      if (!until) duration = 'permanent';
+      else if (/^until the end of (?:the|this|your) turn$/.test(until)) duration = 'turn';
+      else return null;
+
+      const clause = tidy(m[3]).replace(/\.$/, '');
+      const kw = phraseKeyword(clause) ?? KEYWORD_WORDS[clause.toLowerCase()];
+      if (kw) return [{ k: 'grant', target: t, keywords: [kw], duration }];
+
+      const granted = compileGrantedAbility(clause, ctx);
+      return granted ? [{ k: 'grantAbility', target: t, abilities: granted, duration }] : null;
+    },
+  },
+  {
     // "Give an allied follower Rush." — the keyword grant in the same order.
     re: new RegExp(`^give (.+?) (${KW_ALT})(?: until the end of (?:the|this|your) turn)?$`, 'i'),
     build: (m, ctx) => {
@@ -757,6 +792,14 @@ const RULES_TABLE: Rule[] = [
       if (a === null || d === null) return null;
       const temp = /until the end of/i.test(m[0]);
       return [{ k: 'buff', target: { scope: 'other' }, atk: a, def: d, duration: temp ? 'turn' : 'permanent' }];
+    },
+  },
+  {
+    // "That follower gains Last Words: Summon a Zombie."
+    re: /^(?:that follower|it|they) gains? ((?:fanfare|last words|evolve|clash|strike|follower strike)\s*[-:—].+)$/i,
+    build: (m, ctx) => {
+      const abilities = compileGrantedAbility(m[1], ctx);
+      return abilities ? [{ k: 'grantAbility', target: { scope: 'other' }, abilities }] : null;
     },
   },
   {
@@ -1059,6 +1102,25 @@ function bindOtherToCondition(effects: Effect[], cond: Condition | undefined): E
   return walk(effects);
 }
 
+/**
+ * Compiles the clause of a "give X the following effect: …" line into the
+ * abilities to hand over. The clause is ordinary card text — "Follower Strike -
+ * Destroy the enemy follower", "When this card is banished, destroy it instead"
+ * — so it goes through the same prefix matching as a printed line.
+ */
+function compileGrantedAbility(clause: string, ctx: CompileCtx): Ability[] | null {
+  const prefix = matchPrefix(clause, ctx);
+  if (!prefix) return null;
+  const effects = compileSentences(prefix.rest, ctx);
+  if (!effects) return null;
+  const wrapped = prefix.wrap ? prefix.wrap(effects) : effects;
+  return prefix.triggers.map((on) => {
+    const ability: Ability = { on, effects: wrapped };
+    if (prefix.cond) ability.cond = prefix.cond;
+    return ability;
+  });
+}
+
 function parseSentence(sentence: string, ctx: CompileCtx): Effect[] | null {
   const peeled = peelCondition(sentence);
   const body = tidy(peeled.body);
@@ -1178,6 +1240,22 @@ function compileSentences(
     const sel = primaryTarget(out);
     if (!sel) return null;
     return [{ k: 'withTarget', target: sel, body: out }];
+  }
+
+  // "Give +2/+0 to an allied follower. That follower gains Last Words: …" —
+  // the second sentence refers to the first sentence's target. Outside a
+  // trigger there is nothing bound to `other`, so the line binds it itself.
+  if (opts.bindOther !== false) {
+    const named = out.findIndex(
+      (e) => 'target' in e && e.target && (e.target as Selector).scope !== 'other',
+    );
+    const refers = out.findIndex(
+      (e) => 'target' in e && e.target && (e.target as Selector).scope === 'other',
+    );
+    if (named >= 0 && refers > named) {
+      const sel = primaryTarget(out);
+      if (sel) return [{ k: 'withTarget', target: sel, body: out }];
+    }
   }
   return out;
 }
@@ -1402,14 +1480,17 @@ const EARTH_RE = /^earth rite\s*[-:]\s*/i;
 function matchPrefix(line: string, ctx?: CompileCtx): PrefixMatch | null {
   const l = line.trim();
 
+  // A dash separates the trigger from its body as often as a colon does, and
+  // always does inside a "give ... the following effect" clause.
+  const SEP = '\\s*[-:\u2014]\\s*';
   const simple: [RegExp, TriggerKind[]][] = [
-    [/^fanfare and last words:\s*/i, ['fanfare', 'lastWords']],
-    [/^fanfare:\s*/i, ['fanfare']],
-    [/^last words:\s*/i, ['lastWords']],
-    [/^evolve:\s*/i, ['evolve']],
-    [/^clash:\s*/i, ['clash']],
-    [/^strike:\s*/i, ['strike']],
-    [/^follower strike:\s*/i, ['strike']],
+    [new RegExp(`^fanfare and last words${SEP}`, 'i'), ['fanfare', 'lastWords']],
+    [new RegExp(`^fanfare${SEP}`, 'i'), ['fanfare']],
+    [new RegExp(`^last words${SEP}`, 'i'), ['lastWords']],
+    [new RegExp(`^evolve${SEP}`, 'i'), ['evolve']],
+    [new RegExp(`^clash${SEP}`, 'i'), ['clash']],
+    [new RegExp(`^follower strike${SEP}`, 'i'), ['strike']],
+    [new RegExp(`^strike${SEP}`, 'i'), ['strike']],
   ];
   for (const [re, triggers] of simple) {
     const m = l.match(re);
@@ -1551,6 +1632,7 @@ function matchStatic(line: string, res: CompileResult): boolean {
     "can't be targeted by enemy effects": 'untargetable',
     "can't be targeted by enemy spells": 'untargetable',
     'reduce damage from effects to 0': 'effectImmune',
+    'reduce damage to 0': 'damageImmune',
     'can only attack the enemy leader and followers with ward': 'ignoreWard',
   };
   const stripped = l.replace(/^-/, '').trim();

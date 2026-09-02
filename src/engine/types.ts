@@ -93,6 +93,8 @@ export type Keyword =
   | 'indestructible'
   /** Damage from effects is reduced to 0; combat damage still applies. */
   | 'effectImmune'
+  /** Takes no damage at all, not only from effects. */
+  | 'damageImmune'
   /** May attack twice per turn. */
   | 'doubleAttack';
 
@@ -111,6 +113,7 @@ export const KEYWORD_LABEL: Record<Keyword, string> = {
   ignoreWard: 'Ignore Ward',
   indestructible: 'Indestructible',
   effectImmune: 'Effect Immune',
+  damageImmune: 'Damage Immune',
   doubleAttack: 'Double Attack',
 };
 
@@ -129,6 +132,7 @@ export const KEYWORD_LABEL_JA: Record<Keyword, string> = {
   ignoreWard: '守護無視',
   indestructible: '破壊されない',
   effectImmune: '効果ダメージ無効',
+  damageImmune: 'ダメージ無効',
   doubleAttack: '連続攻撃',
 };
 
@@ -273,7 +277,11 @@ export type Effect =
   | { k: 'buff'; target: Selector; atk?: Amount; def?: Amount; duration?: BuffDuration }
   | { k: 'setStats'; target: Selector; atk?: Amount; def?: Amount }
   | { k: 'grant'; target: Selector; keywords: Keyword[]; duration?: BuffDuration }
+  /** Hands whole abilities to other cards, rather than keywords or stats. */
+  | { k: 'grantAbility'; target: Selector; abilities: Ability[]; duration?: BuffDuration }
   | { k: 'revoke'; target: Selector; keywords: Keyword[] }
+  /** Strips a card of everything it does: printed abilities, keywords, auras. */
+  | { k: 'silence'; target: Selector }
   | { k: 'summon'; defId: string; count?: Amount; side?: 'ally' | 'enemy' }
   | { k: 'transform'; target: Selector; into: string }
   | { k: 'returnToHand'; target: Selector }
@@ -537,6 +545,18 @@ export interface Entity {
 
   grantedKeywords: Keyword[];
   tempKeywords: Keyword[];
+  /**
+   * Abilities handed to this entity by another card — "Give an allied follower
+   * the following effect: Follower Strike - Destroy the enemy follower." They
+   * fire alongside the card's own, and the temporary ones expire with buffs.
+   */
+  grantedAbilities: Ability[];
+  tempAbilities: Ability[];
+  /**
+   * The entity has lost its printed abilities and keywords — Shadowverse's
+   * 能力を失う. Anything granted afterwards still applies.
+   */
+  silenced: boolean;
   removedKeywords: Keyword[];
 
   attacksThisTurn: number;

@@ -11,12 +11,12 @@ card inspector, the compiler-coverage push and the leader animations.
 | Milestone | Status |
 |---|---|
 | 0 — Research and specification | **Done.** `docs/research/RULES_RESEARCH.md` (909 lines, sourced, with uncertainty flagged) and `docs/research/VISUAL_RESEARCH.md` (1176 lines). |
-| 1 — Rules engine, deterministic simulation | **Done.** 167 unit tests; 250-game AI-vs-AI soak with 0 failures. |
+| 1 — Rules engine, deterministic simulation | **Done.** 179 unit tests; 400-game AI-vs-AI soak with 0 failures. |
 | 2 — Card data and the Standard set | **Done.** All 888 cards (825 collectible + 63 tokens) from Basic through Wonderland Dreams, from the official card database, in both languages. |
 | 3 — Three.js battle screen and card renderer | **Done.** |
 | 4 — Playable battle flow | **Done,** including the mulligan. |
 | 5 — UI reproduction and feel | **Done.** Battle HUD, menu, mulligan, deck builder, collection, card detail, in-battle inspector. |
-| 6 — All cards through Wonderland Dreams | **Partial.** All cards are present and playable; **79%** have every printed line implemented. |
+| 6 — All cards through Wonderland Dreams | **Partial.** All cards are present and playable; **79.6%** have every printed line implemented. |
 | 7 — Evolution, effects, particles, audio | **Done.** Bloom, particles, camera shake, synthesised audio, leader animation. |
 | 8 — Deck builder and collection | **Done.** Decks persist to localStorage and are validated live. |
 | 9 — Visual comparison and QA | **Partial.** Iterated by screenshot; no side-by-side against real captures — official screenshots are unreachable from this environment. |
@@ -56,9 +56,11 @@ builder and card detail all say so.
 genuine long tail — the largest remaining cluster is four cards — but these
 groups still repeat:
 
-- **Granting a composite effect.** "Give all other allied followers the
-  following effect until the end of the turn — Reduce damage to 0." The DSL can
-  grant keywords and stats, not abilities.
+- **Durations longer than a turn.** "Until the end of your opponent's turn",
+  "until this follower leaves play", "until the start of your next turn". A
+  grant is either permanent or expires at the end of the current turn, and
+  cards asking for anything else stay partial rather than getting a shorter
+  effect than they print.
 - **Leader-attached effects.** "Give your leader the following effect:
   Followers can't be played" (Queen Medb, Carabosse, Wordwielder Ginger).
 - **Damage replacement.** "Deal any damage dealt to your leader to the enemy
@@ -77,15 +79,16 @@ groups still repeat:
 
 ## Recommended next steps
 
-1. **`grantEffect`** — a follower granting an *ability* to others, and the same
-   thing attached to a leader. Between them these two unlock the largest
-   remaining clusters, and both need a new place to hang abilities that are not
-   on a card definition.
-2. **Optimisation (milestone 10), continued.** A card face is 7.0 ms to paint
+1. **Leader-attached effects** — "Give your leader the following effect:
+   Followers can't be played". Abilities can now be granted to *entities*
+   (`grantAbility`); a leader is not one, and has nowhere to hang them.
+2. **A longer grant duration.** An expiry turn per grant rather than the
+   current permanent-or-this-turn pair. Several cards are blocked on it alone.
+3. **Optimisation (milestone 10), continued.** A card face is 7.0 ms to paint
    at collection scale, of which 4.6 ms is the illustration; the three
    full-canvas rim-light passes are the obvious next target. The battle scene
    itself has never been profiled.
-3. **Leader voice lines**, the last part of the original's presentation with no
+4. **Leader voice lines**, the last part of the original's presentation with no
    equivalent here.
 
 ## Environment notes
@@ -134,3 +137,8 @@ exercised it:
   a card face. It is a repeating tile with a random offset now.
 - Rules text longer than the frame was designed for spilled over the stat
   plates instead of staying in its box.
+- Princess Snow White's hand-written entry dropped the "Then remove all its
+  effects" clause, so the copy it summons kept the same Last Words and
+  resurrected itself forever. The AI soak found it as a game that never ended.
+- "Reduce damage to 0" and "Reduce damage from effects to 0" compiled to the
+  same keyword, so Athena's followers still died in a trade.

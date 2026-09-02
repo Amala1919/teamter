@@ -150,4 +150,4 @@ apply to a follower, to the leader, or to both.
 | Mulligan shuffle order | See **[R-10]** above — genuinely ambiguous in the sources. |
 | Buff expiry vs end-of-turn triggers | Triggers resolve first, then buffs expire (**[R-207]/⚠️**, unverified in the sources). |
 | Card text is modern wording | The card database mirrors the official Portal API as it stands today, so a small number of cards carry post-era rebalances and retroactively renamed keywords (`Overflow` for "if you have at least 7 play points", `Earth Rite` for "destroy an Earth Sigil"). Semantics are unchanged. |
-| 185 of 888 cards partly implemented | Their unparsed lines are listed by `npm run cards:report -- --lines`; they carry `implemented: false` and are excluded from generated decks. |
+| 181 of 888 cards partly implemented | Their unparsed lines are listed by `npm run cards:report -- --lines`; they carry `implemented: false` and are excluded from generated decks. |

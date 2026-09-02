@@ -58,7 +58,7 @@ game. The deck builder and collection cover all 825 collectible cards.
 ### Cards marked "Partial"
 
 The card database is complete, but not every card's printed text has an engine
-implementation yet (currently **70%** do). Cards that fall short are badged
+implementation yet (currently **80%** do). Cards that fall short are badged
 **Partial** in the collection and deck builder, and their card detail view
 lists exactly which lines have no behaviour. They are playable, but they do
 less than they say. Generated starter decks never include them.

@@ -17,7 +17,7 @@ verify, it is in the wrong place.
 
 ## Unit tests
 
-`tests/rules.test.ts` — 57 tests over the engine. They run against a small
+`tests/rules.test.ts` — 62 tests over the engine. They run against a small
 hand-written card set in `tests/helpers.ts` rather than the real card pool, so
 a rules test never breaks because a card was rebalanced upstream.
 
@@ -142,11 +142,11 @@ the seed for match `i` is `baseSeed + i * 7919`.
 ```
 $ npm run cards:report
 cards            888
-fully compiled   590
+fully compiled   597
 vanilla          74
 hand-written     36
-incomplete       185
-coverage         79.2%
+incomplete       181
+coverage         79.6%
 ```
 
 "Incomplete" cards have at least one printed line the compiler did not
@@ -188,5 +188,5 @@ keeps working when the copy or the interface language changes.
 - No unit tests for the renderer, HUD or audio. `tools/smoke.mjs` exercises
   them end to end, but only asserts that nothing throws.
 - No automated visual assertion — no screenshot diffing, no reference images.
-- The 185 partly-implemented cards are covered only by the soak test not
+- The 181 partly-implemented cards are covered only by the soak test not
   crashing on them, and by the fact that they declare what they do not do.

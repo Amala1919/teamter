@@ -596,3 +596,110 @@ describe('the win effect', () => {
     expect(g.state.phase).toBe('over');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Granted abilities and silencing
+// ---------------------------------------------------------------------------
+
+describe('granted abilities', () => {
+  it('fires on the follower they were given to', () => {
+    const g = newGame();
+    const target = place(g, 0, 't_vanilla');
+    const src = g.ent(place(g, 0, 't_big'));
+    g.runEffects(
+      [
+        {
+          k: 'grantAbility',
+          target: { scope: 'all', side: 'ally', kind: 'follower', filter: { notSelf: true } },
+          abilities: [{ on: 'lastWords', effects: [{ k: 'draw', amount: 1 }] }],
+        },
+      ],
+      { source: src, controller: 0, targets: [], ti: 0, option: 0, vars: {}, depth: 0 },
+    );
+    const before = g.player(0).hand.length;
+    g.destroyEntity(g.ent(target));
+    g.checkState();
+    expect(g.player(0).hand.length).toBe(before + 1);
+  });
+
+  it('expires at the end of the turn when granted for a turn', () => {
+    const g = newGame();
+    const target = place(g, 0, 't_vanilla');
+    const src = g.ent(place(g, 0, 't_big'));
+    g.runEffects(
+      [
+        {
+          k: 'grantAbility',
+          target: { scope: 'all', side: 'ally', kind: 'follower', filter: { notSelf: true } },
+          abilities: [{ on: 'lastWords', effects: [{ k: 'draw', amount: 1 }] }],
+          duration: 'turn',
+        },
+      ],
+      { source: src, controller: 0, targets: [], ti: 0, option: 0, vars: {}, depth: 0 },
+    );
+    g.endTurn();
+    g.endTurn();
+    const before = g.player(0).hand.length;
+    g.destroyEntity(g.ent(target));
+    g.checkState();
+    expect(g.player(0).hand.length).toBe(before);
+  });
+});
+
+describe('silencing', () => {
+  it('removes printed keywords and abilities but keeps stats', () => {
+    const g = newGame();
+    const uid = place(g, 0, 't_ward');
+    expect(g.stats(uid).keywords.has('ward')).toBe(true);
+    const atk = g.stats(uid).atk;
+
+    g.runEffects([{ k: 'silence', target: { scope: 'all', side: 'ally', kind: 'follower' } }], {
+      source: g.ent(uid),
+      controller: 0,
+      targets: [],
+      ti: 0,
+      option: 0,
+      vars: {},
+      depth: 0,
+    });
+
+    expect(g.stats(uid).keywords.has('ward')).toBe(false);
+    expect(g.stats(uid).atk).toBe(atk);
+  });
+
+  it('stops a Last Words from firing', () => {
+    const g = newGame();
+    const uid = place(g, 0, 't_lastwords');
+    g.runEffects([{ k: 'silence', target: { scope: 'all', side: 'ally', kind: 'follower' } }], {
+      source: g.ent(uid),
+      controller: 0,
+      targets: [],
+      ti: 0,
+      option: 0,
+      vars: {},
+      depth: 0,
+    });
+    const before = g.player(0).field.length;
+    g.destroyEntity(g.ent(uid));
+    g.checkState();
+    // The Last Words summon must not have happened.
+    expect(g.player(0).field.length).toBe(before - 1);
+  });
+});
+
+describe('"summon and then act on it"', () => {
+  it('binds the summoned follower as the context\'s other', () => {
+    const g = newGame();
+    const src = g.ent(place(g, 0, 't_big'));
+    g.runEffects(
+      [
+        { k: 'summon', defId: 't_vanilla' },
+        { k: 'buff', target: { scope: 'other' }, atk: 3, def: 0 },
+      ],
+      { source: src, controller: 0, targets: [], ti: 0, option: 0, vars: {}, depth: 0 },
+    );
+    const summoned = g.player(0).field.map((u) => g.ent(u)).find((e) => e.defId === 't_vanilla');
+    expect(summoned).toBeDefined();
+    expect(g.stats(summoned!.uid).atk).toBe(5);
+  });
+});

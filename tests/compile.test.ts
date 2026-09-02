@@ -232,6 +232,30 @@ describe('sentence forms the printed text keeps using', () => {
     expect(ability?.cond).toEqual({ k: 'subject', filter: { defId: 'fairy' } });
   });
 
+  it('hands a whole ability over for "the following effect"', () => {
+    // Medusa's Gaze: "Give an allied follower the following effect until the
+    // end of the turn: Follower Strike - Destroy the enemy follower."
+    const eff = flatten(abilityEffects('medusas_gaze')).find((e) => e.k === 'grantAbility');
+    expect(eff).toMatchObject({ duration: 'turn' });
+    if (eff?.k !== 'grantAbility') return;
+    expect(eff.abilities[0].on).toBe('strike');
+    expect(eff.abilities[0].effects[0]).toMatchObject({ k: 'destroy', target: { scope: 'other' } });
+  });
+
+  it('separates "reduce damage to 0" from the effect-damage version', () => {
+    // Athena stops combat damage too; Elf Girl Liza's line does not. Compiling
+    // them the same way would let Athena's followers die in a trade.
+    const grant = flatten(abilityEffects('athena')).find((e) => e.k === 'grant');
+    expect(grant).toMatchObject({ keywords: ['damageImmune'], duration: 'turn' });
+  });
+
+  it('refuses a duration the engine cannot honour', () => {
+    // "Until the end of your opponent's turn" outlives every duration the
+    // engine has; the card stays partial rather than getting a shorter effect
+    // than it prints.
+    expect(getCard('elf_girl_liza').implemented).toBe(false);
+  });
+
   it('compares the two leaders for "if their defense is higher than yours"', () => {
     const [eff] = abilityEffects('succubus');
     expect(eff.k).toBe('if');
@@ -278,6 +302,10 @@ describe('the compiled cards actually run', () => {
     'luxhorn_sarissa',
     'petal_fencer',
     'vania_vampire_princess',
+    'athena',
+    'medusas_gaze',
+    'furtive_fangs',
+    'curse_of_rebirth',
   ];
 
   for (const id of ids) {

@@ -289,8 +289,14 @@ export const OVERRIDES: Record<string, Override> = {
   //  its effects."
   princess_snow_white: (base) => ({
     abilities: replaceTrigger(base, 'lastWords', [
+      // "it" is the copy just summoned, which `summon` binds as the context's
+      // other — a second Snow White already in play must not be caught.
       { k: 'summon', defId: 'princess_snow_white' },
-      { k: 'evolveTarget', target: { scope: 'all', side: 'ally', kind: 'follower', filter: { defId: 'princess_snow_white' } } },
+      { k: 'evolveTarget', target: { scope: 'other' } },
+      // "Then remove all its effects." This is the clause that ends the card:
+      // without it the copy keeps the same Last Words and resurrects itself
+      // forever, which is a hung game rather than a strong card.
+      { k: 'silence', target: { scope: 'other' } },
     ]),
   }),
 

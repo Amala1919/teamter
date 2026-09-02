@@ -118,11 +118,18 @@ All defined in `src/engine/types.ts`.
 `toHand`, `searchToHand`, `toDeck`, `gainPP`, `gainMaxPP`, `gainEP`,
 `gainShadows`, `spendShadows`, `costMod`, `evolveTarget`, `countdown`,
 `spellboost`, `earthRite`, `necromancy`, `if`, `repeat`, `chooseOne`, `store`,
-`withTarget`, `freeze`, `untilFull`, `win`, `noop`.
+`withTarget`, `freeze`, `untilFull`, `win`, `grantAbility`, `silence`, `noop`.
 
 `withTarget` binds one entity for the effects inside it, which is how "X equals
 that follower's defense" can still be read after the follower has been
-destroyed. `win` ends the match outright, for Seraph.
+destroyed. `win` ends the match outright, for Seraph. `grantAbility` hands whole
+abilities to other cards; `silence` takes a card's printed abilities, keywords
+and auras away, which is what stops Princess Snow White resurrecting herself
+forever.
+
+`summon` binds what it summoned as the context's `other`, so "Summon a Pluto and
+give **it** +X/+Y" acts on the new follower and not on another copy already in
+play.
 
 **Selectors** describe *what* an effect acts on:
 
@@ -196,7 +203,7 @@ Card text refers back constantly, and each reference resolves differently:
 The third one matters: compiling it to `scope: 'other'` would have produced a
 Fanfare that destroys nothing while looking perfectly implemented.
 
-Current coverage: **79% of 888 cards** compile with no unparsed line. Check it
+Current coverage: **79.6% of 888 cards** compile with no unparsed line. Check it
 with `npm run cards:report -- --lines`.
 
 ## Adding a card by hand
