@@ -5,6 +5,11 @@ dist/
 .DS_Store
 screenshots/tmp/
 
-# Ad-hoc analysis scripts, written and thrown away while working on coverage.
+# Ad-hoc analysis scripts, written and thrown away while working on the card
+# compiler. Nothing in the project depends on them.
 /.*.ts
+/.*.mjs
+
+# Raw mirrors of the official card API. Re-fetchable in two curl commands (see
+# README.md); not ours to redistribute.
 .cache/
