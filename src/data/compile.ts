@@ -13,6 +13,7 @@
  */
 import type {
   BuffDuration,
+  LeaderFlag,
   Ability,
   Amount,
   AuraDef,
@@ -385,6 +386,19 @@ function durationOfClause(clause: string): BuffDuration | null {
   // turn ending, and the printed cards use the two interchangeably.
   if (/^the end of (?:your |the )?opponent['’]s turn$/.test(u)) return 'opponentTurn';
   if (/^the start of your next turn$/.test(u)) return 'opponentTurn';
+  return null;
+}
+
+/**
+ * A restriction the engine enforces on a leader, or null. Each of these is
+ * checked at exactly one place in the engine, so the phrasing is matched
+ * exactly rather than approximated — a near miss leaves the card partial.
+ */
+function leaderFlag(phrase: string): LeaderFlag | null {
+  const p = tidy(phrase).toLowerCase().replace(/\.$/, '');
+  if (/^followers can'?t be played$/.test(p)) return 'cantPlayFollowers';
+  if (/^you will not gain a play point at the start of your turn$/.test(p)) return 'noPlayPointGain';
+  if (/^allied fanfare effects will not activate$/.test(p)) return 'noFanfare';
   return null;
 }
 
@@ -764,6 +778,55 @@ const RULES_TABLE: Rule[] = [
   },
   {
     /**
+     * "Give your leader the following effect: Followers can't be played."
+     *
+     * A leader is not an entity, so these cannot go through `grantAbility`.
+     * The clause after the dash is one or more sentences, each either a named
+     * restriction the engine knows how to enforce or an ability hung on the
+     * leader. Anything else fails the whole line rather than dropping a part
+     * of it.
+     */
+    re: /^give (your|the enemy|the opponent's) leader the following effects?( until [^-:—]+?)?\s*[-:—]\s*(.+)$/i,
+    build: (m, ctx) => {
+      const until = (m[2] ?? '').trim();
+      const duration = until ? durationOfClause(until) : 'permanent';
+      if (duration === null) return null;
+
+      const flags: LeaderFlag[] = [];
+      const abilities: Ability[] = [];
+      // "At the end of *this* turn" fires once; "at the end of *your* turn"
+      // fires every turn. Left permanent, the one-shot version would discard
+      // the hand again on every turn for the rest of the match.
+      let oneShot = false;
+      for (const raw of m[3].split(/(?<=\.)\s+/)) {
+        const part = tidy(raw).replace(/\.$/, '');
+        if (!part) continue;
+        const flag = leaderFlag(part);
+        if (flag) {
+          flags.push(flag);
+          continue;
+        }
+        const ab = compileGrantedAbility(part, ctx);
+        if (!ab) return null;
+        if (/^at the (?:end|start) of this turn,/i.test(part)) oneShot = true;
+        abilities.push(...ab);
+      }
+      if (flags.length === 0 && abilities.length === 0) return null;
+      // A one-shot cannot be mixed with anything meant to outlast the turn.
+      if (oneShot && (flags.length > 0 || duration === 'opponentTurn')) return null;
+
+      const eff: Effect = {
+        k: 'grantLeader',
+        side: /your/i.test(m[1]) ? 'ally' : 'enemy',
+        duration: oneShot ? 'turn' : duration,
+      };
+      if (flags.length > 0) eff.flags = flags;
+      if (abilities.length > 0) eff.abilities = abilities;
+      return [eff];
+    },
+  },
+  {
+    /**
      * "Give all other allied followers the following effect until the end of
      * the turn - Reduce damage to 0."
      *
@@ -956,6 +1019,18 @@ const RULES_TABLE: Rule[] = [
   {
     re: /^randomly discard (a|\d+) cards?(?: (?:in|from) your hand)?$/i,
     build: (m) => [{ k: 'discard', amount: num(m[1], 1), random: true }],
+  },
+  {
+    // "Discard all spells in your hand." The count is the hand size, which the
+    // type filter then narrows — there is never more of a type than that.
+    re: /^discard all (followers?|spells?|amulets?) (?:in|from) your hand$/i,
+    build: (m) => [
+      {
+        k: 'discard',
+        amount: { k: 'handSize' },
+        type: m[1].toLowerCase().replace(/s$/, '') as 'follower' | 'spell' | 'amulet',
+      },
+    ],
   },
   {
     re: /^discard (a card|\d+ cards?|your hand)$/i,
@@ -1250,6 +1325,13 @@ function mergeSelectClauses(sentences: string[], ctx: CompileCtx): string[] {
       out.push(`${s} ${next}`);
       i++;
       continue;
+    }
+    // "Give your leader the following effects - <A>. <B>." lists the granted
+    // effects as separate sentences. Splitting there orphans everything after
+    // the first, so the clause swallows the rest of the line.
+    if (/\bthe following effects?\s*[-:—]/i.test(s)) {
+      out.push(sentences.slice(i).join(' '));
+      break;
     }
     out.push(s);
   }
@@ -1596,8 +1678,10 @@ function matchPrefix(line: string, ctx?: CompileCtx): PrefixMatch | null {
   }
 
   const timed: [RegExp, TriggerKind[]][] = [
-    [/^at the end of your turn,\s*/i, ['turnEnd']],
-    [/^at the start of your turn,\s*/i, ['turnStart']],
+    // Some cards spell Fanfare out instead of naming it.
+    [/^when this (?:follower|card|amulet) comes into play,\s*/i, ['fanfare']],
+    [/^at the end of (?:your|this) turn,\s*/i, ['turnEnd']],
+    [/^at the start of (?:your|this) turn,\s*/i, ['turnStart']],
     [/^at the end of (?:the opponent's|your opponent's) turn,\s*/i, ['enemyTurnEnd']],
     [/^whenever (?:an|another) allied follower comes into play,\s*/i, ['onAllyFollowerPlayed']],
     [/^whenever (?:another allied follower|an allied follower) is destroyed,\s*/i, ['onAllyFollowerDestroyed']],

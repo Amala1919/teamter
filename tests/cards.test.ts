@@ -141,3 +141,67 @@ describe('auras whose condition reads the board', () => {
     expect(g.stats(bahamut!).keywords.has('cantAttackLeader')).toBe(true);
   });
 });
+
+describe('effects hung on a leader', () => {
+  function game(): Game {
+    return new Game([buildStarterDeck('shadow', 3), buildStarterDeck('sword', 9)], {
+      seed: 31,
+      first: 0,
+      skipMulligan: true,
+    });
+  }
+
+  it('stops followers being played and still allows spells', () => {
+    // Queen Medb: "give your leader the following effect: Followers can't be
+    // played." It is her drawback, so it has to actually bite.
+    const g = game();
+    const me = g.player(0);
+    me.pp = RULES.MAX_PP;
+    me.maxPp = RULES.MAX_PP;
+
+    const follower = g.addToHand(0, 'goblin')!;
+    expect(g.canPlay(follower)).toBe(true);
+
+    g.player(0).leaderEffects.push({ flags: ['cantPlayFollowers'], until: null });
+    expect(g.canPlay(follower)).toBe(false);
+    expect(g.leaderHas(0, 'cantPlayFollowers')).toBe(true);
+    // The opponent is unaffected.
+    expect(g.leaderHas(1, 'cantPlayFollowers')).toBe(false);
+  });
+
+  it('withholds the play point orb without touching the refill', () => {
+    // Carabosse: "You will not gain a play point at the start of your turn."
+    const g = game();
+    g.player(0).leaderEffects.push({ flags: ['noPlayPointGain'], until: null });
+    const before = g.player(0).maxPp;
+    for (let i = 0; i < 4; i++) g.endTurn(); // two more turns each
+    expect(g.player(0).maxPp).toBe(before);
+    expect(g.player(0).pp).toBe(before);
+    // The opponent still gains theirs.
+    expect(g.player(1).maxPp).toBeGreaterThan(before);
+  });
+
+  it('fires a leader-hung trigger and expires it on the right turn', () => {
+    // Mysterian Grimoire hangs a one-shot "at the end of this turn" on the
+    // leader; it must fire once and then be gone.
+    const g = game();
+    let fired = 0;
+    g.player(0).leaderEffects.push({
+      abilities: [{ on: 'turnEnd', effects: [{ k: 'draw', amount: 1 }] }],
+      until: g.state.turn,
+    });
+    const handBefore = g.player(0).hand.length;
+    g.endTurn();
+    fired = g.player(0).hand.length - handBefore;
+    expect(fired).toBe(1);
+    expect(g.player(0).leaderEffects.length).toBe(0);
+  });
+
+  it('keeps a permanent leader effect across turns', () => {
+    const g = game();
+    g.player(0).leaderEffects.push({ flags: ['noFanfare'], until: null });
+    g.endTurn();
+    g.endTurn();
+    expect(g.leaderHas(0, 'noFanfare')).toBe(true);
+  });
+});

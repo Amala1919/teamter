@@ -297,6 +297,13 @@ export type Effect =
   | { k: 'grant'; target: Selector; keywords: Keyword[]; duration?: BuffDuration }
   /** Hands whole abilities to other cards, rather than keywords or stats. */
   | { k: 'grantAbility'; target: Selector; abilities: Ability[]; duration?: BuffDuration }
+  | {
+      k: 'grantLeader';
+      side: 'ally' | 'enemy';
+      flags?: LeaderFlag[];
+      abilities?: Ability[];
+      duration?: BuffDuration;
+    }
   | { k: 'revoke'; target: Selector; keywords: Keyword[] }
   /** Strips a card of everything it does: printed abilities, keywords, auras. */
   | { k: 'silence'; target: Selector }
@@ -315,6 +322,8 @@ export type Effect =
        * random, which is not the same as a uniform random discard.
        */
       pick?: 'lowestCost' | 'highestCost';
+      /** Restricts the discard to one card type — "discard all spells". */
+      type?: CardType;
     }
   | { k: 'toHand'; defId: string; count?: Amount }
   /** Search the deck for a matching card and put it in hand. */
@@ -619,6 +628,28 @@ export interface PlayerState {
   cardsPlayedThisTurn: number;
   hasEvolvedThisTurn: boolean;
   fatigue: number;
+  /**
+   * Effects hung on the leader rather than on a follower — Queen Medb's
+   * "Followers can't be played", Carabosse's "You will not gain a play point at
+   * the start of your turn". A leader is not an entity, so these live on the
+   * player and expire the same way a follower's temporary grants do.
+   */
+  leaderEffects: LeaderEffect[];
+}
+
+/**
+ * A restriction a leader effect can impose. Each is checked at exactly one
+ * place in the engine; anything a card asks for that is not here fails to
+ * compile rather than being approximated.
+ */
+export type LeaderFlag = 'cantPlayFollowers' | 'noPlayPointGain' | 'noFanfare';
+
+export interface LeaderEffect {
+  flags?: LeaderFlag[];
+  /** Triggered abilities that fire for this player, sourced from the leader. */
+  abilities?: Ability[];
+  /** Lapses when `GameState.turn` passes this index; null never lapses. */
+  until: number | null;
 }
 
 export type Phase = 'mulligan' | 'start' | 'main' | 'end' | 'over';

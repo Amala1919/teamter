@@ -12,6 +12,7 @@ import type {
   GameEvent,
   GameState,
   Keyword,
+  LeaderFlag,
   PlayerId,
   PlayerState,
   Selector,
@@ -150,6 +151,7 @@ export class Game {
       cardsPlayedThisTurn: 0,
       hasEvolvedThisTurn: false,
       fatigue: 0,
+      leaderEffects: [],
     };
   }
 
@@ -302,6 +304,11 @@ export class Game {
       cap = cap === null ? a.aura.damageCap : Math.min(cap, a.aura.damageCap);
     }
     return cap;
+  }
+
+  /** Whether a leader effect currently imposes this restriction on `p`. */
+  leaderHas(p: PlayerId, flag: LeaderFlag): boolean {
+    return this.player(p).leaderEffects.some((l) => (l.flags ?? []).includes(flag));
   }
 
   /**
@@ -470,8 +477,11 @@ export class Game {
       e.canAttackFollowersEarly = false;
     }
 
-    // 1. Play points: gain an orb (to a cap of 10) and refill.
-    p.maxPp = Math.min(RULES.MAX_PP, p.maxPp + 1);
+    // 1. Play points: gain an orb (to a cap of 10) and refill. Carabosse's
+    // leader effect withholds the orb; the refill still happens.
+    if (!this.leaderHas(s.active, 'noPlayPointGain')) {
+      p.maxPp = Math.min(RULES.MAX_PP, p.maxPp + 1);
+    }
     p.pp = p.maxPp;
     this.emit({ t: 'turnStart', player: s.active, turn: s.turn });
     this.emit({ t: 'ppChange', player: s.active, pp: p.pp, maxPp: p.maxPp });
@@ -545,6 +555,10 @@ export class Game {
         const e = this.state.entities.get(uid);
         if (!e) continue;
         if (e.temps.length > 0) e.temps = e.temps.filter((t) => t.until > s.turn);
+      }
+      const ps = this.player(side);
+      if (ps.leaderEffects.length > 0) {
+        ps.leaderEffects = ps.leaderEffects.filter((l) => l.until === null || l.until > s.turn);
       }
     }
 
@@ -647,6 +661,7 @@ export class Game {
     if (this.costOf(uid, enhance) > ps.pp) return false;
     const d = this.def(e);
     if (d.type !== 'spell' && ps.field.length >= RULES.BOARD_LIMIT) return false;
+    if (d.type === 'follower' && this.leaderHas(player, 'cantPlayFollowers')) return false;
     // A card that must choose a target is unplayable with no legal target.
     const mode = enhance !== undefined ? (d.enhance ?? []).find((m) => m.cost === enhance) : undefined;
     const spec = mode ? mode.targeting : d.targeting;
@@ -699,7 +714,7 @@ export class Game {
       // Spellboost accumulates on cards in hand each time a spell is played.
       this.onSpellPlayed(e.owner);
       if (enhanceMode) this.runEffects(enhanceMode.effects, ctx);
-      else this.runAbilities(e, 'fanfare', ctx);
+      else if (!this.leaderHas(e.owner, 'noFanfare')) this.runAbilities(e, 'fanfare', ctx);
       // Only move to the cemetery if an effect has not already relocated it.
       if (e.zone === 'limbo') {
         e.zone = 'cemetery';
@@ -714,7 +729,7 @@ export class Game {
         this.fireTriggers('onAllyAmuletPlayed', e.owner, { exclude: e.uid, subject: e });
       }
       if (enhanceMode) this.runEffects(enhanceMode.effects, ctx);
-      else this.runAbilities(e, 'fanfare', ctx);
+      else if (!this.leaderHas(e.owner, 'noFanfare')) this.runAbilities(e, 'fanfare', ctx);
       this.fireEntityTriggers(e, 'onSummon');
       // A 0-countdown amulet resolves and leaves immediately.
       if (d.type === 'amulet' && d.countdown !== undefined && e.countdown === 0) {
@@ -1156,6 +1171,44 @@ export class Game {
       // arrived, say — which card text refers to as "it".
       this.fireEntityTriggers(e, kind, opts.subject ?? null, opts.vars);
     }
+    this.fireLeaderTriggers(kind, p, opts.vars);
+  }
+
+  /**
+   * Abilities hung on a leader rather than a follower — Carabosse's "At the end
+   * of your turn, draw a card and deal 1 damage to the enemy leader". They have
+   * no source entity, so effects that read one (`scope: 'self'`) do not apply;
+   * the cards that grant them never use one.
+   */
+  private fireLeaderTriggers(
+    kind: TriggerKind,
+    p: PlayerId,
+    vars?: Record<string, number>,
+  ): void {
+    const effects = this.player(p).leaderEffects;
+    if (effects.length === 0) return;
+    const abilities = effects.flatMap((l) => (l.abilities ?? []).filter((a) => a.on === kind));
+    if (abilities.length === 0) return;
+    if (this.triggerDepth > 24) return;
+    const ctx: ResolveCtx = {
+      source: null,
+      controller: p,
+      targets: [],
+      ti: 0,
+      option: 0,
+      vars: vars ?? {},
+      depth: 0,
+    };
+    this.triggerDepth++;
+    try {
+      for (const ab of abilities) {
+        if (ab.cond && !this.testCondition(ab.cond, ctx)) continue;
+        this.runEffects(ab.effects, ctx);
+      }
+    } finally {
+      this.triggerDepth--;
+    }
+    if (this.triggerDepth === 0) this.resolveDeaths();
   }
 
   private runAbilities(e: Entity, kind: TriggerKind, ctx: ResolveCtx): void {
@@ -1337,6 +1390,17 @@ export class Game {
         return;
       }
 
+      case 'grantLeader': {
+        const side = eff.side === 'enemy' ? other(ctx.controller) : ctx.controller;
+        this.player(side).leaderEffects.push({
+          flags: eff.flags ? [...eff.flags] : undefined,
+          abilities: eff.abilities ? [...eff.abilities] : undefined,
+          until: this.expiryFor(eff.duration),
+        });
+        this.emit({ t: 'log', text: `${this.def(ctx.source ?? this.ent(0)).name} altered a leader` });
+        return;
+      }
+
       case 'silence': {
         for (const t of this.resolveSelector(eff.target, ctx).filter(isEntity)) {
           t.silenced = true;
@@ -1423,16 +1487,22 @@ export class Game {
         const who = eff.side === 'enemy' ? other(ctx.controller) : ctx.controller;
         const ps = this.player(who);
         let discarded = 0;
-        for (let i = 0; i < n && ps.hand.length > 0; i++) {
+        // "Discard all spells in your hand" only ever reaches the spells.
+        const eligible = (): number[] =>
+          eff.type ? ps.hand.filter((u) => this.def(this.ent(u)).type === eff.type) : ps.hand;
+        for (let i = 0; i < n && eligible().length > 0; i++) {
+          const pick = eligible();
           let idx: number;
           if (eff.pick) {
             // Narrow to the cheapest (or dearest) cards, then pick among them.
-            const costs = ps.hand.map((u) => this.def(this.ent(u)).cost);
+            const costs = pick.map((u) => this.def(this.ent(u)).cost);
             const want = eff.pick === 'lowestCost' ? Math.min(...costs) : Math.max(...costs);
-            const pool = ps.hand.filter((_, j) => costs[j] === want);
+            const pool = pick.filter((_, j) => costs[j] === want);
             idx = ps.hand.indexOf(this.rng.pick(pool) ?? pool[0]);
           } else {
-            idx = eff.random ? this.rng.int(ps.hand.length) : ps.hand.length - 1;
+            idx = ps.hand.indexOf(
+              eff.random ? (this.rng.pick(pick) ?? pick[0]) : pick[pick.length - 1],
+            );
           }
           const uid = ps.hand.splice(idx, 1)[0];
           const e = this.ent(uid);

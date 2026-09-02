@@ -103,6 +103,25 @@ The card database carries both languages already, so a card's name and rules
 text are never translated by this project — they are read from the field the
 current language names.
 
+### Leaders are not entities
+
+Everything on the board is an `Entity` with a uid, and effects address entities
+through a `Selector`. A leader is not one — it is a few fields on `PlayerState`
+— which is why leaders are reached through sentinel uids (`LEADER_UID`) for
+damage and healing, and why "give your leader the following effect" needs its
+own effect kind rather than reusing `grantAbility`.
+
+`PlayerState.leaderEffects` holds them. Each entry carries flags, abilities, or
+both, plus the turn index at which it lapses:
+
+- **Flags** are named restrictions, each checked at exactly one place in the
+  engine (`cantPlayFollowers` in `canPlay`, `noPlayPointGain` in `beginTurn`,
+  `noFanfare` where Fanfare fires). Anything a card asks for that is not in the
+  list fails to compile rather than being approximated.
+- **Abilities** fire alongside every entity's, from `fireLeaderTriggers`, with
+  no source entity — so `scope: 'self'` does not resolve, and the cards that
+  grant them never use it.
+
 ### Illustrations are drawn, not composed
 
 `src/art` has three layers under `illustration.ts`, and they are separate on

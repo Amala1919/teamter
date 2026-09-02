@@ -42,8 +42,9 @@ Rule references like **[R-12]** point at the research document.
    destroyed and its Last Words resolve.
 6. **Draw** — last, per **[R-18]**, so a Last Words draw resolves before it.
 
-End of turn runs `turnEnd` abilities, then expires Ambush and every temporary
-grant whose own expiry has come, then passes. A grant carries its expiry with
+End of turn runs `turnEnd` abilities — including any hung on the leader itself
+— then expires Ambush, every temporary grant whose own expiry has come, and any
+leader effect whose expiry has come, then passes. A grant carries its expiry with
 it rather than sharing one, so "until the end of your opponent's turn" survives
 this turn's sweep and lapses on the next.
 
