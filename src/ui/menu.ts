@@ -23,6 +23,7 @@ export interface MenuCallbacks {
   onPlay: (deck: SavedDeck, opponentClass: ClassId) => void;
   onEditDeck: (deck: SavedDeck) => void;
   onCollection: () => void;
+  onOpenPack: () => void;
 }
 
 /** A small class emblem panel, painted with the illustration generator. */
@@ -65,6 +66,11 @@ export class MenuScreen {
       el('div', { class: 'sv-title' }, 'Teamter'),
       el('div', { class: 'sv-subtitle' }, 'Standard → Wonderland Dreams'),
       el('div', { class: 'sv-spacer' }),
+      (() => {
+        const b = el('button', { class: 'sv-btn' }, 'Open a pack');
+        b.addEventListener('click', () => this.cb.onOpenPack());
+        return b;
+      })(),
       (() => {
         const b = el('button', { class: 'sv-btn' }, 'Collection');
         b.addEventListener('click', () => this.cb.onCollection());

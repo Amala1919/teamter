@@ -12,6 +12,7 @@ import { Audio } from './audio/audio';
 import { CollectionScreen } from './ui/collection';
 import { DeckBuilderScreen } from './ui/deckbuilder';
 import { MenuScreen } from './ui/menu';
+import { PackOpenOverlay } from './ui/packopen';
 import { ensureScreenStyles } from './ui/style';
 import { ensureStarterDecks, listDecks, toDeckList, type SavedDeck } from './ui/decks';
 
@@ -39,7 +40,10 @@ export class App {
     // Deep links, used by the screenshot tooling and for quick manual testing.
     const screen = new URLSearchParams(location.search).get('screen');
     if (screen === 'collection') this.showCollection();
-    else if (screen === 'deck') {
+    else if (screen === 'pack') {
+      this.showMenu();
+      this.openPack();
+    } else if (screen === 'deck') {
       const first = listDecks()[0];
       if (first) this.showDeckBuilder(first);
       else this.showMenu();
@@ -61,8 +65,21 @@ export class App {
         onPlay: (deck, opponent) => this.startBattle(deck, opponent),
         onEditDeck: (deck) => this.showDeckBuilder(deck),
         onCollection: () => this.showCollection(),
+        onOpenPack: () => this.openPack(),
       }),
     );
+  }
+
+  /** The pack ceremony sits over whatever screen is showing. */
+  openPack(): void {
+    new PackOpenOverlay({
+      container: this.container,
+      set: 'all',
+      onClose: () => {},
+      onSound: (cue) => {
+        this.audio.play(cue === 'legendary' ? 'evolve' : cue === 'open' ? 'spell' : 'draw');
+      },
+    });
   }
 
   showCollection(): void {

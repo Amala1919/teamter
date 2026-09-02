@@ -16,8 +16,8 @@ Last updated: after the battle screen, rules corrections and documentation pass.
 | 4 — Playable battle flow | **Done,** including the mulligan. |
 | 5 — UI reproduction and feel | **Done.** Battle HUD, menu, mulligan, deck builder, collection and card detail. |
 | 6 — All cards through Wonderland Dreams | **Partial.** All cards are present and playable; 66% have every printed line implemented. |
-| 7 — Evolution, effects, particles, audio | **Done.** Premium card treatment is baked rather than live. |
 | 8 — Deck builder and collection | **Done.** Decks persist to localStorage and are validated live. |
+| 7 — Evolution, effects, particles, audio | **Done.** Bloom, particles, camera shake, synthesised audio. |
 | 9 — Visual comparison and QA | **Partial.** Iterated by screenshot; no side-by-side against real captures — official screenshots are unreachable from this environment. |
 | 10 — Optimisation and final polish | **Not started.** |
 
@@ -53,17 +53,15 @@ remaining clusters:
 
 ### Missing screens
 
-Pack opening is the only screen from the original that does not exist. There is
-also no result/reward flow beyond the victory and defeat overlay.
+Every screen from the original now has an equivalent. There is no result or
+reward flow beyond the victory/defeat overlay, and no progression economy —
+the pack ceremony is a card-viewing ritual rather than a reward, since the
+whole collection is available from the start.
 
 ### Other
 
 - No turn timer.
-- No bloom or post-processing; glows are additive geometry.
 - No leader animations or voice lines.
-- Enhance is implemented in the engine and compiled from card text, but the
-  battle UI has no way to *choose* an Enhance level — `Battle` never passes
-  `enhance`.
 - `Effects.lunge` uses `setTimeout`, which does not respect a paused or
   fast-forwarded game.
 
@@ -73,10 +71,10 @@ also no result/reward flow beyond the victory and defeat overlay.
    `grantEffect` (a follower granting an ability to others) and a
    `duration: 'nextTurn'` to the buff system first — between them they unlock
    the two largest clusters.
-2. **Enhance in the UI.** The engine supports it; the player cannot reach it.
-3. **Event-order tests.** Nothing currently asserts the `GameEvent` sequence,
+2. **Event-order tests.** Nothing currently asserts the `GameEvent` sequence,
    only its effect on state.
-4. **Pack opening.** The one screen from the original with no equivalent here.
+3. **Leader animations and voice lines.** The one part of the original's
+   presentation with no equivalent here.
 
 ## Environment notes
 
