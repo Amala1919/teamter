@@ -11,7 +11,7 @@ card inspector, the compiler-coverage push and the leader animations.
 | Milestone | Status |
 |---|---|
 | 0 — Research and specification | **Done.** `docs/research/RULES_RESEARCH.md` (909 lines, sourced, with uncertainty flagged) and `docs/research/VISUAL_RESEARCH.md` (1176 lines). |
-| 1 — Rules engine, deterministic simulation | **Done.** 192 unit tests; 400-game AI-vs-AI soak with 0 failures. |
+| 1 — Rules engine, deterministic simulation | **Done.** 196 unit tests; 400-game AI-vs-AI soak with 0 failures. |
 | 2 — Card data and the Standard set | **Done.** All 888 cards (825 collectible + 63 tokens) from Basic through Wonderland Dreams, from the official card database, in both languages. |
 | 3 — Three.js battle screen and card renderer | **Done.** |
 | 4 — Playable battle flow | **Done,** including the mulligan. |
@@ -101,10 +101,16 @@ Two constraints shaped the project and will shape anyone continuing it:
   official Shadowverse host were not. Illustrations are therefore drawn by this
   project — original cel-shaded characters and creatures, with the
   copyright-free Game Icons collection covering only spells, amulets and
-  objects (see `ASSET_LICENSES.md`); the renderer is built to prefer official
-  art if it is ever supplied.
+  objects (see `ASSET_LICENSES.md`). The renderer prefers a supplied image over
+  its own drawing wherever one exists.
 - **This project is personal-use only.** Do not distribute, publish, host
   publicly or package it.
+- **Copyright-free artwork is no more reachable than official artwork.** Every
+  image host answers 403 to CONNECT (verified against Wikimedia Commons,
+  openclipart, Pixabay, Unsplash, OpenGameArt, Kenney, publicdomainvectors).
+  npm is the one open channel and carries no fantasy character illustrations.
+  Anyone continuing this can still supply images by hand: drop them into
+  `public/assets/cards/` and run `npm run art:scan`.
 
 ## Bugs fixed along the way
 

@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "cards:build": "node tools/build-cards.mjs",
     "cards:report": "vite-node tools/report-coverage.ts",
-    "sim": "vite-node tools/simulate.ts"
+    "sim": "vite-node tools/simulate.ts",
+    "art:scan": "node tools/scan-cardart.mjs"
   },
   "dependencies": {
     "@fontsource/cinzel": "^5.3.0",

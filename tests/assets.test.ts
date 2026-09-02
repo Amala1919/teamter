@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import art from '../src/data/generated/cardart.json';
 import cards from '../src/data/generated/cards.json';
+import suppliedManifest from '../src/data/generated/suppliedart.json';
 import { LANG, STRING_KEYS, t } from '../src/i18n';
 
 const DATA = art as unknown as {
@@ -75,5 +76,43 @@ describe('interface strings', () => {
   it('substitutes every placeholder it is given', () => {
     expect(t('hud.turnLine', { n: 4, who: 'x' })).not.toContain('{');
     expect(t('deck.addMore', { n: 3 })).not.toContain('{');
+  });
+});
+
+describe('user-supplied card images', () => {
+  const supplied = suppliedManifest as {
+    dir: string;
+    map: Record<string, string>;
+    credits: Record<string, { source?: string; author?: string; url?: string; license?: string }>;
+  };
+  const ids = new Set((cards as { id: string }[]).map((c) => c.id));
+
+  it('serves images from a path the dev server and the build both expose', () => {
+    expect(supplied.dir).toBe('/assets/cards/');
+  });
+
+  it('only maps ids that are real cards', () => {
+    // A filename typo is otherwise invisible: the card keeps its generated
+    // illustration and nothing reports why.
+    for (const id of Object.keys(supplied.map)) {
+      expect(ids.has(id), `${id} is not a card id`).toBe(true);
+    }
+  });
+
+  it('records a source and licence for every supplied image', () => {
+    // ASSET_LICENSES.md requires provenance for third-party artwork, and this
+    // is the only place it can be enforced.
+    for (const id of Object.keys(supplied.map)) {
+      const credit = supplied.credits[id];
+      expect(credit, `${id} has no entry in public/assets/cards/credits.json`).toBeDefined();
+      expect(credit.license, `${id} has no licence recorded`).toBeTruthy();
+      expect(credit.source ?? credit.url, `${id} has no source recorded`).toBeTruthy();
+    }
+  });
+
+  it('credits nothing it does not actually use', () => {
+    for (const id of Object.keys(supplied.credits)) {
+      expect(supplied.map[id], `${id} is credited but has no image`).toBeDefined();
+    }
   });
 });

@@ -76,6 +76,7 @@ less than they say. Generated starter decks never include them.
 | `npm run typecheck` | `tsc --noEmit` |
 | `node tools/smoke.mjs` | End-to-end browser test (needs `npm run dev` running) |
 | `node tools/shoot.mjs <path> <out.png>` | Screenshot a page for visual review |
+| `npm run art:scan` | Re-reads `public/assets/cards/` after you add or remove card images |
 
 ### URL parameters
 
@@ -156,8 +157,16 @@ curated pool for its class and type — and classifies it:
 horizon, architecture and atmosphere. The result is deterministic per card, so
 art never shifts between sessions. Full attribution is in `ASSET_LICENSES.md`.
 
-The renderer is nonetheless built to prefer official art if it is ever
-supplied: drop images into `public/assets/official/` and pass them through
-`CardFaceOptions.officialArt`. The card-name renderer draws onto the frame's
-name band the same way either way, so a supplied image and a generated one look
-like the same product.
+**You can supply your own images.** Drop a file named after a card id into
+`public/assets/cards/` — `goblin.png` for the card `goblin` — and run
+`npm run art:scan`. That card then uses your image, cover-fitted into the art
+window with the frame and name band drawn over it exactly as they are over
+generated art, so a supplied card and a generated one look like the same
+product. `public/assets/cards/README.md` covers filenames, formats and the
+licence record every image needs.
+
+Free artwork cannot be fetched from this environment either: every image host
+is blocked by the same network policy, and the npm registry — the one reachable
+source, and where Game Icons came from — carries icons, emoji and small CC0
+pixel-art packs, but no corpus of fantasy character illustrations. Hence the
+drawn figures above, and the drop-in folder for anything you hold yourself.

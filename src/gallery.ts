@@ -13,6 +13,7 @@ import '@fontsource/noto-sans-jp/japanese-700.css';
 import '@fontsource/noto-serif-jp/japanese-700.css';
 import { loadCards, builtCards } from './data/index';
 import { cardFaceCanvas } from './art/cardface';
+import { loadAllSuppliedArt } from './art/suppliedart';
 import { UI } from './art/theme';
 import type { CardDef } from './engine/types';
 
@@ -46,7 +47,9 @@ app.style.cssText =
   'display:flex;flex-wrap:wrap;gap:22px;padding:26px;justify-content:center;align-items:flex-start;';
 
 async function render(): Promise<void> {
-  await document.fonts.ready;
+  // Card faces paint synchronously, so both the fonts and any user-supplied
+  // images have to be in hand before the first one is drawn.
+  await Promise.all([document.fonts.ready, loadAllSuppliedArt()]);
   for (const card of cards) {
     const wrap = document.createElement('div');
     wrap.style.cssText = 'position:relative;filter:drop-shadow(0 12px 24px rgba(0,0,0,.7));';

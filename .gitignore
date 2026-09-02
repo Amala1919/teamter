@@ -13,3 +13,8 @@ screenshots/tmp/
 # Raw mirrors of the official card API. Re-fetchable in two curl commands (see
 # README.md); not ours to redistribute.
 .cache/
+
+# Card images supplied by the user, and their licence record. This repository
+# ships no third-party artwork; see public/assets/cards/README.md.
+public/assets/cards/*
+!public/assets/cards/README.md

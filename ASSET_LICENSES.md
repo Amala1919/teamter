@@ -35,10 +35,27 @@ scene. The split, over the 904 cards that carry key art:
 | Creature | 226 | `src/art/creature.ts` — original, no third-party content |
 | Emblem | 214 | A Game Icons silhouette (below), lit and modelled |
 
-The renderer is nonetheless built to prefer official art if it is ever
-supplied: drop images into `public/assets/official/` keyed by card id and pass
-them through `CardFaceOptions.officialArt`, and the card-name renderer will
-draw the name onto the frame's name band exactly as it does over generated art.
+### Supplying images yourself
+
+The renderer prefers a supplied image over its own drawing. Drop a file named
+after a card id into `public/assets/cards/` (`goblin.png` supplies the card
+`goblin`), run `npm run art:scan`, and that card uses it — cover-fitted into
+the art window with the frame and name band drawn over it exactly as they are
+over generated art. `public/assets/cards/README.md` has the details.
+
+Copyright-free artwork cannot be fetched here either — every image host is
+blocked by the same policy, verified as 403 CONNECT denials against Wikimedia
+Commons, openclipart, Pixabay, Unsplash, OpenGameArt, Kenney and
+publicdomainvectors. The npm registry is reachable, which is how Game Icons got
+in, but it carries no corpus of fantasy character illustrations: what exists
+freely is icons, emoji, flat corporate vector people (unDraw, MIT) and small
+CC0 pixel/low-poly game packs, none of which match this card pool.
+
+**Images added this way are not part of this repository.** `public/assets/cards/`
+is gitignored apart from its README, and whoever adds an image is responsible
+for its licence. `credits.json` in that folder records source, author, URL and
+licence per image; `npm run art:scan` reports any image missing an entry, and
+`tests/assets.test.ts` fails if one is mapped without a recorded licence.
 
 ## Third-party artwork — Game Icons
 
@@ -70,6 +87,7 @@ All authored by this project, no third-party content:
 
 | Asset | Where | How |
 |---|---|---|
+| Supplied-image pipeline | `src/art/suppliedart.ts`, `tools/scan-cardart.mjs` | Loads whatever the user drops into `public/assets/cards/`. Ships no images. |
 | Card illustration scenes | `src/art/illustration.ts` | Seeded procedural key art: graded sky, ridge lines, background architecture, contact shadow, rim light, foreground occlusion, atmosphere and grain. Deterministic per card via `artSeed`. |
 | Character illustrations (464 cards) | `src/art/portrait.ts` | An original cel-shaded anime figure per card: face, eyes, brows, hair (cap, crown gloss, fringe locks, side locks, back mass, tails), body, costume by archetype, collar, pauldrons, headgear, wings and a weapon held in a drawn fist. Rolled deterministically from the card's seed, class and cost. |
 | Creature illustrations (226 cards) | `src/art/creature.ts` | Original cel-shaded dragons, wolves, birds, serpents, skeletons, ghosts, golems, slimes, insects, demons and imps. |

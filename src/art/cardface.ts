@@ -10,6 +10,7 @@
 import type { CardDef } from '../engine/types';
 import { KEYWORD_LABEL, KEYWORD_LABEL_JA } from '../engine/types';
 import { drawIllustration } from './illustration';
+import { onSuppliedArt, suppliedArtFor } from './suppliedart';
 import { drawCardName, type NameBand } from './cardname';
 import { LANG } from '../i18n';
 import { CARD, CLASS_THEME, FONT, RARITY_THEME, UI } from './theme';
@@ -553,9 +554,12 @@ export function drawCardFace(ctx: CanvasRenderingContext2D, card: CardDef, opts:
   ctx.save();
   roundRect(ctx, art.x, art.y, art.w, art.h, 14 * s);
   ctx.clip();
-  if (opts.officialArt) {
-    // Official artwork is cover-fitted so the subject is never letterboxed.
-    drawCover(ctx, opts.officialArt, art);
+  // An explicit image wins; otherwise a user-supplied one for this card, if it
+  // has finished loading; otherwise the generated illustration.
+  const supplied = opts.officialArt ?? suppliedArtFor(card.id);
+  if (supplied) {
+    // Supplied artwork is cover-fitted so the subject is never letterboxed.
+    drawCover(ctx, supplied, art);
   } else {
     ctx.save();
     ctx.translate(art.x, art.y);
@@ -778,7 +782,10 @@ const cache = new Map<string, HTMLCanvasElement>();
 /** Renders (and caches) a card face canvas. */
 export function cardFaceCanvas(card: CardDef, opts: CardFaceOptions = {}): HTMLCanvasElement {
   const s = opts.scale ?? 1;
-  const key = `${card.id}|${opts.evolved ? 'e' : 'b'}|${s}|${opts.premium ? 'p' : ''}|${opts.lang ?? 'en'}`;
+  // A supplied image that has not loaded yet paints as the generated
+  // illustration, so the two are different faces and must not share a key.
+  const art = opts.officialArt || suppliedArtFor(card.id) ? 'i' : '';
+  const key = `${card.id}|${opts.evolved ? 'e' : 'b'}|${s}|${opts.premium ? 'p' : ''}|${opts.lang ?? 'en'}|${art}`;
   const hit = cache.get(key);
   if (hit) return hit;
 
@@ -795,3 +802,12 @@ export function cardFaceCanvas(card: CardDef, opts: CardFaceOptions = {}): HTMLC
 export function clearCardFaceCache(): void {
   cache.clear();
 }
+
+// A supplied image arrives after the card has already been painted from its
+// generated illustration, so the stale faces for that card are dropped and the
+// next paint picks the image up.
+onSuppliedArt((cardId) => {
+  for (const key of [...cache.keys()]) {
+    if (key.startsWith(`${cardId}|`)) cache.delete(key);
+  }
+});

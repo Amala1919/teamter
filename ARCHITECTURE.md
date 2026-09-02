@@ -25,6 +25,7 @@ flows one way back up.
 |---|---|---|
 | Card data | `src/data/generated/cards.json` | nothing — plain records |
 | Illustration subjects | `src/data/generated/cardart.json` | nothing — an id-to-subject table, an id-to-icon map and path data |
+| Supplied images | `src/data/generated/suppliedart.json` | nothing — an id-to-filename map, built by scanning a folder |
 | Compiler | `src/data/compile.ts` | the effect DSL |
 | Registry | `src/engine/registry.ts` | `CardDef` |
 | Rules engine | `src/engine/game.ts` | cards, state, its own event stream |
@@ -158,6 +159,7 @@ match. A seed reproduces a match exactly, which is what makes the soak test in
 | `npm run typecheck` | `tsc --noEmit` |
 | `node tools/shoot.mjs <path> <out.png>` | Screenshot a page for visual review |
 | `node tools/bench.mjs [samples]` | Card-face paint cost in the browser, at grid, board and inspector scale |
+| `npm run art:scan` | Re-reads `public/assets/cards/` into the supplied-image manifest |
 | `node tools/build-cardart.mjs` | Regenerates the subject table and card-to-icon map in `src/data/generated/cardart.json` |
 | `node tools/smoke.mjs` | End-to-end browser test against a running dev server |
 
