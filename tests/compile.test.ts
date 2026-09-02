@@ -225,6 +225,13 @@ describe('sentence forms the printed text keeps using', () => {
     expect(grant).toMatchObject({ keywords: ['ward', 'bane'] });
   });
 
+  it('reads a named card as the subject of a come-into-play trigger', () => {
+    // Petal Fencer watches for a Fairy specifically, not for a tribe.
+    const ability = getCard('petal_fencer').abilities?.[0];
+    expect(ability?.on).toBe('onAllyFollowerPlayed');
+    expect(ability?.cond).toEqual({ k: 'subject', filter: { defId: 'fairy' } });
+  });
+
   it('compares the two leaders for "if their defense is higher than yours"', () => {
     const [eff] = abilityEffects('succubus');
     expect(eff.k).toBe('if');
@@ -269,6 +276,8 @@ describe('the compiled cards actually run', () => {
     'valhallan_general',
     'astaroths_reckoning',
     'luxhorn_sarissa',
+    'petal_fencer',
+    'vania_vampire_princess',
   ];
 
   for (const id of ids) {

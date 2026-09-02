@@ -57,7 +57,10 @@ function countdownFromText(text: string): number | undefined {
 
 function buildAll(): { cards: CardDef[]; report: BuildReport } {
   const names = new Map<string, string>();
-  for (const c of RAW_CARDS) if (!names.has(c.name)) names.set(c.name, c.id);
+  for (const c of RAW_CARDS) {
+    const key = c.name.toLowerCase();
+    if (!names.has(key)) names.set(key, c.id);
+  }
 
   const cards: CardDef[] = [];
   const report: BuildReport = {

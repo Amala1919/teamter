@@ -25,7 +25,10 @@ import type {
 } from '../engine/types';
 
 export interface CompileCtx {
-  /** Card name -> engine id, for "Summon a Knight" style references. */
+  /**
+   * Lowercased card name -> engine id, for "Summon a Knight" style references.
+   * Lowercased because the printed text capitalises names inconsistently.
+   */
   names: Map<string, string>;
   selfType: 'follower' | 'spell' | 'amulet';
   selfId: string;
@@ -118,7 +121,7 @@ const TRAIT_WORDS = ['Officer', 'Commander', 'Levin', 'Machina', 'Academic', 'My
 
 /** Resolves a printed card name — including plurals — to an engine id. */
 function cardId(name: string, ctx: CompileCtx): string | null {
-  const key = tidy(name);
+  const key = tidy(name).toLowerCase();
   const candidates = [
     key,
     key.replace(/ies$/, 'y'),
@@ -1396,7 +1399,7 @@ interface PrefixMatch {
 const NECRO_RE = /^(?:if any targetable [^,]+ are in play, )?perform necromancy \((\d+)\)\s*[-:]\s*|^necromancy \((\d+)\)\s*[-:]\s*/i;
 const EARTH_RE = /^earth rite\s*[-:]\s*/i;
 
-function matchPrefix(line: string): PrefixMatch | null {
+function matchPrefix(line: string, ctx?: CompileCtx): PrefixMatch | null {
   const l = line.trim();
 
   const simple: [RegExp, TriggerKind[]][] = [
@@ -1448,20 +1451,30 @@ function matchPrefix(line: string): PrefixMatch | null {
   // the trigger's "other" participant.
   // "Whenever an allied <Trait|Neutral|N-cost> follower comes into play, …" —
   // the condition tests the follower that arrived, not the board.
-  const subject = l.match(
-    /^whenever an allied (?:(\w+) )?(?:follower|card)(?: that originally costs (\d+) play points?)? comes into play,\s*/i,
-  );
-  if (subject && (subject[1] || subject[2])) {
+  const subject = l.match(/^whenever an allied (.+?) comes into play,?\s*/i);
+  if (subject) {
     const filter: Record<string, unknown> = {};
-    if (subject[2]) {
-      filter.costMin = num(subject[2]);
-      filter.costMax = num(subject[2]);
+    let phrase = subject[1].trim();
+
+    const cost = phrase.match(/^(.*?)\s*that originally costs (\d+) play points?$/i);
+    if (cost) {
+      phrase = cost[1].trim();
+      filter.costMin = num(cost[2]);
+      filter.costMax = num(cost[2]);
     }
-    if (subject[1]) {
-      const t = TRAIT_WORDS.find((x) => x.toLowerCase() === subject[1].toLowerCase());
+    // "Officer follower" and "Fairy" both name the subject; the noun is
+    // optional because a card name stands on its own.
+    phrase = phrase.replace(/\s*(?:follower|card)$/i, '').trim();
+
+    if (phrase) {
+      const word = phrase.toLowerCase();
+      const t = TRAIT_WORDS.find((x) => x.toLowerCase() === word);
+      // "Whenever an allied Fairy comes into play" names a card, not a tribe.
+      const named = ctx?.names.get(word);
       if (t) filter.trait = t;
-      else if (subject[1].toLowerCase() === 'neutral') filter.cardClass = 'neutral';
-      else if (subject[1].toLowerCase() !== 'follower') return null;
+      else if (word === 'neutral') filter.cardClass = 'neutral';
+      else if (named) filter.defId = named;
+      else return null;
     }
     const inner = withInner(['onAllyFollowerPlayed'], l.slice(subject[0].length));
     inner.cond = { k: 'subject', filter: filter as never };
@@ -1784,7 +1797,7 @@ export function compileCardText(text: string, baseCtx: CompileCtx): CompileResul
     // Only a single unprefixed sentence qualifies: the keyword forms above
     // ("Necromancy (6): Deal 3 damage instead.") are already handled, and a
     // multi-sentence line resolves its own "instead" inside compileSentences.
-    if (splitSentences(line).length === 1 && !matchPrefix(line)) {
+    if (splitSentences(line).length === 1 && !matchPrefix(line, ctx)) {
       const peeled = peelCondition(line.replace(/\.$/, ''));
       const m = tidy(peeled.body).match(/^(.*)\binstead$/i);
       const prev = res.abilities[res.abilities.length - 1];
@@ -1799,7 +1812,7 @@ export function compileCardText(text: string, baseCtx: CompileCtx): CompileResul
       }
     }
 
-    const prefix = matchPrefix(line);
+    const prefix = matchPrefix(line, ctx);
     if (prefix) {
       const nested = prefix.rest.match(/^enhance \((\d+)\)\s*[-:]\s*(.*)$/i);
       if (nested) {
