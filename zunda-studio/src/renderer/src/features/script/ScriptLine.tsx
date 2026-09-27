@@ -25,6 +25,7 @@ interface ScriptLineProps {
   onMove: (direction: -1 | 1) => void
   onDelete: () => void
   onRetry: () => void
+  onContextMenu: (event: React.MouseEvent) => void
 }
 
 export function ScriptLine(props: ScriptLineProps): React.JSX.Element {
@@ -55,6 +56,11 @@ export function ScriptLine(props: ScriptLineProps): React.JSX.Element {
     <li
       className={props.selected ? 'script__line script__line--selected' : 'script__line'}
       onClick={props.onSelect}
+      onContextMenu={(event) => {
+        // セリフの入力欄では、文字の切り取り・貼り付けのメニュー(OS 標準)を使う。
+        if ((event.target as HTMLElement).tagName === 'TEXTAREA') return
+        props.onContextMenu(event)
+      }}
       data-testid="script-line"
     >
       <div className="script__lineHeader">

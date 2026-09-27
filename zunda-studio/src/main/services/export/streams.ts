@@ -103,11 +103,32 @@ const BYTES_PER_FRAME = CHANNELS * 4
  * 素材の一部を 48kHz ステレオの float に展開しながら読む。
  * 素材の長さを超えて読むと無音を返す(素材の終わりより長く置かれていても書き出しが止まらないように)。
  */
+/**
+ * 速さを変えるフィルタ。atempo は古い ffmpeg では 0.5〜2 倍しか受け付けないので、範囲外は重ねて作る。
+ */
+export function atempoChain(rate: number): string | null {
+  if (!(rate > 0) || Math.abs(rate - 1) < 1e-6) return null
+  const parts: string[] = []
+  let rest = rate
+  while (rest > 2) {
+    parts.push('atempo=2')
+    rest /= 2
+  }
+  while (rest < 0.5) {
+    parts.push('atempo=0.5')
+    rest /= 0.5
+  }
+  parts.push(`atempo=${rest.toFixed(6)}`)
+  return parts.join(',')
+}
+
 export class PcmStream {
   private readonly output: FfmpegOutput
   private exhausted = false
 
-  constructor(ffmpeg: string, env: NodeJS.ProcessEnv, path: string, startMs: number, durationMs: number) {
+  /** rate は再生速度。1 以外なら音の高さを保ったまま速さだけ変える(durationMs は出力の長さ)。 */
+  constructor(ffmpeg: string, env: NodeJS.ProcessEnv, path: string, startMs: number, durationMs: number, rate = 1) {
+    const tempo = atempoChain(rate)
     this.output = new FfmpegOutput(
       ffmpeg,
       [
@@ -117,10 +138,11 @@ export class PcmStream {
         '-ss',
         (startMs / 1000).toFixed(3),
         '-t',
-        (durationMs / 1000).toFixed(3),
+        ((durationMs * rate) / 1000).toFixed(3),
         '-i',
         path,
         '-vn',
+        ...(tempo ? ['-af', tempo] : []),
         '-ac',
         String(CHANNELS),
         '-ar',

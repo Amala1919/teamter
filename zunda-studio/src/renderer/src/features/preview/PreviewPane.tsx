@@ -9,7 +9,10 @@ import { formatMs } from '../../lib/time'
 import { player, togglePlayback, usePlaybackStore } from '../../playback/player'
 import { browserResources, useResourceStore } from '../../render/browser-resources'
 import { useMediaStore } from '../../state/media'
-import { useEditorStore } from '../../state/store'
+import { hasClipboard, pasteAt, splitAtPlayhead } from '../../state/edit-actions'
+import { deleteSelection, useEditorStore } from '../../state/store'
+import { openContextMenu, type MenuEntry } from '../../ui/ContextMenu'
+import { insertZoom } from '../timeline/timeline-menus'
 import { ZoomFrameEditor } from './ZoomFrameEditor'
 
 /** ズーム枠を置いたときの既定の尺。 */
@@ -77,6 +80,49 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
     setCheckZoom(false)
   }
 
+  const report = (message: string | null): void => {
+    if (message) onError(message)
+  }
+
+  /** プレビューの右クリック。クリックした所を中心にズーム枠を置けるようにする。 */
+  const onCanvasContextMenu = (event: React.MouseEvent<HTMLCanvasElement>): void => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const point = {
+      x: ((event.clientX - rect.left) / Math.max(1, rect.width)) * project.canvas.width,
+      y: ((event.clientY - rect.top) / Math.max(1, rect.height)) * project.canvas.height
+    }
+    const entries: MenuEntry[] = [
+      { label: playing ? '停止' : '再生', shortcut: 'Space', onSelect: togglePlayback },
+      'separator',
+      {
+        label: 'ここを中心にズーム枠を置く',
+        onSelect: () => {
+          report(insertZoom(project, playheadMs, DEFAULT_ZOOM_MS, point))
+          setCheckZoom(false)
+        },
+        testId: 'menu-preview-zoom'
+      },
+      { label: '再生位置で分割', shortcut: 'S', onSelect: () => report(splitAtPlayhead()) },
+      { label: '再生位置に貼り付け', shortcut: 'Ctrl+V', disabled: !hasClipboard(), onSelect: () => report(pasteAt()) }
+    ]
+    if (selected && 'transform' in selected) {
+      const reset = (patch: { x?: number; y?: number; scale?: number; rotation?: number }, label: string): void => {
+        const result = dispatch([{ op: 'item.setTransform', itemId: selected.id, ...patch }], label)
+        if (!result.ok) onError(result.message)
+      }
+      entries.push(
+        'separator',
+        { label: '選んだものを中央に戻す', onSelect: () => reset({ x: project.canvas.width / 2, y: project.canvas.height / 2 }, '位置を戻す') },
+        { label: '選んだものの大きさ・回転を元に戻す', onSelect: () => reset({ scale: 1, rotation: 0 }, '大きさを戻す') },
+        { label: '選んだものをクリックした所へ', onSelect: () => reset(point, '位置の変更') }
+      )
+    }
+    if (selected) {
+      entries.push('separator', { label: '選んだものを削除', shortcut: 'Delete', danger: true, onSelect: () => report(deleteSelection()) })
+    }
+    openContextMenu(event, entries)
+  }
+
   return (
     <section className="pane pane--preview">
       <header className="pane__header">
@@ -118,6 +164,7 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
           width={project.canvas.width}
           height={project.canvas.height}
           className="preview__canvas"
+          onContextMenu={onCanvasContextMenu}
           data-testid="preview-canvas"
         />
         {zoomItem && !applyZoom && overlayBox && (

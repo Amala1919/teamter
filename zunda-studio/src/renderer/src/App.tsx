@@ -12,7 +12,21 @@ import { useSettingsStore } from './state/settings'
 import { RecoveryBanner } from './features/toolbar/RecoveryBanner'
 import { EngineInstallBanner } from './features/voice/EngineInstall'
 import { useVoiceStore } from './state/voice'
+import {
+  copySelection,
+  cutSelection,
+  duplicateSelection,
+  FRAME_MS,
+  jumpToEditPoint,
+  jumpToEnd,
+  nudgePlayhead,
+  pasteAt,
+  rippleDeleteSelection,
+  selectAll,
+  splitAtPlayhead
+} from './state/edit-actions'
 import { deleteSelection, startAutosave, useEditorStore } from './state/store'
+import { ContextMenuHost } from './ui/ContextMenu'
 
 export function App(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null)
@@ -50,13 +64,18 @@ export function App(): React.JSX.Element {
         togglePlayback()
         return
       }
-      if ((event.key === 'Delete' || event.key === 'Backspace') && !typing && !document.querySelector('[role="dialog"]')) {
-        event.preventDefault()
-        const message = deleteSelection()
-        if (message) setError(message)
-        return
-      }
       const modifier = event.ctrlKey || event.metaKey
+      const report = (message: string | null): void => {
+        if (message) setError(message)
+      }
+      // タイムラインの編集のショートカット。入力中やダイアログを開いている間は効かせない。
+      if (!typing && !document.querySelector('[role="dialog"]')) {
+        const handled = timelineShortcut(event, modifier, report)
+        if (handled) {
+          event.preventDefault()
+          return
+        }
+      }
       if (!modifier) return
       // 入力欄の中では、その入力欄の取り消し(文字単位)を優先する。
       if (typing && (event.key === 'z' || event.key === 'y')) return
@@ -100,6 +119,68 @@ export function App(): React.JSX.Element {
       </div>
       <TimelinePane onError={setError} />
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+      <ContextMenuHost />
     </div>
   )
+}
+
+/**
+ * タイムラインの編集のショートカット。扱ったら true を返す。
+ *   S: 再生位置で分割 / Delete: 削除 / Shift+Delete: 削除して詰める
+ *   Ctrl+C・X・V・D・A: コピー・切り取り・貼り付け・複製・すべて選択
+ *   ←→: 1コマ送り(Shift で1秒) / ↑↓: 前後の編集点へ / Home・End: 先頭・末尾へ
+ */
+function timelineShortcut(event: KeyboardEvent, modifier: boolean, report: (message: string | null) => void): boolean {
+  if (modifier && !event.altKey) {
+    switch (event.key.toLowerCase()) {
+      case 'c':
+        report(copySelection())
+        return true
+      case 'x':
+        report(cutSelection())
+        return true
+      case 'v':
+        report(pasteAt())
+        return true
+      case 'd':
+        report(duplicateSelection())
+        return true
+      case 'a':
+        selectAll()
+        return true
+      default:
+        return false
+    }
+  }
+  if (event.altKey || modifier) return false
+  switch (event.key) {
+    case 'Delete':
+    case 'Backspace':
+      report(event.shiftKey ? rippleDeleteSelection() : deleteSelection())
+      return true
+    case 's':
+    case 'S':
+      report(splitAtPlayhead())
+      return true
+    case 'ArrowLeft':
+      nudgePlayhead(event.shiftKey ? -1000 : -FRAME_MS)
+      return true
+    case 'ArrowRight':
+      nudgePlayhead(event.shiftKey ? 1000 : FRAME_MS)
+      return true
+    case 'ArrowUp':
+      jumpToEditPoint(-1)
+      return true
+    case 'ArrowDown':
+      jumpToEditPoint(1)
+      return true
+    case 'Home':
+      useEditorStore.getState().setPlayhead(0)
+      return true
+    case 'End':
+      jumpToEnd()
+      return true
+    default:
+      return false
+  }
 }

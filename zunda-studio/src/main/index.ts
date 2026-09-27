@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 
-import { app, BrowserWindow, globalShortcut, safeStorage, shell } from 'electron'
+import { app, BrowserWindow, globalShortcut, Menu, safeStorage, shell, type MenuItemConstructorOptions } from 'electron'
 
 import { createHandlers } from './core/handlers'
 import { PLAIN_CIPHER, type SecretCipher } from './core/secret-store'
@@ -26,6 +26,30 @@ function osCipher(): SecretCipher {
 }
 
 registerMediaScheme()
+
+/**
+ * 入力欄の右クリックで、切り取り・コピー・貼り付けのメニューを出す。
+ * タイムラインなどアプリ独自のメニューを出す所では、画面側が右クリックを横取りするのでここには来ない。
+ */
+app.on('web-contents-created', (_event, contents) => {
+  contents.on('context-menu', (_menuEvent, params) => {
+    const hasSelection = params.selectionText.trim() !== ''
+    if (!params.isEditable && !hasSelection) return
+    const template: MenuItemConstructorOptions[] = params.isEditable
+      ? [
+          { role: 'undo', label: '元に戻す', enabled: params.editFlags.canUndo },
+          { role: 'redo', label: 'やり直す', enabled: params.editFlags.canRedo },
+          { type: 'separator' },
+          { role: 'cut', label: '切り取り', enabled: params.editFlags.canCut },
+          { role: 'copy', label: 'コピー', enabled: params.editFlags.canCopy },
+          { role: 'paste', label: '貼り付け', enabled: params.editFlags.canPaste },
+          { type: 'separator' },
+          { role: 'selectAll', label: 'すべて選択', enabled: params.editFlags.canSelectAll }
+        ]
+      : [{ role: 'copy', label: 'コピー' }]
+    Menu.buildFromTemplate(template).popup()
+  })
+})
 
 function loadRenderer(window: BrowserWindow, hash = ''): void {
   const devServerUrl = process.env['ELECTRON_RENDERER_URL']

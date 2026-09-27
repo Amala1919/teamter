@@ -7,6 +7,7 @@ import { accentPhrasesToKana } from '@shared/voice/kana'
 
 import { formatMs } from '../../lib/time'
 import { deleteSelection, useEditorStore } from '../../state/store'
+import { NumberField } from '../../ui/NumberField'
 import { VoiceParamsEditor } from '../characters/VoiceParamsEditor'
 import {
   AudioInspector,
@@ -73,8 +74,17 @@ export function InspectorPane({ onError }: { onError: (message: string) => void 
           {item.type === 'audio' && <AudioInspector item={item} run={run} />}
           {item.type === 'video' && (
             <section>
-              <h3>音</h3>
+              <h3>再生</h3>
               <VolumeField item={item} run={run} />
+              <NumberField
+                label="速度(倍)"
+                value={item.playbackRate}
+                min={0.25}
+                max={4}
+                step={0.25}
+                onCommit={(rate) => run([{ op: 'item.setSpeed', itemId: item.id, rate }], '速度の変更')}
+                testId="inspector-speed"
+              />
             </section>
           )}
           {'transform' in item && <TransformInspector item={item} run={run} />}

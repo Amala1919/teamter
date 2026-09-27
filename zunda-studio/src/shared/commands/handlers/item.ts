@@ -22,7 +22,7 @@ const MIN_DURATION_MS = 10
 
 const EASINGS = ['linear', 'easeInCubic', 'easeOutCubic', 'easeInOutCubic']
 
-function validateEffect(effect: Effect, op: CommandOp): Effect {
+export function validateEffect(effect: Effect, op: CommandOp): Effect {
   const nonNegative = (value: number, label: string): void => {
     requireFinite(value, op, label)
     if (value < 0) fail(op, `${label}は0以上にしてください`)

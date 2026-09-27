@@ -4,8 +4,11 @@ import type { Command } from '@shared/commands/types'
 import { itemEndMs, voiceItemsInOrder } from '@shared/project/queries'
 import type { CharacterId, ItemId } from '@shared/project/types'
 
+import { player } from '../../playback/player'
+import { copySelection } from '../../state/edit-actions'
 import { useEditorStore } from '../../state/store'
 import { useVoiceStore } from '../../state/voice'
+import { openContextMenu } from '../../ui/ContextMenu'
 import { CharacterDialog } from '../characters/CharacterDialog'
 import { BulkInputDialog, type BulkLine } from './BulkInputDialog'
 import { CohostAiBar } from './CohostAiBar'
@@ -220,6 +223,47 @@ export function ScriptPane({ onError }: ScriptPaneProps): React.JSX.Element {
                 onMove={(direction) => move(index, direction)}
                 onDelete={() => run([{ op: 'voice.delete', itemId: line.id }], 'セリフの削除')}
                 onRetry={() => retry(line.id)}
+                onContextMenu={(event) => {
+                  setSelection([line.id])
+                  const character = characters.find((candidate) => candidate.id === line.characterId)
+                  const expressions = character?.portrait ? Object.values(character.portrait.expressions) : []
+                  openContextMenu(event, [
+                    { label: 'このセリフを再生', disabled: !line.synthesis, onSelect: () => void player.play(line.startMs, line.startMs + line.durationMs) },
+                    { label: '再生位置をここへ', onSelect: () => setPlayhead(line.startMs) },
+                    'separator',
+                    { label: '次にセリフを追加', shortcut: 'Ctrl+Enter', onSelect: () => addAfter(line.id, line.characterId), testId: 'menu-line-add-after' },
+                    {
+                      label: '話者',
+                      submenu: characters.map((candidate) => ({
+                        label: candidate.name,
+                        checked: candidate.id === line.characterId,
+                        onSelect: () => run([{ op: 'voice.setCharacter', itemId: line.id, characterId: candidate.id }], '話者の変更')
+                      })),
+                      testId: 'menu-line-speaker'
+                    },
+                    ...(expressions.length > 0
+                      ? [
+                          {
+                            label: '表情',
+                            submenu: [
+                              { label: '既定', checked: line.expressionId === null, onSelect: () => run([{ op: 'voice.setExpression', itemId: line.id, expressionId: null }], '表情の変更') },
+                              ...expressions.map((expression) => ({
+                                label: expression.name,
+                                checked: expression.id === line.expressionId,
+                                onSelect: () => run([{ op: 'voice.setExpression', itemId: line.id, expressionId: expression.id }], '表情の変更')
+                              }))
+                            ]
+                          }
+                        ]
+                      : []),
+                    'separator',
+                    { label: '上へ', disabled: index === 0, onSelect: () => move(index, -1) },
+                    { label: '下へ', disabled: index === lines.length - 1, onSelect: () => move(index, 1) },
+                    { label: 'コピー', onSelect: () => copySelection([line.id]) },
+                    'separator',
+                    { label: '削除', danger: true, onSelect: () => run([{ op: 'voice.delete', itemId: line.id }], 'セリフの削除'), testId: 'menu-line-delete' }
+                  ])
+                }}
               />
             ))}
           </ol>

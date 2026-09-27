@@ -10,6 +10,8 @@ import { formatMs } from '../../lib/time'
 import { usePlaybackStore } from '../../playback/player'
 import { assetName, importMediaFiles } from '../../state/media'
 import { useEditorStore } from '../../state/store'
+import { openContextMenu } from '../../ui/ContextMenu'
+import { itemMenu, laneMenu, layerMenu, rulerMenu, type MenuContext } from './timeline-menus'
 import { Waveform } from './Waveform'
 
 const MIN_VISIBLE_MS = 10_000
@@ -182,6 +184,16 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
   }
 
   const step = labelStepSeconds(pxPerSecond)
+  const menuContext: MenuContext = { onError, onAddMedia: () => void addMedia() }
+  /** クリックした位置の時刻(レーン・目盛りの左端が 0)。 */
+  const timeAt = (event: React.MouseEvent<HTMLElement>): Ms =>
+    ((event.clientX - event.currentTarget.getBoundingClientRect().left) / pxPerSecond) * 1000
+
+  const onItemContextMenu = (event: React.MouseEvent, item: Item): void => {
+    // 選んでいないアイテムを右クリックしたら、それだけを選び直す。
+    if (!selectedItemIds.includes(item.id)) setSelection([item.id])
+    openContextMenu(event, itemMenu(project, item, menuContext))
+  }
 
   return (
     <section className="pane pane--timeline" data-testid="timeline">
@@ -212,7 +224,12 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
         <div className="timeline__body" style={{ width: `${contentWidth + HEADER_WIDTH}px` }}>
           <div className="timeline__row timeline__row--ruler">
             <div className="timeline__header timeline__header--corner" />
-            <div className="timeline__ruler" onPointerDown={scrub} data-testid="timeline-ruler">
+            <div
+              className="timeline__ruler"
+              onPointerDown={scrub}
+              onContextMenu={(event) => openContextMenu(event, rulerMenu(timeAt(event), menuContext))}
+              data-testid="timeline-ruler"
+            >
               {liveMarkers.map((marker) => (
                 <span
                   key={marker.key}
@@ -238,12 +255,16 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
 
           {layersFrontFirst.map((layer) => (
             <div key={layer.id} className="timeline__row" data-testid={`layer-${layer.id}`}>
-              <LayerHeader layer={layer} run={run} />
+              <LayerHeader layer={layer} run={run} onContextMenu={(event) => openContextMenu(event, layerMenu(layer, menuContext))} />
               <div
                 className={layer.visible ? 'timeline__lane' : 'timeline__lane timeline__lane--hidden'}
                 onPointerDown={(event) => {
-                  if (event.target === event.currentTarget) setSelection([])
+                  if (event.target === event.currentTarget && event.button === 0) setSelection([])
                 }}
+                onContextMenu={(event) => {
+                  if (event.target === event.currentTarget) openContextMenu(event, laneMenu(project, layer, timeAt(event), menuContext))
+                }}
+                data-testid={`lane-${layer.id}`}
               >
                 {(itemsByLayer.get(layer.id) ?? []).map((item) => {
                   const dragging = drag?.itemId === item.id && drag.moved ? drag : null
@@ -262,6 +283,7 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
                       selected={selectedItemIds.includes(item.id)}
                       locked={item.locked || layer.locked}
                       onPointerDown={beginDrag}
+                      onContextMenu={onItemContextMenu}
                     />
                   )
                 })}
@@ -313,11 +335,19 @@ function labelStepSeconds(pxPerSecond: number): number {
   return 1200
 }
 
-function LayerHeader({ layer, run }: { layer: Layer; run: (commands: Command[], label: string) => void }): React.JSX.Element {
+function LayerHeader({
+  layer,
+  run,
+  onContextMenu
+}: {
+  layer: Layer
+  run: (commands: Command[], label: string) => void
+  onContextMenu: (event: React.MouseEvent) => void
+}): React.JSX.Element {
   const toggle = (key: 'visible' | 'muted' | 'locked', label: string): void =>
     run([{ op: 'layer.update', layerId: layer.id, [key]: !layer[key] }], label)
   return (
-    <div className="timeline__header">
+    <div className="timeline__header" onContextMenu={onContextMenu}>
       <span className="timeline__layerName" title={layer.name}>
         {layer.name}
       </span>
@@ -386,6 +416,7 @@ interface TimelineItemProps {
   selected: boolean
   locked: boolean
   onPointerDown: (event: React.PointerEvent, item: Item, mode: DragMode) => void
+  onContextMenu: (event: React.MouseEvent, item: Item) => void
 }
 
 function TimelineItem(props: TimelineItemProps): React.JSX.Element {
@@ -404,6 +435,7 @@ function TimelineItem(props: TimelineItemProps): React.JSX.Element {
       style={{ left: `${props.left}px`, width: `${props.width}px`, transform: `translateY(${props.top}px)` }}
       title={`${itemLabel(project, item)}\n${formatMs(item.startMs)} – ${formatMs(itemEndMs(item))}`}
       onPointerDown={(event) => props.onPointerDown(event, item, 'move')}
+      onContextMenu={(event) => props.onContextMenu(event, item)}
       data-testid="timeline-item"
       data-item-type={item.type}
       data-item-id={item.id}
