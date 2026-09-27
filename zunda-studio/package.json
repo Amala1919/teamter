@@ -12,6 +12,7 @@
     "build:devhost": "vite build -c vite.devhost.config.ts",
     "devhost": "npm run build:app && npm run build:devhost && node out/devhost/main.js",
     "start": "electron-vite preview",
+    "postinstall": "install-electron",
     "typecheck": "tsc --noEmit -p tsconfig.node.json --composite false && tsc --noEmit -p tsconfig.web.json --composite false",
     "test": "vitest run",
     "test:watch": "vitest",
