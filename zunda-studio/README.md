@@ -49,6 +49,6 @@ npm run dist:win       # Windows のインストーラ
 
 このリポジトリは**音声ライブラリ・立ち絵素材・BGMを一切同梱しない**。すべてユーザーが用意した素材を読み込む。
 
-VOICEVOX ENGINEはアプリから自動起動する形で利用する。インストール済みの VOICEVOX を自動で探すほか、配布物を作るときに公式の VOICEVOX ENGINE を `vendor/voicevox-engine/` に置けば改変せずに同梱する。リポジトリにはバイナリを置かない(LGPL-3.0を含むデュアルライセンスのため、配布形態は [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) の「ライセンス要件」に従う)。
+VOICEVOX ENGINEはアプリから自動起動する形で利用する。インストール済みの VOICEVOX を自動で探し、見つからなければ公式の配布物をダウンロードして入れられる(利用者がボタンを押したときだけ)。配布物を作るときに公式の VOICEVOX ENGINE を `vendor/voicevox-engine/` に置けば改変せずに同梱する。リポジトリにはバイナリを置かない(LGPL-3.0を含むデュアルライセンスのため、配布形態は [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) の「ライセンス要件」に従う)。
 
 VOICEVOXの音声ライブラリは利用規約でクレジット表記が必要である。本アプリは使用したキャラクターを追跡し、`VOICEVOX:ずんだもん` 形式のクレジット文を自動生成する。ただし**最終的な規約遵守の責任は動画の投稿者にある**ため、生成されたクレジットの確認は必須とする。

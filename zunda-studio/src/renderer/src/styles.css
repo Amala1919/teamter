@@ -75,22 +75,68 @@ input[type='text'] {
 
 .app {
   display: grid;
-  /* ヘッダー(ツールバー + エラー表示)/ 作業領域 / タイムライン の3行で固定する */
-  grid-template-rows: auto minmax(0, 1fr) 260px;
+  /*
+   * ヘッダー(ツールバー + エラー表示)/ 作業領域 / 境界 / タイムライン。
+   * 各欄の大きさは境界のドラッグで変わる比率(--layout-*)で決める(state/layout.ts)。
+   */
+  grid-template-rows: auto minmax(0, 1fr) 5px minmax(120px, calc(var(--layout-timeline, 0.36) * 100%));
   height: 100%;
 }
 
 .workspace {
   display: grid;
-  grid-template-columns: 320px 1fr 320px;
+  grid-template-columns:
+    minmax(200px, calc(var(--layout-left, 0.22) * 100%)) 5px minmax(0, 1fr) 5px
+    minmax(200px, calc(var(--layout-right, 0.22) * 100%));
   min-height: 0;
 }
 
 .workspace__center {
   display: grid;
-  grid-template-rows: 1fr auto;
+  grid-template-rows: minmax(120px, 1fr) 5px minmax(60px, calc(var(--layout-inspector, 0.34) * 100%));
   min-height: 0;
   min-width: 0;
+}
+
+.splitter {
+  background: var(--border);
+  position: relative;
+  z-index: 5;
+  touch-action: none;
+  outline: none;
+  transition: background 0.1s;
+}
+
+.splitter:hover,
+.splitter:focus-visible {
+  background: var(--accent-dim);
+}
+
+/* 掴みやすいよう、見た目より広い範囲で反応させる。 */
+.splitter::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+}
+
+.splitter--vertical {
+  cursor: col-resize;
+}
+
+.splitter--horizontal {
+  cursor: row-resize;
+}
+
+body.resizing-x,
+body.resizing-x * {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
+body.resizing-y,
+body.resizing-y * {
+  cursor: row-resize !important;
+  user-select: none;
 }
 
 .pane {
@@ -348,8 +394,6 @@ input[type='text'] {
 
 .pane--inspector {
   border-left: none;
-  border-top: 1px solid var(--border);
-  max-height: 260px;
   overflow-y: auto;
 }
 
@@ -412,7 +456,6 @@ input[type='text'] {
 
 .pane--timeline {
   border-left: none;
-  border-top: 1px solid var(--border);
 }
 
 .timeline__zoom {
@@ -1343,6 +1386,7 @@ input[type='color'] {
 /* ---------------------------------------------------------------- 右の欄(チャット・ライブの記録) */
 
 .pane--side {
+  border-left: none;
   padding-top: 0;
 }
 

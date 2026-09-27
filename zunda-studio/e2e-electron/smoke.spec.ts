@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -47,6 +47,21 @@ test('実物の Electron で、合成・動画のプレビュー・ライブの�
     const page = await app.firstWindow()
     expect(await page.evaluate(() => (globalThis as unknown as { zunda?: { runtime: string } }).zunda?.runtime)).toBe('electron')
 
+    // API キーは OS の鍵保管庫で暗号化して保存し、値そのものは画面に返さない
+    type Bridge = { zunda: { invoke(channel: string, args: unknown[]): Promise<{ ok: boolean; value?: unknown }> } }
+    const stored = await page.evaluate(() =>
+      (globalThis as unknown as Bridge).zunda.invoke('secrets:set', ['opencode.apiKey', 'sk-electron-secret-1234'])
+    )
+    expect(stored).toMatchObject({ ok: true, value: { set: true, hint: '…1234' } })
+    const secretsFile = readFileSync(join(config, 'zunda-studio', 'secrets.json'), 'utf8')
+    if ((stored.value as { secure: boolean }).secure) expect(secretsFile).not.toContain('sk-electron-secret-1234')
+
+    // VOICEVOX の自動インストールに使う 7za が、配布版の asar の外に置かれている
+    const info = await page.evaluate(() => (globalThis as unknown as Bridge).zunda.invoke('voice:install:info', []))
+    expect(info).toMatchObject({ ok: true, value: { supported: true } })
+    const unpacked = join(unpackedExecutable(), '..', 'resources', 'app.asar.unpacked', 'node_modules', '7zip-bin')
+    expect(existsSync(unpacked)).toBe(true)
+
     // preload 経由の呼び出しで合成できる
     await page.getByRole('button', { name: /ずんだもん\(あなた\)/ }).click()
     await page.getByTestId('open-bulk').click()
@@ -78,6 +93,13 @@ test('実物の Electron で、合成・動画のプレビュー・ライブの�
       )
       .toBeGreaterThan(1000)
     await expect(page.getByTestId('proxy-status')).toHaveCount(0)
+
+    // 右クリックメニュー(画面側のメニュー)と、境界のドラッグ
+    await page.locator('[data-item-type="video"]').click({ button: 'right' })
+    await expect(page.getByTestId('context-menu').first()).toContainText('再生位置で分割')
+    await page.keyboard.press('Escape')
+    await expect(page.getByTestId('context-menu')).toHaveCount(0)
+    await expect(page.getByTestId('splitter-timeline')).toBeVisible()
 
     // ライブのウィンドウは最前面の別ウィンドウで開く
     await page.getByTestId('side-tab-live').click()
