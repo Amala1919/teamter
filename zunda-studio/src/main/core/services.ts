@@ -2,6 +2,7 @@ import { AiService } from '../services/ai/ai-service'
 import { ClaudeCodeProvider } from '../services/ai/claude-code-provider'
 import { OpenCodeProvider } from '../services/ai/opencode-provider'
 import { ProjectService } from '../services/project/project-service'
+import { PsdService } from '../services/psd/psd-service'
 import { EngineManager } from '../services/voice/engine-manager'
 import { SynthesisService } from '../services/voice/synthesis-service'
 import type { FilePicker } from './dialog'
@@ -34,6 +35,7 @@ export interface Services {
   ai: AiService
   engines: EngineManager
   synthesis: SynthesisService
+  psd: PsdService
   /** 終了時の後始末(アプリが起動した音声エンジンを止める等)。 */
   dispose: () => Promise<void>
 }
@@ -70,6 +72,7 @@ export async function createServices(options: ServicesOptions): Promise<Services
     ai,
     engines,
     synthesis,
+    psd: new PsdService(paths.cache.psd),
     dispose: () => engines.shutdown()
   }
 }

@@ -2,7 +2,7 @@ import { fail, invalidateSynthesis, refreshSubtitleLines, type HandlerTable } fr
 
 type CharacterHandlers = Pick<
   HandlerTable,
-  'character.create' | 'character.setPersona' | 'character.update' | 'character.delete'
+  'character.create' | 'character.setPersona' | 'character.update' | 'character.setPortrait' | 'character.delete'
 >
 
 export const characterHandlers: CharacterHandlers = {
@@ -90,6 +90,33 @@ export const characterHandlers: CharacterHandlers = {
       if (item.type !== 'voice' || item.characterId !== characterId) continue
       if (voiceChanged) invalidateSynthesis(item)
       if (restyled) refreshSubtitleLines(draft, item)
+    }
+  },
+
+  'character.setPortrait': (draft, command, env) => {
+    const characterId = env.resolve(command.characterId)
+    const character = draft.characters[characterId]
+    if (!character) fail(command.op, `キャラクターが見つかりません: ${characterId}`)
+    const portrait = command.portrait
+    if (portrait === null) {
+      character.portrait = null
+      return
+    }
+    const asset = draft.assets[env.resolve(portrait.assetId)]
+    if (!asset || asset.type !== 'psd') fail(command.op, '立ち絵には PSD の素材を指定してください')
+    if (!(portrait.transform.scale > 0)) fail(command.op, '立ち絵の拡大率が不正です')
+    const groupIds = new Set(Object.keys(portrait.partGroups))
+    if (portrait.lipSync && !groupIds.has(portrait.lipSync.partGroupId)) fail(command.op, '口パクのパーツグループが見つかりません')
+    if (portrait.blink && !groupIds.has(portrait.blink.partGroupId)) fail(command.op, 'まばたきのパーツグループが見つかりません')
+    if (portrait.defaultExpressionId !== null && !portrait.expressions[portrait.defaultExpressionId]) {
+      fail(command.op, '既定の表情が見つかりません')
+    }
+    character.portrait = { ...portrait, assetId: env.resolve(portrait.assetId) }
+    // 消えた表情を指しているセリフは既定の表情に戻す。
+    for (const item of draft.items) {
+      if (item.type === 'voice' && item.characterId === characterId && item.expressionId && !portrait.expressions[item.expressionId]) {
+        item.expressionId = null
+      }
     }
   },
 

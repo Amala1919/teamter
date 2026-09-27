@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react'
 
 import { isVoiceItem, itemsAt, projectDurationMs } from '@shared/project/queries'
+import { renderFrame } from '@shared/render/compositor'
+import type { Ctx2D } from '@shared/render/types'
 
-import { renderFrame } from '../../compositor/render'
+import { browserResources, useResourceStore } from '../../render/browser-resources'
 import { formatMs } from '../../lib/time'
 import { player, togglePlayback, usePlaybackStore } from '../../playback/player'
 import { useEditorStore } from '../../state/store'
@@ -19,14 +21,16 @@ export function PreviewPane(): React.JSX.Element {
     .join(' ')
   const playing = usePlaybackStore((state) => state.playing)
   const loading = usePlaybackStore((state) => state.loading)
+  // 画像や PSD の読み込みが終わったら描き直す。
+  const resourceVersion = useResourceStore((state) => state.version)
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     const context = canvas.getContext('2d')
     if (!context) return
-    renderFrame(context, project, playheadMs)
-  }, [project, playheadMs])
+    renderFrame(context as unknown as Ctx2D, project, playheadMs, browserResources.bind(project))
+  }, [project, playheadMs, resourceVersion])
 
   return (
     <section className="pane pane--preview">

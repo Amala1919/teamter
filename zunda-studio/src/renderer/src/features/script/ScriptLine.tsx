@@ -21,6 +21,7 @@ interface ScriptLineProps {
   onCommitText: (text: string) => void
   onAddAfter: () => void
   onChangeCharacter: (characterId: string) => void
+  onChangeExpression: (expressionId: string | null) => void
   onMove: (direction: -1 | 1) => void
   onDelete: () => void
   onRetry: () => void
@@ -71,6 +72,23 @@ export function ScriptLine(props: ScriptLineProps): React.JSX.Element {
             </option>
           ))}
         </select>
+        {character?.portrait && Object.keys(character.portrait.expressions).length > 0 && (
+          <select
+            className="script__expressionSelect"
+            value={line.expressionId ?? ''}
+            onChange={(event) => props.onChangeExpression(event.target.value || null)}
+            onClick={(event) => event.stopPropagation()}
+            aria-label="表情"
+            data-testid="line-expression"
+          >
+            <option value="">表情: 既定</option>
+            {Object.values(character.portrait.expressions).map((expression) => (
+              <option key={expression.id} value={expression.id}>
+                {expression.name}
+              </option>
+            ))}
+          </select>
+        )}
         {character && (
           <span className={`script__role script__role--${character.authorRole}`}>
             {character.authorRole === 'ai' ? 'AI' : 'あなた'}

@@ -94,7 +94,8 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
       priority: z.number().int().min(0).max(10)
     })
   ]),
-  'voice:dict:delete': z.tuple([engineIdArg, z.string().min(1).max(100)])
+  'voice:dict:delete': z.tuple([engineIdArg, z.string().min(1).max(100)]),
+  'psd:load': z.tuple([pathArg])
 }
 
 export function createHandlers(services: Services): HandlerTable {
@@ -151,7 +152,15 @@ export function createHandlers(services: Services): HandlerTable {
     'voice:resolve': (cacheKey) => services.synthesis.resolve(cacheKey),
     'voice:dict:list': async (engineId) => (await services.engines.require(engineId)).userDict(),
     'voice:dict:add': async (engineId, word) => (await services.engines.require(engineId)).addUserDictWord(word),
-    'voice:dict:delete': async (engineId, wordId) => (await services.engines.require(engineId)).deleteUserDictWord(wordId)
+    'voice:dict:delete': async (engineId, wordId) => (await services.engines.require(engineId)).deleteUserDictWord(wordId),
+
+    'psd:load': (path) => {
+      // 利用者が選んだ・プロジェクトに登録された PSD に限る(任意のファイルを解析させない)。
+      if (!services.media.isAllowed(path)) {
+        return Promise.reject(new AppError('ACCESS_DENIED', 'プロジェクトに登録されていない PSD は読み込めません'))
+      }
+      return services.psd.load(path)
+    }
   }
 }
 

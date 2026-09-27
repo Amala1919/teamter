@@ -215,6 +215,9 @@ export function ScriptPane({ onError }: ScriptPaneProps): React.JSX.Element {
                 onChangeCharacter={(characterId) =>
                   run([{ op: 'voice.setCharacter', itemId: line.id, characterId }], '話者の変更')
                 }
+                onChangeExpression={(expressionId) =>
+                  run([{ op: 'voice.setExpression', itemId: line.id, expressionId }], '表情の変更')
+                }
                 onMove={(direction) => move(index, direction)}
                 onDelete={() => run([{ op: 'voice.delete', itemId: line.id }], 'セリフの削除')}
                 onRetry={() => retry(line.id)}

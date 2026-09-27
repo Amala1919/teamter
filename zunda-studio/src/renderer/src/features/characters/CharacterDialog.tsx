@@ -8,6 +8,7 @@ import { useSettingsStore } from '../../state/settings'
 import { useEditorStore } from '../../state/store'
 import { useVoiceStore } from '../../state/voice'
 import { Modal } from '../../ui/Modal'
+import { PortraitSection } from '../portrait/PortraitSection'
 import { VoiceParamsEditor } from './VoiceParamsEditor'
 
 const BANTER_ROLES: { id: BanterRole; label: string }[] = [
@@ -284,6 +285,8 @@ function CharacterEditor({ character, run, onDeleted }: CharacterEditorProps): R
           />
         </label>
       </section>
+
+      <PortraitSection character={character} run={run} />
 
       {style && (
         <section>

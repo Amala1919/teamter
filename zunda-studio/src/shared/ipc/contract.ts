@@ -1,6 +1,7 @@
 import type { ModelInfo, ProviderId, ProviderStatus } from '../ai/types'
 import type { AppErrorShape } from '../errors'
 import type { Project } from '../project/types'
+import type { PsdManifest } from '../psd/types'
 import type { AppSettings, SettingsPatch } from '../settings/schema'
 import type {
   EngineStatus,
@@ -66,6 +67,9 @@ export interface IpcContract {
   'voice:dict:list': { args: [engineId: string]; result: UserDictWord[] }
   'voice:dict:add': { args: [engineId: string, word: Omit<UserDictWord, 'id'>]; result: string }
   'voice:dict:delete': { args: [engineId: string, wordId: string]; result: void }
+
+  /** PSD を解析してレイヤーツリーを返す。各レイヤーの画像はキャッシュに PNG として置かれる。 */
+  'psd:load': { args: [path: string]; result: PsdManifest }
 }
 
 export type Channel = keyof IpcContract

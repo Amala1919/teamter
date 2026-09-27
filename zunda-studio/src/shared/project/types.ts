@@ -140,6 +140,11 @@ export interface PortraitConfig {
   assetId: AssetId
   transform: PortraitTransform
   partGroups: Record<PartGroupId, PortraitPartGroup>
+  /**
+   * パーツ以外のレイヤーの表示を PSD の初期状態から変えたもの(レイヤーの key → 表示するか)。
+   * 小物のオン・オフなどに使う。
+   */
+  layerVisibility: Record<string, boolean>
   expressions: Record<ExpressionId, Expression>
   defaultExpressionId: ExpressionId | null
   lipSync: LipSyncConfig | null

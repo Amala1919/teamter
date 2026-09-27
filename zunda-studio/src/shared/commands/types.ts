@@ -9,6 +9,10 @@
 import type { GeneratedBy, ModelRef } from '../ai/types'
 import type {
   AiPersona,
+  Asset,
+  AssetId,
+  AssetLicense,
+  PortraitConfig,
   CharacterAuthorRole,
   CharacterId,
   ExpressionId,
@@ -49,6 +53,27 @@ export interface LayerInsert {
   index: number
   /** AI が後続コマンドから参照するための一時ID。適用時に実IDへ解決される。 */
   tempId?: string
+}
+
+// ------------------------------------------------------------------ 素材
+
+/** 素材を登録する。ライセンス情報は必須(書き出し時のクレジット集約に使う。L-4)。 */
+export interface AssetAdd {
+  op: 'asset.add'
+  asset: Asset
+  tempId?: string
+}
+
+export interface AssetUpdateLicense {
+  op: 'asset.updateLicense'
+  assetId: AssetId
+  license: AssetLicense
+}
+
+/** 使われていない素材だけ外せる。 */
+export interface AssetRemove {
+  op: 'asset.remove'
+  assetId: AssetId
 }
 
 // ------------------------------------------------------------------ 字幕スタイル
@@ -97,6 +122,13 @@ export interface CharacterUpdate {
   voice?: Partial<VoiceConfig>
   subtitleStyleId?: SubtitleStyleId
   creditText?: string
+}
+
+/** 立ち絵の設定を丸ごと置き換える(素材マネージャーで編集した結果を反映する)。null で立ち絵を外す。 */
+export interface CharacterSetPortrait {
+  op: 'character.setPortrait'
+  characterId: CharacterId
+  portrait: PortraitConfig | null
 }
 
 export interface CharacterDelete {
@@ -219,10 +251,14 @@ export type Command =
   | ProjectSetConversationAi
   | ProjectSetEditing
   | LayerInsert
+  | AssetAdd
+  | AssetUpdateLicense
+  | AssetRemove
   | StyleUpsertSubtitle
   | CharacterCreate
   | CharacterSetPersona
   | CharacterUpdate
+  | CharacterSetPortrait
   | CharacterDelete
   | ItemSetTimeRange
   | ItemSetLayer

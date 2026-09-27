@@ -2,6 +2,7 @@ import { produce } from 'immer'
 
 import type { Project } from '../project/types'
 import type { ApplyEnv, CommandContext, HandlerTable } from './env'
+import { assetHandlers } from './handlers/asset'
 import { characterHandlers } from './handlers/character'
 import { itemHandlers } from './handlers/item'
 import { projectHandlers } from './handlers/project'
@@ -19,6 +20,7 @@ export interface ApplyResult {
 /** 全ての op の処理。型が網羅を強制する(足し忘れはコンパイルエラーになる)。 */
 const HANDLERS: HandlerTable = {
   ...projectHandlers,
+  ...assetHandlers,
   ...characterHandlers,
   ...itemHandlers,
   ...voiceHandlers

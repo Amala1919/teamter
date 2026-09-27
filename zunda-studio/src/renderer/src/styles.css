@@ -233,7 +233,8 @@ input[type='text'] {
 .script__lineHeader {
   align-items: center;
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 4px 8px;
   margin-bottom: 4px;
 }
 
@@ -249,6 +250,8 @@ input[type='text'] {
 
 .script__role {
   border: 1px solid var(--border);
+  flex: none;
+  white-space: nowrap;
   border-radius: 3px;
   color: var(--text-dim);
   font-size: 10px;
@@ -264,6 +267,7 @@ input[type='text'] {
   color: var(--text-dim);
   font-size: 11px;
   margin-left: auto;
+  white-space: nowrap;
 }
 
 .script__delete {
@@ -583,6 +587,11 @@ input[type='text'] {
   flex: 1;
 }
 
+.field__row input[type='checkbox'],
+.field__row input[type='radio'] {
+  flex: none;
+}
+
 input[type='number'] {
   background: var(--bg-input);
   border: 1px solid var(--border);
@@ -788,4 +797,109 @@ input[type='color'] {
   border-bottom: none;
   margin-bottom: 6px;
   padding-bottom: 0;
+}
+
+.field__row--wrap {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.field__row--wrap > label.field__row {
+  align-items: center;
+}
+
+.script__expressionSelect {
+  max-width: 110px;
+  padding: 1px 4px;
+}
+
+/* ---------------------------------------------------------------- 立ち絵 */
+
+.portrait-preview {
+  background-color: #2a2f35;
+  background-image:
+    linear-gradient(45deg, #353b42 25%, transparent 25%, transparent 75%, #353b42 75%),
+    linear-gradient(45deg, #353b42 25%, transparent 25%, transparent 75%, #353b42 75%);
+  background-position:
+    0 0,
+    8px 8px;
+  background-size: 16px 16px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  display: block;
+  max-width: 100%;
+}
+
+.portrait-section {
+  display: flex;
+  gap: 14px;
+}
+
+.portrait-section__thumb {
+  flex: none;
+}
+
+.portrait-section__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.portrait-section__file {
+  font-weight: 600;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portrait-manager {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 380px 1fr;
+  min-height: 480px;
+}
+
+.portrait-manager__preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.portrait-manager__preview .field__row {
+  align-items: center;
+}
+
+.portrait-manager__editor {
+  max-height: 70vh;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.chip {
+  border-radius: 999px;
+  padding: 3px 12px;
+}
+
+.chip--active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.layer-tree {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  max-height: 52vh;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.layer-row {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  padding: 2px 0;
 }
