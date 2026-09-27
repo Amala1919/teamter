@@ -10,6 +10,8 @@ import { Toolbar } from './features/toolbar/Toolbar'
 import { togglePlayback } from './playback/player'
 import { useSettingsStore } from './state/settings'
 import { RecoveryBanner } from './features/toolbar/RecoveryBanner'
+import { EngineInstallBanner } from './features/voice/EngineInstall'
+import { useVoiceStore } from './state/voice'
 import { deleteSelection, startAutosave, useEditorStore } from './state/store'
 
 export function App(): React.JSX.Element {
@@ -18,7 +20,10 @@ export function App(): React.JSX.Element {
   const loadSettings = useSettingsStore((state) => state.load)
 
   useEffect(() => {
-    loadSettings().catch((caught: unknown) => setError(String(caught)))
+    loadSettings()
+      // 起動したら音声エンジンをつないでおく(見つからなければ自動インストールを勧める)。
+      .then(() => useVoiceStore.getState().ensureEngine('voicevox'))
+      .catch((caught: unknown) => setError(String(caught)))
   }, [loadSettings])
 
   useEffect(() => {
@@ -75,6 +80,7 @@ export function App(): React.JSX.Element {
       <div className="app__header">
         <Toolbar onError={setError} onOpenSettings={() => setSettingsOpen(true)} />
         <RecoveryBanner onError={setError} />
+        <EngineInstallBanner onOpenSettings={() => setSettingsOpen(true)} />
         {error !== null && (
           <div className="banner banner--error" role="alert">
             <span>{error}</span>

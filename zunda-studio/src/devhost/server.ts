@@ -48,7 +48,16 @@ export async function startDevHost(options: DevHostOptions): Promise<DevHost> {
     runtime: 'devhost',
     appVersion: '0.0.0-devhost',
     picker,
-    ...(options.env ? { env: options.env } : {})
+    ...(options.env ? { env: options.env } : {}),
+    // E2E で VOICEVOX の自動インストールを試すときは、配布元を模擬サーバーに向ける。
+    ...(process.env['ZS_ENGINE_RELEASE_BASE']
+      ? {
+          engineRelease: {
+            latestUrl: `${process.env['ZS_ENGINE_RELEASE_BASE']}/latest`,
+            downloadBase: `${process.env['ZS_ENGINE_RELEASE_BASE']}/download`
+          }
+        }
+      : {})
   })
   const handlers = createHandlers(services)
   const eventClients = new Set<ServerResponse>()

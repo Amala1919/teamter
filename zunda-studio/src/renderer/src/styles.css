@@ -1679,3 +1679,69 @@ input[type='url'] {
   cursor: pointer;
   font-size: 12px;
 }
+
+/* ------------------------------------------------------ 音声エンジンの自動インストール */
+
+.banner--info {
+  background: #1d2a3a;
+  border-bottom: 1px solid #4a88e0;
+}
+
+.banner--ok {
+  background: #1f3a1d;
+  border-bottom: 1px solid var(--accent);
+}
+
+.banner .banner__actions {
+  flex: none;
+  display: flex;
+  gap: 6px;
+}
+
+.install-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.install-progress__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+}
+
+.banner .install-progress__text span {
+  flex: none;
+}
+
+.install-progress__bytes {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.progress {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-input);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress__bar {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s;
+}
+
+.progress--busy .progress__bar {
+  opacity: 0.5;
+  animation: progress-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes progress-pulse {
+  50% {
+    opacity: 0.15;
+  }
+}

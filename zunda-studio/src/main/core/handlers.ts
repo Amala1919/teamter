@@ -103,6 +103,9 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
   'ai:test': z.tuple([z.enum(PROVIDER_IDS), z.string().min(1).max(200)]),
   'voice:engines': z.tuple([]),
   'voice:ensure': z.tuple([engineIdArg]),
+  'voice:install:info': z.tuple([]),
+  'voice:install:start': z.tuple([]),
+  'voice:install:cancel': z.tuple([]),
   'voice:speakers': z.tuple([engineIdArg]),
   'voice:synthesize': z.tuple([synthesisRequestSchema]) as unknown as z.ZodType<ChannelArgs<'voice:synthesize'>>,
   'voice:resolve': z.tuple([z.string().max(100)]),
@@ -285,6 +288,24 @@ export function createHandlers(services: Services): HandlerTable {
 
     'voice:engines': () => Promise.resolve(services.engines.statusList()),
     'voice:ensure': (engineId) => services.engines.ensure(engineId),
+    'voice:install:info': () => services.engineInstaller.info(),
+    'voice:install:start': async () => {
+      const executablePath = await services.engineInstaller.install()
+      // 入れたエンジンを使う設定にする(VOICEVOX の項目が消されていたら足す)。
+      const current = services.settings.get().voice.engines
+      const engines = current.some((engine) => engine.id === 'voicevox')
+        ? current.map((engine) => (engine.id === 'voicevox' ? { ...engine, executablePath, autoLaunch: true } : engine))
+        : [{ id: 'voicevox', label: 'VOICEVOX', url: 'http://127.0.0.1:50021', executablePath, autoLaunch: true }, ...current]
+      await services.settings.update({ voice: { engines } })
+      services.engineInstaller.markStarting()
+      const status = await services.engines.ensure('voicevox')
+      services.engineInstaller.finish(status.state === 'ready' ? undefined : (status.message ?? 'VOICEVOX を起動できませんでした'))
+      return status
+    },
+    'voice:install:cancel': () => {
+      services.engineInstaller.cancel()
+      return Promise.resolve()
+    },
     'voice:speakers': async (engineId) => (await services.engines.require(engineId)).speakers(),
     'voice:synthesize': async (request) => {
       if (request.text.trim() === '' && !request.accentPhrases && !request.kana) {

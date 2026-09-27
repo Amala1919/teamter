@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { defineConfig } from '@playwright/test'
 
-import { AI_RESPONSE_DIR, DEVHOST_PORT, MOCK_VOICEVOX_PORT } from './e2e/ports'
+import { AI_RESPONSE_DIR, DEVHOST_PORT, ENGINE_RELEASE_PORT, MOCK_VOICEVOX_PORT } from './e2e/ports'
 
 /**
  * E2E テスト。ビルド済みのレンダラをテスト用ホスト(src/devhost)で配信し、Chromium で操作する。
@@ -47,7 +47,8 @@ export default defineConfig({
       env: {
         FAKE_MODE: 'text',
         FAKE_REPLY: '接続できたのだ',
-        FAKE_RESPONSE_DIR: AI_RESPONSE_DIR
+        FAKE_RESPONSE_DIR: AI_RESPONSE_DIR,
+        ZS_ENGINE_RELEASE_BASE: `http://127.0.0.1:${ENGINE_RELEASE_PORT}`
       }
     }
   ]

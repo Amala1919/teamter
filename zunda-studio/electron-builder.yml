@@ -13,6 +13,8 @@ files:
 asarUnpack:
   # ネイティブのモジュールは asar の外に出す必要がある。
   - '**/node_modules/@napi-rs/**'
+  # VOICEVOX の自動インストールで使う 7za。実行ファイルなので asar の外に置く。
+  - '**/node_modules/7zip-bin/**'
 extraResources:
   # 公式の VOICEVOX ENGINE を vendor/voicevox-engine に置いて作ると、アプリに同梱される(無ければ同梱しない)。
   # エンジンは改変せずに同梱し、ライセンス文書も一緒に置くこと(REQUIREMENTS.md L-2)。

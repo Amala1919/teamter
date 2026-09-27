@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.0.9",
+    "7zip-bin": "^5.2.0",
     "ag-psd": "^31.0.2",
     "immer": "^11.1.18",
     "nanoid": "^6.0.1",
