@@ -120,12 +120,15 @@ export function ModelPicker({ value, onChange, inheritLabel, testId }: ModelPick
               {groups.recommended.map(renderOption)}
             </optgroup>
           )}
-          {groups.others.length > 0 &&
-            (groups.recommended.length > 0 ? (
-              <optgroup label="その他のモデル">{groups.others.map(renderOption)}</optgroup>
+          {groups.groups.map((group) =>
+            groups.recommended.length > 0 || groups.groups.length > 1 ? (
+              <optgroup key={group.label} label={group.label}>
+                {group.models.map(renderOption)}
+              </optgroup>
             ) : (
-              groups.others.map(renderOption)
-            ))}
+              group.models.map(renderOption)
+            )
+          )}
           <option value={CUSTOM}>その他(モデルIDを入力)</option>
         </select>
       )}

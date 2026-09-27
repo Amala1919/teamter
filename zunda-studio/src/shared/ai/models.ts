@@ -26,11 +26,16 @@ function baseName(id: string): string {
 
 const byVersion = (a: string, b: string): number => a.localeCompare(b, 'en', { numeric: true })
 
-export function markRecommended(models: ModelInfo[], rules: RecommendRule[]): ModelInfo[] {
+/**
+ * おすすめの印を付ける。preferPrefix を渡すと、その前置き(opencode-go/ など)のモデルがあればそちらから選ぶ。
+ */
+export function markRecommended(models: ModelInfo[], rules: RecommendRule[], preferPrefix?: string): ModelInfo[] {
   const chosen = new Map<string, string | undefined>()
   for (const rule of rules) {
     const matches = models.filter((model) => model.source !== 'custom' && rule.pattern.test(baseName(model.id)))
-    const newest = matches.map((model) => model.id).sort(byVersion).at(-1)
+    const preferred = preferPrefix ? matches.filter((model) => model.id.startsWith(preferPrefix)) : []
+    const pool = preferred.length > 0 ? preferred : matches
+    const newest = [...pool].sort((a, b) => byVersion(baseName(a.id), baseName(b.id))).at(-1)?.id
     if (newest !== undefined && !chosen.has(newest)) chosen.set(newest, rule.note)
   }
   return models.map((model) => {
@@ -40,11 +45,31 @@ export function markRecommended(models: ModelInfo[], rules: RecommendRule[]): Mo
   })
 }
 
-/** おすすめを先に、残りは名前順に並べて2つに分ける(一覧に無い手入力のモデルは最後)。 */
-export function groupModels(models: ModelInfo[]): { recommended: ModelInfo[]; others: ModelInfo[] } {
+export interface ModelGroup {
+  label: string
+  models: ModelInfo[]
+}
+
+/** 見出しの無いモデルをまとめる見出し。 */
+export const OTHER_MODELS_LABEL = 'その他のモデル'
+
+/**
+ * おすすめを先に、残りは見出し(group)ごとにまとめる。見出しは一覧に出てきた順、中は名前順。
+ * 手入力したモデルは最後。
+ */
+export function groupModels(models: ModelInfo[]): { recommended: ModelInfo[]; groups: ModelGroup[] } {
   const recommended = models.filter((model) => model.recommended === true)
-  const others = models
-    .filter((model) => model.recommended !== true)
-    .sort((a, b) => (a.source === 'custom' ? 1 : 0) - (b.source === 'custom' ? 1 : 0) || byVersion(a.id, b.id))
-  return { recommended, others }
+  const groups = new Map<string, ModelInfo[]>()
+  for (const model of models) {
+    if (model.recommended === true) continue
+    const label = model.group ?? OTHER_MODELS_LABEL
+    groups.set(label, [...(groups.get(label) ?? []), model])
+  }
+  const ordered = [...groups.entries()]
+    .map(([label, list]) => ({
+      label,
+      models: [...list].sort((a, b) => Number(a.source === 'custom') - Number(b.source === 'custom') || byVersion(a.label, b.label))
+    }))
+    .sort((a, b) => Number(a.models.every((m) => m.source === 'custom')) - Number(b.models.every((m) => m.source === 'custom')))
+  return { recommended, groups: ordered }
 }

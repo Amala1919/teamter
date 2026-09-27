@@ -247,22 +247,19 @@ describe('OpenCodeProvider', () => {
     )
   })
 
-  it('モデル一覧を CLI から取得し、設定のプロバイダで絞る', async () => {
+  it('モデル一覧を CLI から取得し、全プロバイダのモデルをプランごとにまとめて出す', async () => {
     const models = await opencode(fakeCliSettings(), envFor('text')).listModels()
-    expect(models.map((model) => model.id)).toEqual(['opencode-go/kimi-k3', 'opencode-go/glm-5.3'])
+    expect(models.map((model) => model.id)).toEqual(['opencode-go/kimi-k3', 'opencode-go/glm-5.3', 'anthropic/claude-sonnet-5'])
     expect(models.every((model) => model.source === 'cli')).toBe(true)
+    expect(models[0]).toMatchObject({ label: 'Kimi K3', group: 'OpenCode Go(月額プラン)', recommended: true })
+    expect(models[2]!.group).toBe('その他のプロバイダ(anthropic)')
   })
 
-  it('絞り込みを外すと全プロバイダのモデルを出す', async () => {
-    const settings = fakeCliSettings({ ai: { providers: { opencode: { providerFilter: '' } } } })
-    const models = await opencode(settings, envFor('text')).listModels()
-    expect(models.map((model) => model.id)).toContain('anthropic/claude-sonnet-5')
-  })
-
-  it('一覧を取得できなければ内蔵の候補を出す', async () => {
+  it('一覧を取得できなければ内蔵の一覧(Go と Zen)を出す', async () => {
     const models = await opencode(fakeCliSettings(), envFor('models-fail')).listModels()
-    expect(models.length).toBeGreaterThan(0)
-    expect(models.every((model) => model.source === 'static' && model.id.startsWith('opencode-go/'))).toBe(true)
+    expect(models.length).toBeGreaterThan(100)
+    expect(models.every((model) => model.source === 'static')).toBe(true)
+    expect(models.map((model) => model.id)).toEqual(expect.arrayContaining(['opencode-go/kimi-k3', 'opencode/claude-opus-5', 'opencode/gemini-3.8-flash']))
   })
 
   it('provider/model の形式でないモデルを拒否する', async () => {

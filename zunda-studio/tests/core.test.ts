@@ -135,7 +135,7 @@ describe('設定', () => {
   it('空の入力から既定値を作る', () => {
     const settings = parseSettings({})
     expect(settings.ai.roles).toEqual({ conversation: null, editor: null })
-    expect(settings.ai.providers.opencode.providerFilter).toBe('opencode-go')
+    expect(settings.ai.providers.opencode).toMatchObject({ connection: 'api-key', baseUrl: 'https://opencode.ai/zen/go/v1' })
     expect(settings.voice.engines[0]?.url).toBe('http://127.0.0.1:50021')
   })
 

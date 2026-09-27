@@ -1,31 +1,31 @@
 import type { ChatTurn, GenerateRequest } from '@shared/ai/types'
+import { catalogEntry, opencodePlan, type OpenCodeApiFormat } from '@shared/ai/opencode-catalog'
+import { OPENCODE_GO_BASE_URL, OPENCODE_ZEN_BASE_URL } from '@shared/settings/schema'
 
 import { AppError } from '../../core/errors'
 import { classifyCliFailure } from './cli-errors'
 
 /**
  * OpenCode Go / Zen の API を、APIキーで直接呼ぶ。
- * モデルによって受け付ける形式(OpenAI の chat/completions・responses、Anthropic の messages)が違い、
- * モデル一覧にはその区別が載っていないので、名前から見当をつけ、断られたら別の形式で試し直す。
+ * モデルによって受け付ける形式(OpenAI の chat/completions・responses、Anthropic の messages、Gemini)が違う。
+ * 内蔵の一覧(opencode-catalog.ts)に載っていればその形式を、無ければ名前から見当をつけ、断られたら別の形式で試し直す。
  */
 
-export type ApiFormat = 'chat' | 'messages' | 'responses'
-
-const FORMAT_PATHS: Record<ApiFormat, string> = {
-  chat: '/chat/completions',
-  messages: '/messages',
-  responses: '/responses'
-}
+export type ApiFormat = OpenCodeApiFormat
 
 const FORMAT_HINTS: { pattern: RegExp; format: ApiFormat }[] = [
+  { pattern: /^gemini/i, format: 'gemini' },
   { pattern: /^(gpt|grok|muse|o\d)/i, format: 'responses' },
   { pattern: /^(minimax|qwen|claude)/i, format: 'messages' }
 ]
 
-/** 試す順の形式。名前から見当をつけたものを先頭にする。 */
+const FALLBACK_ORDER: ApiFormat[] = ['chat', 'messages', 'responses']
+
+/** 試す順の形式。内蔵の一覧か名前から決めたものを先頭にする。model は「opencode-go/kimi-k3」の形でも名前だけでもよい。 */
 export function formatsFor(model: string): ApiFormat[] {
-  const preferred = FORMAT_HINTS.find((hint) => hint.pattern.test(model))?.format ?? 'chat'
-  return [preferred, ...(['chat', 'messages', 'responses'] as const).filter((format) => format !== preferred)]
+  const name = apiModelName(model)
+  const preferred = catalogEntry(model)?.format ?? FORMAT_HINTS.find((hint) => hint.pattern.test(name))?.format ?? 'chat'
+  return [preferred, ...FALLBACK_ORDER.filter((format) => format !== preferred)]
 }
 
 /** モデルIDの前に付ける名前(opencode コマンドと同じ ID にそろえる)。 */
@@ -33,10 +33,41 @@ export function modelPrefix(baseUrl: string): string {
   return /\/zen\/go(\/|$)/.test(baseUrl) ? 'opencode-go' : 'opencode'
 }
 
+function sameUrl(a: string, b: string): boolean {
+  return a.replace(/\/+$/, '') === b.replace(/\/+$/, '')
+}
+
+/** 公式の接続先(Go・Zen)を使っているか。独自の接続先なら全てそこへ送る。 */
+export function usesOfficialEndpoints(baseUrl: string): boolean {
+  return sameUrl(baseUrl, OPENCODE_GO_BASE_URL) || sameUrl(baseUrl, OPENCODE_ZEN_BASE_URL)
+}
+
+/** モデルを送る接続先。公式なら ID の前置きで Go と Zen を分ける(1つのキーで両方使える)。 */
+export function baseUrlFor(model: string, configured: string): string {
+  if (!usesOfficialEndpoints(configured)) return configured
+  const plan = opencodePlan(model)
+  if (plan === 'go') return OPENCODE_GO_BASE_URL
+  if (plan === 'zen') return OPENCODE_ZEN_BASE_URL
+  return configured
+}
+
 /** 「opencode-go/kimi-k3」のような ID から、API に渡す名前を取り出す。 */
 export function apiModelName(model: string): string {
   const slash = model.indexOf('/')
   return slash >= 0 ? model.slice(slash + 1) : model
+}
+
+function formatPath(format: ApiFormat, name: string): string {
+  switch (format) {
+    case 'chat':
+      return '/chat/completions'
+    case 'messages':
+      return '/messages'
+    case 'responses':
+      return '/responses'
+    case 'gemini':
+      return `/models/${encodeURIComponent(name)}:generateContent`
+  }
 }
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
@@ -71,11 +102,12 @@ export class OpenCodeApi {
     signal?: AbortSignal
   ): Promise<string> {
     const name = apiModelName(model)
-    const learned = this.learned.get(name)
-    const formats = learned ? [learned, ...formatsFor(name).filter((format) => format !== learned)] : formatsFor(name)
+    const target = { ...options, baseUrl: baseUrlFor(model, options.baseUrl) }
+    const learned = this.learned.get(model)
+    const formats = learned ? [learned, ...formatsFor(model).filter((format) => format !== learned)] : formatsFor(model)
     let lastError: AppError | null = null
     for (const format of formats) {
-      const response = await this.request(options, FORMAT_PATHS[format], {
+      const response = await this.request(target, formatPath(format, name), {
         method: 'POST',
         body: JSON.stringify(buildBody(format, name, request.system, request.turns)),
         ...(signal ? { signal } : {})
@@ -83,7 +115,7 @@ export class OpenCodeApi {
       if (response.ok) {
         const text = extractText(format, await response.json())
         if (text.trim() === '') throw new AppError('CLI_FAILED', `OpenCode: ${name} から空の応答が返りました`)
-        this.learned.set(name, format)
+        this.learned.set(model, format)
         return text
       }
       const detail = await response.text().catch(() => '')
@@ -113,8 +145,9 @@ export class OpenCodeApi {
         headers: {
           'content-type': 'application/json',
           authorization: `Bearer ${options.apiKey}`,
-          // messages 形式(Anthropic 互換)はこちらのヘッダーでキーを受け取る。
+          // messages 形式(Anthropic 互換)と Gemini 形式は、それぞれこちらのヘッダーでキーを受け取る。
           'x-api-key': options.apiKey,
+          'x-goog-api-key': options.apiKey,
           'anthropic-version': '2023-06-01'
         }
       })
@@ -137,6 +170,11 @@ function buildBody(format: ApiFormat, model: string, system: string, turns: read
       return { model, system, messages, max_tokens: 8192, stream: false }
     case 'responses':
       return { model, instructions: system, input: messages, stream: false }
+    case 'gemini':
+      return {
+        systemInstruction: { parts: [{ text: system }] },
+        contents: turns.map((turn) => ({ role: turn.role === 'assistant' ? 'model' : 'user', parts: [{ text: turn.content }] }))
+      }
   }
 }
 
@@ -145,6 +183,9 @@ interface ChatBody {
 }
 interface MessagesBody {
   content?: { type?: string; text?: unknown }[]
+}
+interface GeminiBody {
+  candidates?: { content?: { parts?: { text?: unknown; thought?: unknown }[] } }[]
 }
 interface ResponsesBody {
   output_text?: unknown
@@ -176,6 +217,11 @@ export function extractText(format: ApiFormat, body: unknown): string {
         .map((part) => part.text as string)
         .join('')
     }
+    case 'gemini':
+      return ((body as GeminiBody).candidates?.[0]?.content?.parts ?? [])
+        .filter((part) => typeof part.text === 'string' && part.thought !== true)
+        .map((part) => part.text as string)
+        .join('')
   }
 }
 

@@ -138,7 +138,7 @@ export function AiSettings({ settings, onError }: AiSettingsProps): React.JSX.El
           <>
             <OpenCodeKeyField onError={onError} />
             <label className="field">
-              <span className="field__label">サービス</span>
+              <span className="field__label">契約しているプラン</span>
               <select
                 value={
                   opencode.baseUrl === OPENCODE_GO_BASE_URL ? 'go' : opencode.baseUrl === OPENCODE_ZEN_BASE_URL ? 'zen' : 'custom'
@@ -175,6 +175,8 @@ export function AiSettings({ settings, onError }: AiSettingsProps): React.JSX.El
             <p className="note">
               キーは OpenCode のサイト(opencode.ai)にログインし、OpenCode Go を契約したうえで管理画面の「API Keys」から発行します。
               入れたキーはこの PC の中だけに暗号化して保存し、OpenCode 以外には送りません。
+              モデルの一覧には OpenCode Go と OpenCode Zen(Claude・GPT・Gemini なども使える従量課金)の両方が出ます。
+              おすすめは契約しているプランから選びます。Zen のモデルは使った分だけ料金がかかります。
             </p>
           </>
         ) : (
@@ -188,15 +190,7 @@ export function AiSettings({ settings, onError }: AiSettingsProps): React.JSX.El
               onChange={(executablePath) => save({ ai: { providers: { opencode: { executablePath } } } })}
               testId="opencode-path"
             />
-            <label className="field">
-              <span className="field__label">モデル一覧の絞り込み</span>
-              <input
-                type="text"
-                defaultValue={opencode.providerFilter}
-                placeholder="空欄なら全プロバイダ"
-                onBlur={(event) => save({ ai: { providers: { opencode: { providerFilter: event.target.value.trim() } } } })}
-              />
-            </label>
+            <p className="note">モデルの一覧には、opencode コマンドに登録されている全てのプロバイダのモデルが出ます。</p>
           </>
         )}
         <p className="note">

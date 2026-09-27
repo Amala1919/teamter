@@ -63,6 +63,13 @@ test.describe('AIの選択', () => {
       await expect(page.getByTestId('provider-opencode-status')).toContainText('APIキーが未入力')
       await expect(page.getByTestId('opencode-path')).toHaveCount(0)
 
+      // キーを入れる前でも、内蔵の一覧から Go と Zen の全モデルを選べる
+      await page.getByTestId('role-conversation-provider').selectOption('opencode')
+      const conversation = page.getByTestId('role-conversation-model')
+      await expect(conversation.locator('optgroup[label="OpenCode Zen(従量課金)"] option', { hasText: 'Claude Opus 5' }).first()).toBeAttached()
+      await expect(conversation.locator('optgroup[label="OpenCode Zen(従量課金)"] option', { hasText: 'Gemini 3.8 Flash' })).toHaveCount(1)
+      expect(await conversation.locator('option').count()).toBeGreaterThan(100)
+
       // 間違ったキーでは接続テストで原因が分かる
       await page.getByTestId('opencode-key-input').fill('sk-wrong-0000')
       await page.getByTestId('opencode-key-save').click()
@@ -80,7 +87,7 @@ test.describe('AIの選択', () => {
       await page.getByTestId('role-editor-provider').selectOption('opencode')
       const model = page.getByTestId('role-editor-model')
       await expect(model.locator('optgroup[label="おすすめ"] option')).toHaveCount(4)
-      await expect(model.locator('optgroup[label="その他のモデル"] option', { hasText: 'glm-5.2' })).toHaveCount(1)
+      await expect(model.locator('optgroup[label="OpenCode Go(月額プラン)"] option', { hasText: 'GLM-5.2' })).toHaveCount(1)
       await expect(model).toHaveValue(/^opencode-go\/(kimi|glm|deepseek|qwen)/)
 
       // その他から選んでも使える(messages 形式のモデル)
