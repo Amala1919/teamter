@@ -73,4 +73,17 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-void start()
+const started = start()
+
+// アプリが起動した音声エンジンを残さないよう、終了前に止める。
+let disposed = false
+app.on('before-quit', (event) => {
+  if (disposed) return
+  event.preventDefault()
+  void started
+    .then((services) => services.dispose())
+    .finally(() => {
+      disposed = true
+      app.quit()
+    })
+})

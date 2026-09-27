@@ -72,6 +72,7 @@ export function createEmptyProject(options: CreateProjectOptions = {}): Project 
     liveSessions: {},
     credits: { generated: '', confirmedByUser: false },
     chat: { messages: [] },
-    ai: { conversation: null }
+    ai: { conversation: null },
+    editing: { rippleOnVoiceChange: true, defaultGapMs: 200 }
   }
 }

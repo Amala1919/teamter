@@ -128,7 +128,7 @@ export async function startDevHost(options: DevHostOptions): Promise<DevHost> {
     close: () =>
       new Promise<void>((resolvePromise) => {
         for (const client of eventClients) client.end()
-        server.close(() => resolvePromise())
+        void services.dispose().finally(() => server.close(() => resolvePromise()))
       })
   }
 }

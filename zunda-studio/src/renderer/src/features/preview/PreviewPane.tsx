@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react'
 
-import { projectDurationMs } from '@shared/project/queries'
+import { isVoiceItem, itemsAt, projectDurationMs } from '@shared/project/queries'
 
 import { renderFrame } from '../../compositor/render'
 import { formatMs } from '../../lib/time'
+import { player, togglePlayback, usePlaybackStore } from '../../playback/player'
 import { useEditorStore } from '../../state/store'
 
 export function PreviewPane(): React.JSX.Element {
@@ -12,6 +13,12 @@ export function PreviewPane(): React.JSX.Element {
   const playheadMs = useEditorStore((state) => state.playheadMs)
   const setPlayhead = useEditorStore((state) => state.setPlayhead)
   const durationMs = projectDurationMs(project)
+  const caption = itemsAt(project, playheadMs)
+    .filter(isVoiceItem)
+    .map((item) => `${project.characters[item.characterId]?.name ?? ''}「${item.text}」`)
+    .join(' ')
+  const playing = usePlaybackStore((state) => state.playing)
+  const loading = usePlaybackStore((state) => state.loading)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -36,9 +43,23 @@ export function PreviewPane(): React.JSX.Element {
           height={project.canvas.height}
           className="preview__canvas"
         />
+        {/* 画面の字幕は canvas に描くため、読み上げ用に同じ内容を文字でも出す。 */}
+        <p className="sr-only" aria-live="polite" data-testid="current-subtitle">
+          {caption}
+        </p>
       </div>
       <div className="preview__controls">
-        <span className="preview__time">
+        <button
+          type="button"
+          className="preview__play"
+          onClick={togglePlayback}
+          disabled={loading}
+          aria-label={playing ? '停止' : '再生'}
+          data-testid="play-toggle"
+        >
+          {loading ? '…' : playing ? '■' : '▶'}
+        </button>
+        <span className="preview__time" data-testid="playhead">
           {formatMs(playheadMs)} / {formatMs(durationMs)}
         </span>
         <input
@@ -47,10 +68,12 @@ export function PreviewPane(): React.JSX.Element {
           max={Math.max(durationMs, 1000)}
           step={10}
           value={Math.min(playheadMs, Math.max(durationMs, 1000))}
-          onChange={(event) => setPlayhead(Number(event.target.value))}
+          onChange={(event) => {
+            player.stop()
+            setPlayhead(Number(event.target.value))
+          }}
           aria-label="再生位置"
         />
-        <span className="note">再生は Phase 3(音声同期と同時に実装する)</span>
       </div>
     </section>
   )

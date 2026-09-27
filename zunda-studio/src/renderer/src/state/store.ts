@@ -20,7 +20,16 @@ interface HistoryEntry {
 
 const HISTORY_LIMIT = 200
 
-export type DispatchResult = { ok: true } | { ok: false; message: string }
+export type DispatchResult = { ok: true; resolvedIds: Record<string, string> } | { ok: false; message: string }
+
+export interface DispatchOptions {
+  /**
+   * push: 取り消しの単位として履歴に積む(通常の編集)。
+   * skip: 履歴に積まない。合成結果の反映のような、利用者の操作から導かれる二次的な更新に使う。
+   *       取り消すと元の操作ごと戻り、二次的な更新は必要なら再び行われる。
+   */
+  history?: 'push' | 'skip'
+}
 
 interface EditorState {
   project: Project
@@ -32,7 +41,7 @@ interface EditorState {
   redoStack: HistoryEntry[]
 
   /** プロジェクトへの変更はすべてこの関数を通す。 */
-  dispatch: (commands: readonly Command[], label: string) => DispatchResult
+  dispatch: (commands: readonly Command[], label: string, options?: DispatchOptions) => DispatchResult
   undo: () => void
   redo: () => void
 
@@ -58,18 +67,22 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   undoStack: [],
   redoStack: [],
 
-  dispatch: (commands, label) => {
-    if (commands.length === 0) return { ok: true }
+  dispatch: (commands, label, options) => {
+    if (commands.length === 0) return { ok: true, resolvedIds: {} }
     const { project, undoStack } = get()
     try {
-      const { project: next } = applyCommands(project, commands, commandContext)
-      set({
-        project: next,
-        dirty: true,
-        undoStack: [...undoStack, { label, project }].slice(-HISTORY_LIMIT),
-        redoStack: []
-      })
-      return { ok: true }
+      const { project: next, resolvedIds } = applyCommands(project, commands, commandContext)
+      if (options?.history === 'skip') {
+        set({ project: next, dirty: true })
+      } else {
+        set({
+          project: next,
+          dirty: true,
+          undoStack: [...undoStack, { label, project }].slice(-HISTORY_LIMIT),
+          redoStack: []
+        })
+      }
+      return { ok: true, resolvedIds }
     } catch (error) {
       const message =
         error instanceof CommandError

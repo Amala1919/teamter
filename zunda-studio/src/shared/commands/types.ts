@@ -2,8 +2,8 @@
  * プロジェクトへの変更はすべてこのコマンドを経由する。
  * UI の手動編集と AI チャットは同一のコマンドを使う。仕様は docs/AI_EDIT_PROTOCOL.md を参照。
  *
- * Phase 0 では骨格の検証に必要な最小の集合のみ実装している。
- * 残りは各フェーズで追加する(プロトコル仕様側には全体が定義済み)。
+ * 新しい操作を足すときは、ここに型を1つ足し、commands/handlers/ に処理を1つ足す。
+ * 処理表は全ての op を網羅することが型で強制されるので、足し忘れはコンパイルエラーになる。
  */
 
 import type { GeneratedBy, ModelRef } from '../ai/types'
@@ -15,8 +15,14 @@ import type {
   ItemId,
   LayerId,
   Ms,
-  SubtitleStyleId
+  SubtitleStyle,
+  SubtitleStyleId,
+  SynthesisResult,
+  VoiceConfig,
+  VoiceParams
 } from '../project/types'
+
+// ------------------------------------------------------------------ プロジェクト
 
 export interface ProjectSetMeta {
   op: 'project.setMeta'
@@ -29,6 +35,14 @@ export interface ProjectSetConversationAi {
   model: ModelRef | null
 }
 
+export interface ProjectSetEditing {
+  op: 'project.setEditing'
+  rippleOnVoiceChange?: boolean
+  defaultGapMs?: Ms
+}
+
+// ------------------------------------------------------------------ レイヤー
+
 export interface LayerInsert {
   op: 'layer.insert'
   name: string
@@ -36,6 +50,20 @@ export interface LayerInsert {
   /** AI が後続コマンドから参照するための一時ID。適用時に実IDへ解決される。 */
   tempId?: string
 }
+
+// ------------------------------------------------------------------ 字幕スタイル
+
+/** 字幕スタイルを作る(styleId 省略時)か、部分的に更新する。 */
+export interface StyleUpsertSubtitle {
+  op: 'style.upsertSubtitle'
+  styleId?: SubtitleStyleId
+  /** 新規作成時に元にするスタイル。省略時は最初のスタイル。 */
+  baseStyleId?: SubtitleStyleId
+  props: Partial<Omit<SubtitleStyle, 'id'>>
+  tempId?: string
+}
+
+// ------------------------------------------------------------------ キャラクター
 
 export interface CharacterCreate {
   op: 'character.create'
@@ -58,6 +86,26 @@ export interface CharacterSetPersona {
   persona: AiPersona
 }
 
+/** キャラクターの既定値を変える。声が変わる変更は、そのキャラクターのセリフを合成し直す対象にする。 */
+export interface CharacterUpdate {
+  op: 'character.update'
+  characterId: CharacterId
+  name?: string
+  authorRole?: CharacterAuthorRole
+  /** AIの役にするときは persona も同時に渡せる(persona が無いと AI の役にできないため)。 */
+  persona?: AiPersona
+  voice?: Partial<VoiceConfig>
+  subtitleStyleId?: SubtitleStyleId
+  creditText?: string
+}
+
+export interface CharacterDelete {
+  op: 'character.delete'
+  characterId: CharacterId
+}
+
+// ------------------------------------------------------------------ アイテム共通
+
 export interface ItemSetTimeRange {
   op: 'item.setTimeRange'
   itemId: ItemId
@@ -76,11 +124,18 @@ export interface ItemDelete {
   itemId: ItemId
 }
 
+// ------------------------------------------------------------------ ボイス
+
+/**
+ * セリフを挿入する。atMs か afterItemId のどちらか一方で位置を決める。
+ * afterItemId を使うとそのセリフの直後(既定の間を空けて)に入り、後ろのアイテムは追従設定に従ってずれる。
+ */
 export interface VoiceInsert {
   op: 'voice.insert'
   characterId: CharacterId
   text: string
-  atMs: Ms
+  atMs?: Ms
+  afterItemId?: ItemId
   layerId?: LayerId
   expressionId?: ExpressionId
   /** AIが書いたセリフの生成元。AI自身には指定させず、アプリが付与する。 */
@@ -94,6 +149,38 @@ export interface VoiceSetText {
   text: string
 }
 
+/** セリフを削除し、追従設定に従って後ろを前に詰める。 */
+export interface VoiceDelete {
+  op: 'voice.delete'
+  itemId: ItemId
+}
+
+/** 発話順を変える。afterItemId が null なら先頭へ。 */
+export interface VoiceMove {
+  op: 'voice.move'
+  itemId: ItemId
+  afterItemId: ItemId | null
+}
+
+export interface VoiceSetCharacter {
+  op: 'voice.setCharacter'
+  itemId: ItemId
+  characterId: CharacterId
+}
+
+export interface VoiceSetExpression {
+  op: 'voice.setExpression'
+  itemId: ItemId
+  expressionId: ExpressionId | null
+}
+
+/** 発話パラメータをキャラクターの既定値から上書きする。null の項目は上書きを外す。 */
+export interface VoiceSetVoiceParams {
+  op: 'voice.setVoiceParams'
+  itemId: ItemId
+  params: { [K in keyof VoiceParams]?: VoiceParams[K] | null }
+}
+
 export interface VoiceSetSubtitleOverride {
   op: 'voice.setSubtitleOverride'
   itemId: ItemId
@@ -102,20 +189,58 @@ export interface VoiceSetSubtitleOverride {
   sizeScale?: number
 }
 
+/** 字幕の改行位置を手で決める。null なら自動改行に戻す。 */
+export interface VoiceSetSubtitleLines {
+  op: 'voice.setSubtitleLines'
+  itemId: ItemId
+  lines: string[] | null
+}
+
+/** 次のセリフまでの間を決める。後ろのアイテムを全てずらす。 */
+export interface VoiceSetGapAfter {
+  op: 'voice.setGapAfter'
+  itemId: ItemId
+  gapMs: Ms
+}
+
+/**
+ * 合成結果を反映する。アプリの内部処理だけが発行し、AI には公開しない。
+ * 合成を要求した時点のテキストと違えば(その間に書き換えられたなら)古い結果として拒否する。
+ */
+export interface VoiceApplySynthesis {
+  op: 'voice.applySynthesis'
+  itemId: ItemId
+  expectedText: string
+  synthesis: SynthesisResult
+}
+
 export type Command =
   | ProjectSetMeta
   | ProjectSetConversationAi
+  | ProjectSetEditing
   | LayerInsert
+  | StyleUpsertSubtitle
   | CharacterCreate
   | CharacterSetPersona
+  | CharacterUpdate
+  | CharacterDelete
   | ItemSetTimeRange
   | ItemSetLayer
   | ItemDelete
   | VoiceInsert
   | VoiceSetText
+  | VoiceDelete
+  | VoiceMove
+  | VoiceSetCharacter
+  | VoiceSetExpression
+  | VoiceSetVoiceParams
   | VoiceSetSubtitleOverride
+  | VoiceSetSubtitleLines
+  | VoiceSetGapAfter
+  | VoiceApplySynthesis
 
 export type CommandOp = Command['op']
+export type CommandOf<K extends CommandOp> = Extract<Command, { op: K }>
 
 /** コマンドが適用できなかったことを表す。適用は全件成功か全件不適用のいずれかになる。 */
 export class CommandError extends Error {

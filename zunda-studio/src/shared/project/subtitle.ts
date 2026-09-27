@@ -1,34 +1,8 @@
 /** 行頭に置いてはいけない文字(行頭禁則)。 */
 const FORBIDDEN_AT_LINE_START = new Set([
-  '。',
-  '、',
-  '，',
-  '．',
-  '」',
-  '』',
-  '）',
-  ')',
-  '】',
-  '〉',
-  '》',
-  '!',
-  '!',
-  '?',
-  '?',
-  'ー',
-  'っ',
-  'ゃ',
-  'ゅ',
-  'ょ',
-  'ぁ',
-  'ぃ',
-  'ぅ',
-  'ぇ',
-  'ぉ',
-  'ゎ',
-  '々',
-  '〜',
-  '…'
+  ...'。、，．・：；」』）)】〉》］｝'.split(''),
+  ...'!！?？‼⁉'.split(''),
+  ...'ーぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ々〜…'.split('')
 ])
 
 /** 行末に置いてはいけない文字(行末禁則)。 */
@@ -56,24 +30,23 @@ function wrapParagraph(characters: string[], maxCharsPerLine: number): string[] 
   const lines: string[] = []
   let current: string[] = []
 
-  for (const character of characters) {
-    current.push(character)
+  for (let index = 0; index < characters.length; index++) {
+    current.push(characters[index]!)
     if (current.length < maxCharsPerLine) continue
 
-    let breakAt = current.length
-    // 次の文字が行頭禁則なら、この行に入れてから折り返したいので判断を1文字遅らせる。
-    // ここでは先読みせず、行末禁則の文字が末尾に来た場合だけ1文字戻す。
-    while (breakAt > 1 && FORBIDDEN_AT_LINE_END.has(current[breakAt - 1]!)) {
-      breakAt -= 1
+    // 次の文字が行頭禁則(句読点や小さい「ゃゅょっ」など)なら、この行にぶら下げる。
+    while (index + 1 < characters.length && FORBIDDEN_AT_LINE_START.has(characters[index + 1]!)) {
+      index++
+      current.push(characters[index]!)
     }
+    // 行末禁則(開き括弧など)で終わるなら、その文字を次の行へ送る。
+    let breakAt = current.length
+    while (breakAt > 1 && FORBIDDEN_AT_LINE_END.has(current[breakAt - 1]!)) breakAt--
     lines.push(current.slice(0, breakAt).join(''))
     current = current.slice(breakAt)
   }
 
-  if (current.length > 0) {
-    lines.push(current.join(''))
-  }
-
+  if (current.length > 0) lines.push(current.join(''))
   return mergeOrphanLastLine(lines)
 }
 

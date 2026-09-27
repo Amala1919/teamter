@@ -2,6 +2,13 @@ import type { ModelInfo, ProviderId, ProviderStatus } from '../ai/types'
 import type { AppErrorShape } from '../errors'
 import type { Project } from '../project/types'
 import type { AppSettings, SettingsPatch } from '../settings/schema'
+import type {
+  EngineStatus,
+  SpeakerInfo,
+  SynthesisOutcome,
+  SynthesisRequest,
+  UserDictWord
+} from '../voice/types'
 
 /**
  * main とレンダラの間の通信契約。
@@ -49,6 +56,16 @@ export interface IpcContract {
   'ai:providers': { args: []; result: ProviderStatus[] }
   'ai:models': { args: [providerId: ProviderId]; result: ModelInfo[] }
   'ai:test': { args: [providerId: ProviderId, model: string]; result: { text: string; durationMs: number } }
+
+  'voice:engines': { args: []; result: EngineStatus[] }
+  'voice:ensure': { args: [engineId: string]; result: EngineStatus }
+  'voice:speakers': { args: [engineId: string]; result: SpeakerInfo[] }
+  'voice:synthesize': { args: [request: SynthesisRequest]; result: SynthesisOutcome }
+  /** キャッシュ済みの音声ファイルの場所。無ければ null(保存済みのアクセント句から再合成する)。 */
+  'voice:resolve': { args: [cacheKey: string]; result: string | null }
+  'voice:dict:list': { args: [engineId: string]; result: UserDictWord[] }
+  'voice:dict:add': { args: [engineId: string, word: Omit<UserDictWord, 'id'>]; result: string }
+  'voice:dict:delete': { args: [engineId: string, wordId: string]; result: void }
 }
 
 export type Channel = keyof IpcContract
@@ -60,6 +77,7 @@ export type IpcResult<T> = { ok: true; value: T } | { ok: false; error: AppError
 /** main からレンダラへ送る通知。 */
 export interface AppEvents {
   'settings:changed': AppSettings
+  'voice:engine-status': EngineStatus
 }
 
 export type EventName = keyof AppEvents

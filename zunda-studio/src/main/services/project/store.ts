@@ -50,6 +50,7 @@ function fillMissingContainers(raw: Partial<Project>): Project {
     liveSessions: raw.liveSessions ?? {},
     chat: raw.chat ?? empty.chat,
     ai: raw.ai ?? empty.ai,
+    editing: raw.editing ?? empty.editing,
     credits: raw.credits ?? empty.credits,
     subtitleStyles: raw.subtitleStyles ?? empty.subtitleStyles
   } as Project

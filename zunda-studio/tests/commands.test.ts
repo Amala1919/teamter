@@ -85,20 +85,17 @@ describe('voice.insert', () => {
 })
 
 describe('voice.setText', () => {
-  it('テキストを変えると合成結果が無効化され、尺が再計算される', () => {
+  it('テキストを変えると合成結果が無効化されるが、尺は新しい合成結果が届くまで変えない', () => {
     const { project, characterId } = projectWithCharacter()
-    const inserted = apply(project, [
-      { op: 'voice.insert', characterId, text: '短い', atMs: 0, tempId: 'tmp_1' }
-    ])
-    const itemId = voiceItemsInOrder(inserted)[0]!.id
+    const inserted = apply(project, [{ op: 'voice.insert', characterId, text: '短い', atMs: 0 }])
+    const before = voiceItemsInOrder(inserted)[0]!
     const next = apply(inserted, [
-      { op: 'voice.setText', itemId, text: 'こちらはずっと長いセリフなのだ' }
+      { op: 'voice.setText', itemId: before.id, text: 'こちらはずっと長いセリフなのだ' }
     ])
-
     const line = voiceItemsInOrder(next)[0]!
     expect(line.synthesis).toBeNull()
-    expect(line.durationMs).toBe(estimateSpeechDurationMs('こちらはずっと長いセリフなのだ'))
-    expect(line.durationMs).toBeGreaterThan(voiceItemsInOrder(inserted)[0]!.durationMs)
+    // 尺をここで暫定値に変えると、合成結果が届いたときに後ろをずらす量が狂う
+    expect(line.durationMs).toBe(before.durationMs)
   })
 })
 

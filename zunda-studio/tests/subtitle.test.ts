@@ -30,11 +30,23 @@ describe('wrapSubtitle', () => {
     expect(lines[1]).toBe('「かきくけこ')
   })
 
+  it('行の途中の折り返しでも、小さい「ょ」や句読点を行頭に置かない', () => {
+    expect(wrapSubtitle('いちぎょうめ', 3)).toEqual(['いちぎょ', 'うめ'])
+    expect(wrapSubtitle('あいう、えおかきく', 3)).toEqual(['あいう、', 'えおか', 'きく'])
+  })
+
   it('1文字だけの行を作らない(1文字の超過を許す)', () => {
     expect(wrapSubtitle('あいうえおか', 5)).toEqual(['あいうえおか'])
   })
 
   it('折り返し幅が不正なら分割しない', () => {
     expect(wrapSubtitle('あいうえお', 0)).toEqual(['あいうえお'])
+  })
+})
+
+describe('全角の記号', () => {
+  it('全角の「！」「？」も行頭に置かない', () => {
+    expect(wrapSubtitle('すごいのだ！？', 5)).toEqual(['すごいのだ！？'])
+    expect(wrapSubtitle('いくのだ！ほんとに', 4)).toEqual(['いくのだ！', 'ほんとに'])
   })
 })

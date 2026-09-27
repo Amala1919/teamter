@@ -674,3 +674,118 @@ input[aria-invalid='true'] {
   background: var(--bg-input);
   border-color: var(--border);
 }
+
+/* ------------------------------------------------------------------ 共通 */
+
+.sr-only {
+  border: 0;
+  clip: rect(0 0 0 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.button--small {
+  font-size: 11px;
+  padding: 2px 6px;
+}
+
+.button--danger {
+  border-color: #6b2b2b;
+  color: #f0a0a0;
+}
+
+input[type='color'] {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  height: 26px;
+  padding: 0 2px;
+  width: 48px;
+}
+
+/* ---------------------------------------------------------- キャラクター */
+
+.character-dialog {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 200px 1fr;
+  min-height: 420px;
+}
+
+.character-dialog__list {
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 12px;
+}
+
+.character-dialog__item {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  text-align: left;
+}
+
+.character-dialog__item--active {
+  border-color: var(--accent);
+}
+
+.voice-params__row .field__row {
+  align-items: center;
+}
+
+.voice-params__row input[type='range'] {
+  flex: 1;
+}
+
+.voice-params__value {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  width: 44px;
+}
+
+/* ------------------------------------------------------------------ 台本 */
+
+.script__controls {
+  flex-wrap: wrap;
+}
+
+.script__speakerSelect {
+  font-weight: 600;
+  max-width: 120px;
+  padding: 1px 4px;
+}
+
+.script__lineFooter {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.script__actions {
+  display: flex;
+  gap: 4px;
+}
+
+.bulk__text {
+  font-family: inherit;
+  width: 100%;
+}
+
+.preview__play {
+  min-width: 36px;
+}
+
+.pane--inspector .settings-section section {
+  border-bottom: none;
+  margin-bottom: 6px;
+  padding-bottom: 0;
+}

@@ -4,10 +4,14 @@ import { toAppError } from '../../api'
 import { useSettingsStore } from '../../state/settings'
 import { Modal } from '../../ui/Modal'
 import { AiSettings } from './AiSettings'
+import { VoiceSettings } from './VoiceSettings'
 
-type Tab = 'ai'
+type Tab = 'ai' | 'voice'
 
-const TABS: { id: Tab; label: string }[] = [{ id: 'ai', label: 'AI' }]
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'ai', label: 'AI' },
+  { id: 'voice', label: '音声エンジン' }
+]
 
 interface SettingsDialogProps {
   onClose: () => void
@@ -40,6 +44,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): React.JSX.Elem
             aria-selected={tab === item.id}
             className={tab === item.id ? 'tabs__tab tabs__tab--active' : 'tabs__tab'}
             onClick={() => setTab(item.id)}
+            data-testid={`settings-tab-${item.id}`}
           >
             {item.label}
           </button>
@@ -53,7 +58,13 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): React.JSX.Elem
           </button>
         </div>
       )}
-      {!settings ? <p className="pane__empty">読み込み中…</p> : tab === 'ai' && <AiSettings settings={settings} onError={onError} />}
+      {!settings ? (
+        <p className="pane__empty">読み込み中…</p>
+      ) : tab === 'ai' ? (
+        <AiSettings settings={settings} onError={onError} />
+      ) : (
+        <VoiceSettings settings={settings} onError={onError} />
+      )}
     </Modal>
   )
 }

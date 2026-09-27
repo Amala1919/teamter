@@ -353,8 +353,10 @@ export interface VoiceItem extends ItemBase {
   generatedBy: GeneratedBy | null
   /** 未合成なら null。durationMs はここから導出される。 */
   synthesis: SynthesisResult | null
-  /** 自動改行の結果。手動で編集できる。 */
+  /** 字幕の行。既定では自動改行の結果で、手で決めた場合は subtitleLinesManual が真になる。 */
   subtitleLines: string[]
+  /** 字幕の改行を手で決めたか。テキストを書き換えると自動に戻る。 */
+  subtitleLinesManual: boolean
 }
 
 export interface VideoItem extends ItemBase {
@@ -504,6 +506,14 @@ export interface Project {
   credits: CreditsState
   chat: { messages: ChatMessage[] }
   ai: ProjectAiSettings
+  editing: EditingSettings
+}
+
+export interface EditingSettings {
+  /** セリフの尺が変わったとき、後ろのアイテムを一緒にずらすか(V-4)。 */
+  rippleOnVoiceChange: boolean
+  /** セリフを続けて追加するときの間。 */
+  defaultGapMs: Ms
 }
 
 export interface ProjectAiSettings {

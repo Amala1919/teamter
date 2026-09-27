@@ -7,6 +7,7 @@ import { ScriptPane } from './features/script/ScriptPane'
 import { SettingsDialog } from './features/settings/SettingsDialog'
 import { TimelinePane } from './features/timeline/TimelinePane'
 import { Toolbar } from './features/toolbar/Toolbar'
+import { togglePlayback } from './playback/player'
 import { useSettingsStore } from './state/settings'
 import { useEditorStore } from './state/store'
 
@@ -24,8 +25,17 @@ export function App(): React.JSX.Element {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
+      const target = event.target as HTMLElement | null
+      const typing = target !== null && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+      if (event.key === ' ' && !typing) {
+        event.preventDefault()
+        togglePlayback()
+        return
+      }
       const modifier = event.ctrlKey || event.metaKey
       if (!modifier) return
+      // 入力欄の中では、その入力欄の取り消し(文字単位)を優先する。
+      if (typing && (event.key === 'z' || event.key === 'y')) return
       if (event.key === 'z' && !event.shiftKey) {
         event.preventDefault()
         undo()

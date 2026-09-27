@@ -2,6 +2,8 @@ import { AiService } from '../services/ai/ai-service'
 import { ClaudeCodeProvider } from '../services/ai/claude-code-provider'
 import { OpenCodeProvider } from '../services/ai/opencode-provider'
 import { ProjectService } from '../services/project/project-service'
+import { EngineManager } from '../services/voice/engine-manager'
+import { SynthesisService } from '../services/voice/synthesis-service'
 import type { FilePicker } from './dialog'
 import { EventBus } from './events'
 import { MediaAccess } from './media-access'
@@ -30,6 +32,10 @@ export interface Services {
   picker: FilePicker
   projects: ProjectService
   ai: AiService
+  engines: EngineManager
+  synthesis: SynthesisService
+  /** 終了時の後始末(アプリが起動した音声エンジンを止める等)。 */
+  dispose: () => Promise<void>
 }
 
 export async function createServices(options: ServicesOptions): Promise<Services> {
@@ -49,6 +55,9 @@ export async function createServices(options: ServicesOptions): Promise<Services
   ai.register(new ClaudeCodeProvider(getSettings, paths.cache.aiWork, env))
   ai.register(new OpenCodeProvider(getSettings, paths.cache.aiWork, env))
 
+  const engines = new EngineManager(getSettings, events)
+  const synthesis = new SynthesisService(engines, paths.cache.voice)
+
   return {
     runtime: options.runtime,
     appVersion: options.appVersion,
@@ -58,6 +67,9 @@ export async function createServices(options: ServicesOptions): Promise<Services
     media,
     picker: options.picker,
     projects: new ProjectService(media),
-    ai
+    ai,
+    engines,
+    synthesis,
+    dispose: () => engines.shutdown()
   }
 }
