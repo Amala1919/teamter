@@ -14,6 +14,11 @@ import type {
   AssetLicense,
   PortraitConfig,
   CharacterAuthorRole,
+  Effect,
+  ShapeItem,
+  Transform,
+  ZoomMethod,
+  ZoomRegion,
   CharacterId,
   ExpressionId,
   ItemId,
@@ -43,6 +48,8 @@ export interface ProjectSetEditing {
   op: 'project.setEditing'
   rippleOnVoiceChange?: boolean
   defaultGapMs?: Ms
+  duckVolume?: number
+  duckFadeMs?: Ms
 }
 
 // ------------------------------------------------------------------ レイヤー
@@ -246,6 +253,159 @@ export interface VoiceApplySynthesis {
   synthesis: SynthesisResult
 }
 
+// ------------------------------------------------------------------ 素材の配置
+
+/** 動画の区間を配置する。inMs/outMs を省略すると素材の全体。 */
+export interface MediaPlaceVideo {
+  op: 'media.placeVideo'
+  assetId: AssetId
+  layerId?: LayerId
+  atMs: Ms
+  inMs?: Ms
+  outMs?: Ms
+  transform?: Partial<Transform>
+  volume?: number
+  tempId?: string
+}
+
+export interface MediaPlaceImage {
+  op: 'media.placeImage'
+  assetId: AssetId
+  layerId?: LayerId
+  atMs: Ms
+  durationMs: Ms
+  transform?: Partial<Transform>
+  tempId?: string
+}
+
+/** BGM・効果音を配置する。durationMs を省略すると素材の区間の長さ(ループなら素材の区間より長くできる)。 */
+export interface MediaPlaceAudio {
+  op: 'media.placeAudio'
+  assetId: AssetId
+  layerId?: LayerId
+  atMs: Ms
+  inMs?: Ms
+  outMs?: Ms
+  durationMs?: Ms
+  volume?: number
+  loop?: boolean
+  duckable?: boolean
+  tempId?: string
+}
+
+export interface MediaPlaceText {
+  op: 'media.placeText'
+  text: string
+  layerId?: LayerId
+  atMs: Ms
+  durationMs: Ms
+  styleId?: SubtitleStyleId
+  transform?: Partial<Transform>
+  tempId?: string
+}
+
+export interface MediaPlaceShape {
+  op: 'media.placeShape'
+  shape: ShapeItem['shape']
+  fill: string
+  layerId?: LayerId
+  atMs: Ms
+  durationMs: Ms
+  transform?: Partial<Transform>
+  tempId?: string
+}
+
+// ------------------------------------------------------------------ アイテム共通(続き)
+
+/**
+ * アイテムの端を動かす(タイムラインでの伸縮)。動画・音声は素材の切り出し位置も一緒に動くので、
+ * 左端を右へ縮めると、映像はその分だけ先から始まる。
+ */
+export interface ItemTrim {
+  op: 'item.trim'
+  itemId: ItemId
+  startMs?: Ms
+  endMs?: Ms
+}
+
+export interface ItemSetTransform {
+  op: 'item.setTransform'
+  itemId: ItemId
+  x?: number
+  y?: number
+  scale?: number
+  rotation?: number
+  opacity?: number
+}
+
+/** 音量・ループ・フェード・ダッキングの対象か。動画は音量だけ持つ。 */
+export interface ItemSetAudio {
+  op: 'item.setAudio'
+  itemId: ItemId
+  volume?: number
+  loop?: boolean
+  fadeInMs?: Ms
+  fadeOutMs?: Ms
+  duckable?: boolean
+}
+
+/** テロップの文字・図形の色など、アイテムの中身を変える。 */
+export interface ItemSetContent {
+  op: 'item.setContent'
+  itemId: ItemId
+  text?: string
+  styleId?: SubtitleStyleId
+  fill?: string
+  shape?: ShapeItem['shape']
+}
+
+export interface ItemAddEffect {
+  op: 'item.addEffect'
+  itemId: ItemId
+  effect: Effect
+}
+
+export interface ItemUpdateEffect {
+  op: 'item.updateEffect'
+  itemId: ItemId
+  effectIndex: number
+  effect: Effect
+}
+
+export interface ItemRemoveEffect {
+  op: 'item.removeEffect'
+  itemId: ItemId
+  effectIndex: number
+}
+
+// ------------------------------------------------------------------ ズーム
+
+/**
+ * ズーム枠を置く。範囲は画面からはみ出さないよう、縦横比を保ったまま収める。
+ * wholeScreen が真なら一番上のレイヤーに置き、立ち絵・字幕も含めて拡大する。
+ */
+export interface ZoomInsert {
+  op: 'zoom.insert'
+  atMs: Ms
+  durationMs: Ms
+  region: ZoomRegion
+  method?: ZoomMethod
+  inMs?: Ms
+  outMs?: Ms
+  wholeScreen?: boolean
+  layerId?: LayerId
+  tempId?: string
+}
+
+export interface ZoomUpdate {
+  op: 'zoom.update'
+  itemId: ItemId
+  region?: ZoomRegion
+  method?: ZoomMethod
+  inMs?: Ms
+  outMs?: Ms
+}
+
 export type Command =
   | ProjectSetMeta
   | ProjectSetConversationAi
@@ -263,6 +423,20 @@ export type Command =
   | ItemSetTimeRange
   | ItemSetLayer
   | ItemDelete
+  | ItemTrim
+  | ItemSetTransform
+  | ItemSetAudio
+  | ItemSetContent
+  | ItemAddEffect
+  | ItemUpdateEffect
+  | ItemRemoveEffect
+  | MediaPlaceVideo
+  | MediaPlaceImage
+  | MediaPlaceAudio
+  | MediaPlaceText
+  | MediaPlaceShape
+  | ZoomInsert
+  | ZoomUpdate
   | VoiceInsert
   | VoiceSetText
   | VoiceDelete

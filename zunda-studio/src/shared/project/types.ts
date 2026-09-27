@@ -407,6 +407,28 @@ export interface ShapeItem extends ItemBase {
   transform: Transform
 }
 
+/** 寄り方。docs/PROJECT_FORMAT.md 6.3 を参照。 */
+export const ZOOM_METHODS = ['cut', 'smooth', 'linear', 'punch', 'slowPush'] as const
+export type ZoomMethod = (typeof ZOOM_METHODS)[number]
+
+/** ズームする範囲(キャンバス座標)。高さは持たず、縦横比は常にキャンバスと同じになる。 */
+export interface ZoomRegion {
+  x: number
+  y: number
+  width: number
+}
+
+/** 画面の一部に寄って、終了時に戻る演出。このアイテムより下のレイヤーだけを拡大する。 */
+export interface ZoomItem extends ItemBase {
+  type: 'zoom'
+  region: ZoomRegion
+  method: ZoomMethod
+  /** 寄るのにかける時間。 */
+  inMs: Ms
+  /** 戻るのにかける時間。 */
+  outMs: Ms
+}
+
 /** 立ち絵の登場・退場を明示的に制御したい場合に置く。 */
 export interface PortraitItem extends ItemBase {
   type: 'portrait'
@@ -422,6 +444,7 @@ export type Item =
   | AudioItem
   | ShapeItem
   | PortraitItem
+  | ZoomItem
 
 export type ItemType = Item['type']
 
@@ -519,6 +542,10 @@ export interface EditingSettings {
   rippleOnVoiceChange: boolean
   /** セリフを続けて追加するときの間。 */
   defaultGapMs: Ms
+  /** セリフの間、duckable な音声(BGM など)をこの倍率まで下げる(M-4)。 */
+  duckVolume: number
+  /** 音量を下げる・戻すのにかける時間。 */
+  duckFadeMs: Ms
 }
 
 export interface ProjectAiSettings {

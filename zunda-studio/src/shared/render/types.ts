@@ -1,4 +1,4 @@
-import type { AssetId } from '../project/types'
+import type { AssetId, Ms, VideoItem } from '../project/types'
 import type { PsdManifest } from '../psd/types'
 
 /**
@@ -6,6 +6,8 @@ import type { PsdManifest } from '../psd/types'
  * ブラウザの CanvasRenderingContext2D と、書き出しで使う @napi-rs/canvas の両方が満たす。
  */
 export interface Ctx2D {
+  /** この描画先のキャンバス。ズームで描いた内容を拡大し直すのに使う。 */
+  readonly canvas: unknown
   save(): void
   restore(): void
   clearRect(x: number, y: number, width: number, height: number): void
@@ -63,5 +65,7 @@ export interface CanvasLike {
 export interface RenderResources {
   psd(assetId: AssetId): PsdManifest | null
   image(path: string): unknown
+  /** 動画アイテムの、素材上の時刻 sourceMs のコマ。まだ用意できていなければ null。 */
+  video(item: VideoItem, sourceMs: Ms): unknown
   createCanvas(width: number, height: number): CanvasLike
 }

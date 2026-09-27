@@ -2,6 +2,7 @@ import { PROJECT_FORMAT_VERSION, type Layer, type Project, type SubtitleStyle } 
 
 export const DEFAULT_LAYER_IDS = {
   background: 'lyr_bg',
+  zoom: 'lyr_zoom',
   portrait: 'lyr_portrait',
   voice: 'lyr_voice',
   bgm: 'lyr_bgm'
@@ -12,9 +13,11 @@ export const DEFAULT_SUBTITLE_STYLE_ID = 'sty_default'
 function defaultLayers(): Layer[] {
   return [
     { id: DEFAULT_LAYER_IDS.background, name: '背景', index: 0, visible: true, locked: false, muted: false },
-    { id: DEFAULT_LAYER_IDS.portrait, name: '立ち絵', index: 1, visible: true, locked: false, muted: false },
-    { id: DEFAULT_LAYER_IDS.voice, name: 'ボイス', index: 2, visible: true, locked: false, muted: false },
-    { id: DEFAULT_LAYER_IDS.bgm, name: 'BGM', index: 3, visible: true, locked: false, muted: false }
+    // ズームはこのレイヤーより下(ゲーム映像)だけを拡大するので、立ち絵と字幕は動かない。
+    { id: DEFAULT_LAYER_IDS.zoom, name: 'ズーム', index: 1, visible: true, locked: false, muted: false },
+    { id: DEFAULT_LAYER_IDS.portrait, name: '立ち絵', index: 2, visible: true, locked: false, muted: false },
+    { id: DEFAULT_LAYER_IDS.voice, name: 'ボイス', index: 3, visible: true, locked: false, muted: false },
+    { id: DEFAULT_LAYER_IDS.bgm, name: 'BGM', index: 4, visible: true, locked: false, muted: false }
   ]
 }
 
@@ -73,6 +76,6 @@ export function createEmptyProject(options: CreateProjectOptions = {}): Project 
     credits: { generated: '', confirmedByUser: false },
     chat: { messages: [] },
     ai: { conversation: null },
-    editing: { rippleOnVoiceChange: true, defaultGapMs: 200 }
+    editing: { rippleOnVoiceChange: true, defaultGapMs: 200, duckVolume: 0.35, duckFadeMs: 200 }
   }
 }

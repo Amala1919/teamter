@@ -147,11 +147,12 @@ describe('applyCommands', () => {
 describe('layer.insert', () => {
   it('挿入位置以降のレイヤーを押し下げる', () => {
     const project = createEmptyProject()
-    const next = apply(project, [{ op: 'layer.insert', name: 'テロップ', index: 1 }])
+    const next = apply(project, [{ op: 'layer.insert', name: 'テロップ', index: 2 }])
     const inserted = next.layers.find((layer) => layer.name === 'テロップ')!
-    expect(inserted.index).toBe(1)
-    expect(next.layers.find((layer) => layer.id === DEFAULT_LAYER_IDS.portrait)!.index).toBe(2)
-    expect(next.layers.map((layer) => layer.index)).toEqual([0, 1, 2, 3, 4])
+    expect(inserted.index).toBe(2)
+    expect(next.layers.find((layer) => layer.id === DEFAULT_LAYER_IDS.zoom)!.index).toBe(1)
+    expect(next.layers.find((layer) => layer.id === DEFAULT_LAYER_IDS.portrait)!.index).toBe(3)
+    expect(next.layers.map((layer) => layer.index).sort()).toEqual([0, 1, 2, 3, 4, 5])
   })
 })
 

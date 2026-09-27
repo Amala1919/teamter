@@ -117,24 +117,29 @@ LLM(tool use) → コマンド列
 
 | op | 引数 | 意味 |
 | --- | --- | --- |
-| `media.placeVideo` | `assetId`, `layerId`, `inMs`, `outMs`, `atMs` または `alignToItemId`, `tempId?` | 動画の区間を配置する。`alignToItemId` を使うとそのアイテムの区間に合わせる |
-| `media.placeImage` | `assetId`, `layerId`, `atMs`, `durationMs`, `transform?`, `tempId?` | 画像を配置する |
-| `media.placeAudio` | `assetId`, `layerId`, `atMs`, `inMs`, `outMs`, `volume?`, `loop?`, `tempId?` | BGM・SEを配置する |
-| `media.placeText` | `text`, `layerId`, `atMs`, `durationMs`, `styleId?`, `transform?`, `tempId?` | 独立したテロップを置く |
-| `media.placeShape` | `shape`, `layerId`, `atMs`, `durationMs`, `fill`, `transform?`, `tempId?` | 図形を置く |
+| `media.placeVideo` | `assetId`, `atMs`, `layerId?`, `inMs?`, `outMs?`, `transform?`, `volume?`, `tempId?` | 動画の区間を配置する。区間を省略すると素材の全体。既定のレイヤーは背景 |
+| `media.placeImage` | `assetId`, `atMs`, `durationMs`, `layerId?`, `transform?`, `tempId?` | 画像を配置する |
+| `media.placeAudio` | `assetId`, `atMs`, `layerId?`, `inMs?`, `outMs?`, `durationMs?`, `volume?`, `loop?`, `duckable?`, `tempId?` | BGM・SEを配置する。ループするなら素材より長くできる。既定のレイヤーは BGM |
+| `media.placeText` | `text`, `atMs`, `durationMs`, `layerId?`, `styleId?`, `transform?`, `tempId?` | 独立したテロップを置く |
+| `media.placeShape` | `shape`, `fill`, `atMs`, `durationMs`, `layerId?`, `transform?`, `tempId?` | 図形を置く(等倍で画面全体の大きさ) |
+
+変形(`transform`)の `x`, `y` はアイテムの中心の位置(キャンバス座標)。等倍(`scale: 1`)の大きさは、動画は画面に収まる最大の大きさ、画像は素材の画素数、図形は画面全体。
 
 ### 5.3 共通のアイテム操作
 
 | op | 引数 | 意味 |
 | --- | --- | --- |
 | `item.setTimeRange` | `itemId`, `startMs?`, `durationMs?` | 区間を変える(ボイスアイテムの尺には使えない) |
+| `item.trim` | `itemId`, `startMs?`, `endMs?` | 端を動かす。動画・音声は素材の切り出し位置も一緒に動く |
 | `item.setLayer` | `itemId`, `layerId` | レイヤーを移す |
 | `item.setTransform` | `itemId`, `x?`, `y?`, `scale?`, `rotation?`, `opacity?` | 変形を設定する |
+| `item.setAudio` | `itemId`, `volume?`, `loop?`, `fadeInMs?`, `fadeOutMs?`, `duckable?` | 音量などを設定する(動画は音量のみ) |
+| `item.setContent` | `itemId`, `text?`, `styleId?`, `fill?`, `shape?` | テロップの文字・図形の色や形を変える |
 | `item.addEffect` | `itemId`, `effect` | エフェクトを追加する |
+| `item.updateEffect` | `itemId`, `effectIndex`, `effect` | エフェクトを置き換える |
 | `item.removeEffect` | `itemId`, `effectIndex` | エフェクトを外す |
 | `item.delete` | `itemId` | 削除する |
-
-| `zoom.insert` | `atMs`, `durationMs`, `region`(`x`,`y`,`width`), `method?`, `inMs?`, `outMs?`, `wholeScreen?`, `tempId?` | ズーム枠を置く。`wholeScreen` が真なら立ち絵・字幕も含めて拡大する |
+| `zoom.insert` | `atMs`, `durationMs`, `region`(`x`,`y`,`width`), `method?`, `inMs?`, `outMs?`, `wholeScreen?`, `layerId?`, `tempId?` | ズーム枠を置く。`wholeScreen` が真なら立ち絵・字幕も含めて拡大する |
 | `zoom.update` | `itemId`, `region?`, `method?`, `inMs?`, `outMs?` | ズーム枠の範囲・寄り方を変える |
 
 ### 5.4 設定

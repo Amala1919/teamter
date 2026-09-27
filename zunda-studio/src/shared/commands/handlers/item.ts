@@ -1,6 +1,61 @@
-import { fail, findMutableItem, requireLayer, type HandlerTable } from '../env'
+import type { Effect, Project } from '../../project/types'
+import { fail, findMutableItem, requireFinite, requireLayer, type HandlerTable } from '../env'
+import type { CommandOp } from '../types'
+import { COLOR_PATTERN, validateTransform, validateVolume } from './media'
 
-type ItemHandlers = Pick<HandlerTable, 'item.setTimeRange' | 'item.setLayer' | 'item.delete'>
+type ItemHandlers = Pick<
+  HandlerTable,
+  | 'item.setTimeRange'
+  | 'item.setLayer'
+  | 'item.delete'
+  | 'item.trim'
+  | 'item.setTransform'
+  | 'item.setAudio'
+  | 'item.setContent'
+  | 'item.addEffect'
+  | 'item.updateEffect'
+  | 'item.removeEffect'
+>
+
+/** 伸縮で残す最短の尺。 */
+const MIN_DURATION_MS = 10
+
+const EASINGS = ['linear', 'easeInCubic', 'easeOutCubic', 'easeInOutCubic']
+
+function validateEffect(effect: Effect, op: CommandOp): Effect {
+  const nonNegative = (value: number, label: string): void => {
+    requireFinite(value, op, label)
+    if (value < 0) fail(op, `${label}は0以上にしてください`)
+  }
+  switch (effect.type) {
+    case 'fade':
+      nonNegative(effect.inMs, 'フェードインの時間')
+      nonNegative(effect.outMs, 'フェードアウトの時間')
+      return { type: 'fade', inMs: effect.inMs, outMs: effect.outMs }
+    case 'scale':
+      if (!(effect.from > 0 && effect.to > 0)) fail(op, '拡大率は正の値にしてください')
+      if (!EASINGS.includes(effect.easing)) fail(op, `変化の曲線の指定が不正です: ${effect.easing}`)
+      nonNegative(effect.durationMs, '時間')
+      return { type: 'scale', from: effect.from, to: effect.to, easing: effect.easing, durationMs: effect.durationMs }
+    case 'move':
+      for (const value of [effect.fromX, effect.fromY, effect.toX, effect.toY]) requireFinite(value, op, '移動量')
+      if (!EASINGS.includes(effect.easing)) fail(op, `変化の曲線の指定が不正です: ${effect.easing}`)
+      nonNegative(effect.durationMs, '時間')
+      return { ...effect }
+    case 'shake':
+      nonNegative(effect.amplitudePx, '揺れの大きさ')
+      nonNegative(effect.durationMs, '時間')
+      if (!(effect.frequencyHz > 0 && effect.frequencyHz <= 60)) fail(op, '揺れの速さは0〜60Hzにしてください')
+      return { ...effect }
+    default:
+      return fail(op, `未対応のエフェクトです: ${(effect as { type: string }).type}`)
+  }
+}
+
+function assetDurationMs(draft: Project, assetId: string): number {
+  const asset = draft.assets[assetId]
+  return asset && (asset.type === 'video' || asset.type === 'audio') ? asset.durationMs : Number.POSITIVE_INFINITY
+}
 
 export const itemHandlers: ItemHandlers = {
   'item.setTimeRange': (draft, command, env) => {
@@ -32,5 +87,110 @@ export const itemHandlers: ItemHandlers = {
         if (entry.adoptedItemId === itemId) entry.adoptedItemId = null
       }
     }
+  },
+
+  'item.trim': (draft, command, env) => {
+    const item = findMutableItem(draft, env.resolve(command.itemId), command.op)
+    if (item.type === 'voice') fail(command.op, 'ボイスアイテムの尺は合成結果から決まるため直接変更できません')
+    const start = Math.round(command.startMs ?? item.startMs)
+    const end = Math.round(command.endMs ?? item.startMs + item.durationMs)
+    requireFinite(start, command.op, '開始時刻')
+    requireFinite(end, command.op, '終了時刻')
+    if (start < 0) fail(command.op, '開始時刻は負の値にできません')
+    if (end - start < MIN_DURATION_MS) fail(command.op, '尺が短すぎます')
+
+    if (item.type === 'video' || (item.type === 'audio' && !item.loop)) {
+      // 素材の切り出し位置も一緒に動かす。映像は画面上の位置を保ったまま端だけが動く。
+      const rate = item.type === 'video' ? item.playbackRate : 1
+      const inMs = Math.round(item.inMs + (start - item.startMs) * rate)
+      const outMs = Math.round(inMs + (end - start) * rate)
+      if (inMs < 0) fail(command.op, '素材の先頭より前には伸ばせません')
+      if (outMs > assetDurationMs(draft, item.assetId) + 1) fail(command.op, '素材の末尾より後には伸ばせません')
+      item.inMs = inMs
+      item.outMs = outMs
+    }
+    item.startMs = start
+    item.durationMs = end - start
+  },
+
+  'item.setTransform': (draft, command, env) => {
+    const item = findMutableItem(draft, env.resolve(command.itemId), command.op)
+    if (!('transform' in item)) fail(command.op, 'このアイテムには位置・大きさがありません')
+    const { op: _op, itemId: _itemId, ...patch } = command
+    const next = { ...item.transform, ...Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined)) }
+    validateTransform(next, command.op)
+    item.transform = next
+  },
+
+  'item.setAudio': (draft, command, env) => {
+    const item = findMutableItem(draft, env.resolve(command.itemId), command.op)
+    if (item.type !== 'audio' && item.type !== 'video') fail(command.op, '音のあるアイテムではありません')
+    if (command.volume !== undefined) item.volume = validateVolume(command.volume, command.op)
+    if (item.type === 'video') {
+      if (command.loop !== undefined || command.fadeInMs !== undefined || command.fadeOutMs !== undefined || command.duckable !== undefined) {
+        fail(command.op, '動画で変えられるのは音量だけです')
+      }
+      return
+    }
+    for (const [key, value] of [
+      ['fadeInMs', command.fadeInMs],
+      ['fadeOutMs', command.fadeOutMs]
+    ] as const) {
+      if (value === undefined) continue
+      requireFinite(value, command.op, 'フェードの時間')
+      if (value < 0) fail(command.op, 'フェードの時間は0以上にしてください')
+      item[key] = Math.round(value)
+    }
+    if (command.duckable !== undefined) item.duckable = command.duckable
+    if (command.loop !== undefined) {
+      item.loop = command.loop
+      // ループをやめたら、素材の区間より長い分は切り詰める。
+      if (!item.loop) item.durationMs = Math.min(item.durationMs, item.outMs - item.inMs)
+    }
+  },
+
+  'item.setContent': (draft, command, env) => {
+    const item = findMutableItem(draft, env.resolve(command.itemId), command.op)
+    if (item.type === 'text') {
+      if (command.fill !== undefined || command.shape !== undefined) fail(command.op, 'テロップには色・形を指定できません')
+      if (command.text !== undefined) {
+        if (command.text.trim() === '') fail(command.op, 'テロップの文字が空です')
+        item.text = command.text
+      }
+      if (command.styleId !== undefined) {
+        const styleId = env.resolve(command.styleId)
+        if (!draft.subtitleStyles[styleId]) fail(command.op, '字幕スタイルが見つかりません')
+        item.styleId = styleId
+      }
+      return
+    }
+    if (item.type === 'shape') {
+      if (command.text !== undefined || command.styleId !== undefined) fail(command.op, '図形には文字を指定できません')
+      if (command.fill !== undefined) {
+        if (!COLOR_PATTERN.test(command.fill)) fail(command.op, `色の指定が不正です: ${command.fill}`)
+        item.fill = command.fill
+      }
+      if (command.shape !== undefined) item.shape = command.shape
+      return
+    }
+    fail(command.op, 'テロップか図形のアイテムではありません')
+  },
+
+  'item.addEffect': (draft, command, env) => {
+    const item = findMutableItem(draft, env.resolve(command.itemId), command.op)
+    if (item.type === 'zoom') fail(command.op, 'ズームにはエフェクトを付けられません')
+    item.effects.push(validateEffect(command.effect, command.op))
+  },
+
+  'item.updateEffect': (draft, command, env) => {
+    const item = findMutableItem(draft, env.resolve(command.itemId), command.op)
+    if (!item.effects[command.effectIndex]) fail(command.op, `エフェクトが見つかりません: ${command.effectIndex}`)
+    item.effects[command.effectIndex] = validateEffect(command.effect, command.op)
+  },
+
+  'item.removeEffect': (draft, command, env) => {
+    const item = findMutableItem(draft, env.resolve(command.itemId), command.op)
+    if (!item.effects[command.effectIndex]) fail(command.op, `エフェクトが見つかりません: ${command.effectIndex}`)
+    item.effects.splice(command.effectIndex, 1)
   }
 }

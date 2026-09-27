@@ -1,6 +1,6 @@
 import { createCanvas, loadImage, type Image } from '@napi-rs/canvas'
 
-import type { AssetId } from '@shared/project/types'
+import type { AssetId, ItemId, VideoItem } from '@shared/project/types'
 import { walkLayers, type PsdManifest } from '@shared/psd/types'
 import type { CanvasLike, RenderResources } from '@shared/render/types'
 
@@ -11,6 +11,8 @@ import type { CanvasLike, RenderResources } from '@shared/render/types'
 export class NodeRenderResources implements RenderResources {
   private readonly manifests = new Map<AssetId, PsdManifest>()
   private readonly images = new Map<string, Image>()
+  /** 書き出しでは、1コマ描く前に各動画アイテムの今のコマをここに置く。 */
+  private readonly videoFrames = new Map<ItemId, unknown>()
 
   async addPsd(assetId: AssetId, manifest: PsdManifest): Promise<void> {
     this.manifests.set(assetId, manifest)
@@ -32,6 +34,15 @@ export class NodeRenderResources implements RenderResources {
 
   image(path: string): unknown {
     return this.images.get(path) ?? null
+  }
+
+  setVideoFrame(itemId: ItemId, frame: unknown): void {
+    if (frame === null) this.videoFrames.delete(itemId)
+    else this.videoFrames.set(itemId, frame)
+  }
+
+  video(item: VideoItem): unknown {
+    return this.videoFrames.get(item.id) ?? null
   }
 
   createCanvas(width: number, height: number): CanvasLike {

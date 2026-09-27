@@ -1,6 +1,6 @@
 import { isSafeModelId } from '../../ai/types'
 import type { Layer } from '../../project/types'
-import { fail, refreshSubtitleLines, type HandlerTable } from '../env'
+import { fail, insertLayer, refreshSubtitleLines, type HandlerTable } from '../env'
 
 type ProjectHandlers = Pick<
   HandlerTable,
@@ -30,6 +30,14 @@ export const projectHandlers: ProjectHandlers = {
       if (command.defaultGapMs < 0) fail(command.op, '間は0以上にしてください')
       draft.editing.defaultGapMs = Math.round(command.defaultGapMs)
     }
+    if (command.duckVolume !== undefined) {
+      if (!(command.duckVolume >= 0 && command.duckVolume <= 1)) fail(command.op, '下げる音量は0〜1の範囲で指定してください')
+      draft.editing.duckVolume = command.duckVolume
+    }
+    if (command.duckFadeMs !== undefined) {
+      if (command.duckFadeMs < 0) fail(command.op, '音量を下げる時間は0以上にしてください')
+      draft.editing.duckFadeMs = Math.round(command.duckFadeMs)
+    }
   },
 
   'layer.insert': (draft, command, env) => {
@@ -42,11 +50,7 @@ export const projectHandlers: ProjectHandlers = {
       locked: false,
       muted: false
     }
-    for (const existing of draft.layers) {
-      if (existing.index >= command.index) existing.index += 1
-    }
-    draft.layers.push(layer)
-    draft.layers.sort((a, b) => a.index - b.index)
+    insertLayer(draft, layer)
     if (command.tempId) env.resolvedIds[command.tempId] = id
   },
 

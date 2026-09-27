@@ -34,7 +34,13 @@
   "credits":    { /* 8章 */ },
   "liveSessions": { /* 9章 */ },
   "chat":       { /* 10章 */ },
-  "ai":         { /* 11章 */ }
+  "ai":         { /* 11章 */ },
+  "editing": {
+    "rippleOnVoiceChange": true,   // セリフの尺が変わったら後ろのアイテムもずらす
+    "defaultGapMs": 200,           // セリフを続けて追加するときの間
+    "duckVolume": 0.35,            // セリフの間、duckable な音声をこの倍率まで下げる
+    "duckFadeMs": 200              // 下げる・戻すのにかける時間
+  }
 }
 ```
 
@@ -178,14 +184,17 @@ PSDのレイヤーツリーに対する「役割の割り当て」を保存す�
 
 ```jsonc
 "layers": [
-  { "id": "lyr_bg",    "name": "背景",   "index": 0, "visible": true, "locked": false, "muted": false },
-  { "id": "lyr_chr",   "name": "立ち絵", "index": 1, "visible": true, "locked": false, "muted": false },
-  { "id": "lyr_voice", "name": "ボイス", "index": 2, "visible": true, "locked": false, "muted": false },
-  { "id": "lyr_bgm",   "name": "BGM",   "index": 3, "visible": true, "locked": false, "muted": false }
+  { "id": "lyr_bg",       "name": "背景",   "index": 0, "visible": true, "locked": false, "muted": false },
+  { "id": "lyr_zoom",     "name": "ズーム", "index": 1, "visible": true, "locked": false, "muted": false },
+  { "id": "lyr_portrait", "name": "立ち絵", "index": 2, "visible": true, "locked": false, "muted": false },
+  { "id": "lyr_voice",    "name": "ボイス", "index": 3, "visible": true, "locked": false, "muted": false },
+  { "id": "lyr_bgm",      "name": "BGM",   "index": 4, "visible": true, "locked": false, "muted": false }
 ]
 ```
 
 `index` が大きいレイヤーが前面に描画される。音声のみのアイテムには描画順は影響しない。
+
+ズームのアイテムは、置かれたレイヤーより下(`index` が小さいレイヤー)だけを拡大する。既定の構成ではゲーム映像だけが拡大され、立ち絵と字幕は動かない。
 
 ## 6. アイテム
 
@@ -266,6 +275,10 @@ PSDのレイヤーツリーに対する「役割の割り当て」を保存す�
 // 立ち絵の明示的な配置(常時表示ではなく区間を制御したい場合)
 { "type": "portrait", "characterId": "chr_zundamon", "transformOverride": null }
 ```
+
+`transform` の `x`, `y` はアイテムの中心の位置。等倍の大きさは、動画は画面に収まる最大の大きさ、画像は素材の画素数、図形は画面全体とする。ゲーム録画は置いただけで画面いっぱいになり、画像は素材の大きさのまま置かれる。
+
+音量の時間変化(音量 × フェード × ダッキング)は折れ線として求め、プレビューと書き出しで同じ折れ線を使う(`src/shared/audio/envelope.ts`)。
 
 立ち絵は既定ではキャラクター設定に基づいて発話中に自動表示されるが、登場・退場を明示的に制御したい場合に `portrait` アイテムを置ける。
 

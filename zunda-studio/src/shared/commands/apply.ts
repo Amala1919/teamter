@@ -5,8 +5,10 @@ import type { ApplyEnv, CommandContext, HandlerTable } from './env'
 import { assetHandlers } from './handlers/asset'
 import { characterHandlers } from './handlers/character'
 import { itemHandlers } from './handlers/item'
+import { mediaHandlers } from './handlers/media'
 import { projectHandlers } from './handlers/project'
 import { voiceHandlers } from './handlers/voice'
+import { zoomHandlers } from './handlers/zoom'
 import type { Command } from './types'
 
 export { estimateSpeechDurationMs, type CommandContext } from './env'
@@ -23,7 +25,9 @@ const HANDLERS: HandlerTable = {
   ...assetHandlers,
   ...characterHandlers,
   ...itemHandlers,
-  ...voiceHandlers
+  ...mediaHandlers,
+  ...voiceHandlers,
+  ...zoomHandlers
 }
 
 /**

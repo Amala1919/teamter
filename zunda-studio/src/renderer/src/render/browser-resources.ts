@@ -80,6 +80,10 @@ class BrowserResources implements RenderResources {
     return null
   }
 
+  video(): unknown {
+    return null
+  }
+
   createCanvas(width: number, height: number): CanvasLike {
     const canvas = document.createElement('canvas')
     canvas.width = Math.max(1, Math.ceil(width))

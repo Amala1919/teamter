@@ -103,3 +103,37 @@ export function refreshSubtitleLines(draft: Project, item: VoiceItem): void {
 export function invalidateSynthesis(item: VoiceItem): void {
   item.synthesis = null
 }
+
+/**
+ * 指定のレイヤー、無ければ既定のレイヤー(ID が一致するもの、無ければ名前が一致するもの)を返す。
+ * どちらも無ければ最も下のレイヤー。
+ */
+export function layerOrDefault(
+  draft: Project,
+  layerId: string | undefined,
+  fallback: { id: string; name: string },
+  op: CommandOp,
+  resolve: (id: string) => string
+): string {
+  if (layerId !== undefined) return requireLayer(draft, resolve(layerId), op).id
+  const layer =
+    draft.layers.find((candidate) => candidate.id === fallback.id) ??
+    draft.layers.find((candidate) => candidate.name === fallback.name) ??
+    [...draft.layers].sort((a, b) => a.index - b.index)[0]
+  if (!layer) fail(op, 'レイヤーが存在しません')
+  return layer.id
+}
+
+/** 指定の位置にレイヤーを差し込み、それ以降を押し上げる。 */
+export function insertLayer(draft: Project, layer: Layer): void {
+  for (const existing of draft.layers) {
+    if (existing.index >= layer.index) existing.index += 1
+  }
+  draft.layers.push(layer)
+  draft.layers.sort((a, b) => a.index - b.index)
+}
+
+export function requireFinite(value: number, op: CommandOp, label: string): number {
+  if (!Number.isFinite(value)) fail(op, `${label}が数値ではありません`)
+  return value
+}
