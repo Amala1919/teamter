@@ -18,6 +18,7 @@ import { SynthesisService } from '../services/voice/synthesis-service'
 import type { FilePicker } from './dialog'
 import { EventBus } from './events'
 import { MediaAccess } from './media-access'
+import { PLAIN_CIPHER, SecretStore, type SecretCipher } from './secret-store'
 import { createAppPaths, ensureAppDirectories, type AppPaths } from './paths'
 import { SettingsStore } from './settings-store'
 
@@ -32,6 +33,10 @@ export interface ServicesOptions {
   windows?: WindowControl
   /** OBS への接続。テストでは偽物に差し替える。 */
   connectObs?: ObsConnector
+  /** APIキーの暗号化(Electron は OS の鍵保管庫)。無ければ暗号化せずに置く。 */
+  cipher?: SecretCipher
+  /** HTTP の呼び出し(AI の API など)。テストで差し替える。 */
+  fetch?: (input: string, init?: RequestInit) => Promise<Response>
 }
 
 /** ライブ用ウィンドウとホットキー。テスト用ホストでは用意しない。 */
@@ -51,6 +56,7 @@ export interface Services {
   paths: AppPaths
   events: EventBus
   settings: SettingsStore
+  secrets: SecretStore
   media: MediaAccess
   picker: FilePicker
   projects: ProjectService
@@ -81,6 +87,8 @@ export async function createServices(options: ServicesOptions): Promise<Services
   const events = new EventBus()
   const settings = new SettingsStore(paths.settingsFile, events)
   await settings.load()
+  const secrets = new SecretStore(paths.secretsFile, options.cipher ?? PLAIN_CIPHER)
+  await secrets.load()
 
   const media = new MediaAccess()
   media.allowRoot(paths.cache.root)
@@ -89,7 +97,7 @@ export async function createServices(options: ServicesOptions): Promise<Services
   const env = options.env ?? process.env
   const ai = new AiService(getSettings)
   ai.register(new ClaudeCodeProvider(getSettings, paths.cache.aiWork, env))
-  ai.register(new OpenCodeProvider(getSettings, paths.cache.aiWork, env))
+  ai.register(new OpenCodeProvider(getSettings, paths.cache.aiWork, env, () => secrets.get('opencode.apiKey'), options.fetch))
 
   const engines = new EngineManager(getSettings, events)
   const synthesis = new SynthesisService(engines, paths.cache.voice)
@@ -111,6 +119,7 @@ export async function createServices(options: ServicesOptions): Promise<Services
     paths,
     events,
     settings,
+    secrets,
     media,
     picker: options.picker,
     projects: new ProjectService(media),

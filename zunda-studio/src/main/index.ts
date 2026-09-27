@@ -1,8 +1,9 @@
 import { join } from 'node:path'
 
-import { app, BrowserWindow, globalShortcut, shell } from 'electron'
+import { app, BrowserWindow, globalShortcut, safeStorage, shell } from 'electron'
 
 import { createHandlers } from './core/handlers'
+import { PLAIN_CIPHER, type SecretCipher } from './core/secret-store'
 import { createServices, type Services, type WindowControl } from './core/services'
 import {
   bindEvents,
@@ -13,6 +14,16 @@ import {
 } from './electron/adapter'
 
 const isDevelopment = !app.isPackaged
+
+/** APIキーは OS の鍵保管庫(Windows は DPAPI、macOS はキーチェーン)で暗号化して置く。 */
+function osCipher(): SecretCipher {
+  if (!safeStorage.isEncryptionAvailable()) return PLAIN_CIPHER
+  return {
+    secure: true,
+    encrypt: (plain) => safeStorage.encryptString(plain).toString('base64'),
+    decrypt: (sealed) => safeStorage.decryptString(Buffer.from(sealed, 'base64'))
+  }
+}
 
 registerMediaScheme()
 
@@ -104,7 +115,8 @@ async function start(): Promise<Services> {
     runtime: 'electron',
     appVersion: app.getVersion(),
     picker: new ElectronFilePicker(),
-    windows: windowControl
+    windows: windowControl,
+    cipher: osCipher()
   })
   alwaysOnTop = services.settings.get().live.alwaysOnTop
   bindIpc(createHandlers(services))

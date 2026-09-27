@@ -10,6 +10,7 @@ import type { LiveProfile, LiveSessionSummary, LiveState } from '../live/types'
 import type { AiPersona, LiveEntry, LiveSession, Project, PublishInfo } from '../project/types'
 import type { PsdManifest } from '../psd/types'
 import type { AppSettings, SettingsPatch } from '../settings/schema'
+import type { SecretName, SecretStatus } from '../settings/secrets'
 import type {
   EngineStatus,
   SpeakerInfo,
@@ -59,6 +60,11 @@ export interface IpcContract {
 
   'settings:get': { args: []; result: AppSettings }
   'settings:update': { args: [patch: SettingsPatch]; result: AppSettings }
+
+  /** APIキーなどが入っているか(値そのものは返さない)。 */
+  'secrets:status': { args: []; result: SecretStatus[] }
+  /** APIキーなどを入れる。null か空文字で消す。 */
+  'secrets:set': { args: [name: SecretName, value: string | null]; result: SecretStatus }
 
   'dialog:pick': { args: [request: PickRequest]; result: string[] | null }
 

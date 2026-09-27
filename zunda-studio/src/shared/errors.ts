@@ -12,6 +12,8 @@ export const ERROR_CODES = [
   'AI_NOT_CONFIGURED',
   'AI_NOT_LOGGED_IN',
   'AI_RATE_LIMITED',
+  /** APIキーが無い・正しくない。 */
+  'AI_KEY_REQUIRED',
   'AI_OUTPUT_INVALID',
   'ENGINE_UNAVAILABLE',
   'ENGINE_FAILED',
@@ -49,6 +51,7 @@ export const ERROR_GUIDANCE: Record<ErrorCode, string> = {
   AI_NOT_LOGGED_IN:
     'ターミナルでCLIを起動してログインしてください(Claude Code は claude で /login、OpenCode は opencode auth login)。',
   AI_RATE_LIMITED: '利用上限に達しています。時間をおくか、設定で別のモデルを選んでください。',
+  AI_KEY_REQUIRED: '設定画面の「AI」→ OpenCode に API キーを入力してください。キーは OpenCode のサイト(opencode.ai)の管理画面で発行できます。',
   AI_OUTPUT_INVALID: 'AIの応答を解釈できませんでした。もう一度試すか、別のモデルを選んでください。',
   ENGINE_UNAVAILABLE:
     'VOICEVOXエンジンに接続できません。設定画面でエンジンの場所を指定するか、VOICEVOXを起動してください。',

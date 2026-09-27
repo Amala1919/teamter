@@ -13,6 +13,7 @@ import { PROVIDER_IDS } from '@shared/ai/types'
 import type { Channel, ChannelArgs, ChannelResult, IpcResult } from '@shared/ipc/contract'
 import type { Project } from '@shared/project/types'
 import type { SettingsPatch } from '@shared/settings/schema'
+import { SECRET_NAMES } from '@shared/settings/secrets'
 
 import { PROJECT_FILE_EXTENSION } from '../services/project/store'
 import { writeFileAtomic } from './fs'
@@ -73,6 +74,8 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
   'app:info': z.tuple([]),
   'settings:get': z.tuple([]),
   'settings:update': z.tuple([z.record(z.string(), z.unknown())]) as unknown as z.ZodType<[SettingsPatch]>,
+  'secrets:status': z.tuple([]),
+  'secrets:set': z.tuple([z.enum(SECRET_NAMES), z.string().max(1000).nullable()]),
   'dialog:pick': z.tuple([
     z.object({
       kind: z.enum([
@@ -200,6 +203,13 @@ export function createHandlers(services: Services): HandlerTable {
 
     'settings:get': () => Promise.resolve(services.settings.get()),
     'settings:update': (patch) => services.settings.update(patch),
+    'secrets:status': () => Promise.resolve(services.secrets.statuses()),
+    'secrets:set': async (name, value) => {
+      const status = await services.secrets.set(name, value)
+      // キーが変わるとモデル一覧や状態が変わるので、画面に読み直してもらう。
+      services.events.emit('settings:changed', services.settings.get())
+      return status
+    },
 
     'dialog:pick': async (request) => {
       const picked = await services.picker.pick(request)
