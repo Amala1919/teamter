@@ -16,13 +16,18 @@ zunda-studio を自分の PC で動かし、動画を1本作るまでの手順�
 
 `zunda-studio Setup x.y.z.exe`(Windows)を実行する。インストーラの作り方は「7. 配布用に作る」を参照。
 
-### ソースから動かす(開発版)
+### ソースから動かす
 
-Node.js 22 以上を入れておく。
+[Node.js](https://nodejs.org/) の LTS 版(22 以上)を入れておく。
+
+**Windows**: `zunda-studio` フォルダの **`起動.bat` をダブルクリック**する。初回と更新後は必要な部品を自動で入れ(数分かかる)、ビルドしてからアプリを開く。黒い画面を閉じるとアプリも終了する。開発中は `起動.bat dev` で開発モード(画面の変更がすぐ反映される)になる。
+
+**macOS / Linux**、または手で動かす場合:
 
 ```sh
 npm ci
-npm run dev
+npm run start   # ビルドして起動
+npm run dev     # 開発モード
 ```
 
 ## 2. 音声エンジン(VOICEVOX)
