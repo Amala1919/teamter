@@ -9,6 +9,7 @@ import {
   copySelection,
   cutSelection,
   duplicateSelection,
+  freezeAtPlayhead,
   hasClipboard,
   insertGapAt,
   moveToLayer,
@@ -51,6 +52,14 @@ const GAPS: [Ms, string][] = [
   [500, '0.5秒'],
   [1000, '1秒'],
   [2000, '2秒'],
+  [5000, '5秒']
+]
+
+/** 静止画の長さの選択肢(あとからタイムラインで伸び縮みできる)。 */
+const FREEZE_LENGTHS: [Ms, string][] = [
+  [1000, '1秒'],
+  [2000, '2秒'],
+  [3000, '3秒'],
   [5000, '5秒']
 ]
 
@@ -108,7 +117,31 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
   ]
 
   const tools: MenuEntry[] = []
-  if (item.type === 'video') {
+  if (item.type === 'video' && !item.freeze) {
+    const canFreeze = !locked && item.startMs <= playheadMs && playheadMs <= itemEndMs(item)
+    const freezeMenu = (mode: 'insert' | 'overwrite'): MenuEntry[] =>
+      FREEZE_LENGTHS.map(([length, label]) => ({
+        label,
+        onSelect: report(context, () => freezeAtPlayhead(length, mode, [item.id])),
+        testId: `menu-freeze-${mode}-${length}`
+      }))
+    tools.push(
+      {
+        label: '再生位置で止めて静止画を挟む',
+        shortcut: 'F',
+        disabled: !canFreeze,
+        testId: 'menu-freeze-insert',
+        submenu: freezeMenu('insert')
+      },
+      {
+        label: '再生位置から先を静止画にする',
+        disabled: !canFreeze,
+        testId: 'menu-freeze-overwrite',
+        submenu: freezeMenu('overwrite')
+      }
+    )
+  }
+  if (item.type === 'video' && !item.freeze) {
     tools.push({
       label: '速度',
       disabled: locked,
@@ -121,7 +154,7 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
       }))
     })
   }
-  if (item.type === 'video' || item.type === 'audio') {
+  if ((item.type === 'video' && !item.freeze) || item.type === 'audio') {
     tools.push({
       label: '音量',
       disabled: locked,

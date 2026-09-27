@@ -64,6 +64,13 @@ class VideoPool {
       if (!element) continue
       active.add(item.id)
       const target = sourceTimeMs(item, positionMs - item.startMs) / 1000
+      if (item.freeze) {
+        // 静止画: 止めたまま、そのコマを出し続ける(音も鳴らさない)。
+        element.muted = true
+        if (!element.paused) element.pause()
+        if (!element.seeking && Math.abs(element.currentTime - target) > 0.01) element.currentTime = target
+        continue
+      }
       element.playbackRate = item.playbackRate
       element.muted = muted.has(item.layerId) || item.volume === 0
       // HTML の音量は1が上限。1を超える音量は書き出しでだけ反映される。

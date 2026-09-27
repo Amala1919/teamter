@@ -636,6 +636,12 @@ body.resizing-y * {
   border-color: #2f5f96;
 }
 
+/* 静止画は、止まっていることが分かるよう斜線にする。 */
+.timeline__item--freeze {
+  background: repeating-linear-gradient(135deg, #1f3a5c 0 6px, #28486f 6px 12px);
+  border-style: dashed;
+}
+
 .timeline__item--image {
   background: #3b2f5c;
   border-color: #5a47a0;

@@ -70,6 +70,27 @@ export function duplicateSelection(ids?: readonly ItemId[]): string | null {
 }
 
 /**
+ * 再生位置のコマで動画を止め、静止画として durationMs の間表示する。
+ * 選んだ動画、選んでいなければ再生位置にある動画(一番上のもの)が対象。止めた静止画を選んだ状態にする。
+ */
+export function freezeAtPlayhead(durationMs: Ms, mode: 'insert' | 'overwrite', ids?: readonly ItemId[]): string | null {
+  const { project, playheadMs } = state()
+  const layerIndex = new Map(project.layers.map((layer) => [layer.id, layer.index]))
+  const pool = ids || state().selectedItemIds.length > 0 ? selectedItems(ids) : project.items
+  const target = pool
+    .filter((item) => item.type === 'video' && !item.freeze && item.startMs <= playheadMs && playheadMs <= itemEndMs(item))
+    .sort((a, b) => (layerIndex.get(b.layerId) ?? 0) - (layerIndex.get(a.layerId) ?? 0))[0]
+  if (!target) return '再生位置に止められる動画がありません(動画を選んで、再生位置を動画の上に置いてください)'
+  const { error, resolvedIds } = run(
+    [{ op: 'item.freezeFrame', itemId: target.id, atMs: playheadMs, durationMs, mode, tempId: 'still' }],
+    '静止画'
+  )
+  if (error) return error
+  if (resolvedIds['still']) state().setSelection([resolvedIds['still']])
+  return null
+}
+
+/**
  * 再生位置で分ける。選んだアイテムを分け、何も選んでいなければ再生位置にある(分けられる)アイテムを全て分ける。
  */
 export function splitAtPlayhead(ids?: readonly ItemId[]): string | null {

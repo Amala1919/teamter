@@ -82,6 +82,8 @@ export async function mixAudio(options: MixOptions): Promise<void> {
     } else if (item.type === 'audio' || item.type === 'video') {
       const asset = project.assets[item.assetId]
       if (!asset || (asset.type === 'video' && !asset.hasAudio) || item.volume === 0) continue
+      // 静止画は音を鳴らさない。
+      if (item.type === 'video' && item.freeze) continue
       const gain = gainEnvelope(project, item)
       if (item.type === 'audio' && item.loop && sourceSpanMs(item) > 0) {
         const buffer = await decodeAll(options.ffmpeg, options.env, asset.path.absolute, item.inMs, sourceSpanMs(item))

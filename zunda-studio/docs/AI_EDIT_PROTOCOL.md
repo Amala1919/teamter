@@ -141,6 +141,7 @@ LLM(tool use) → コマンド列
 | `item.delete` | `itemId` | 削除する |
 | `item.split` | `itemId`, `atMs`, `tempId?` | その時刻で2つに分ける(セリフ・ズームは不可)。後半が新しいアイテムになる |
 | `item.setSpeed` | `itemId`, `rate` | 動画の再生速度(0.25〜4倍)。画面上の長さが変わる |
+| `item.freezeFrame` | `itemId`, `atMs`, `durationMs`, `mode`(`insert`/`overwrite`), `tempId?` | その時刻のコマで動画を止め、静止画として表示する。`insert` は後ろをずらし(かかっているズームは寄ったまま伸ばす)、`overwrite` は動画のその先を静止画で置き換える |
 | `timeline.rippleDelete` | `itemIds` | 削除して、空いた時間を詰める |
 | `timeline.closeGap` | `atMs` | その位置の何も無い時間を詰める |
 | `timeline.insertGap` | `atMs`, `durationMs` | その位置から後ろをずらして空白を作る |

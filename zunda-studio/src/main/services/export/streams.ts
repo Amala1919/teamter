@@ -200,7 +200,7 @@ export class FrameStream {
     ffmpeg: string,
     env: NodeJS.ProcessEnv,
     path: string,
-    options: { startMs: number; fps: number; width: number; height: number; playbackRate: number }
+    options: { startMs: number; fps: number; width: number; height: number; playbackRate: number; singleFrame?: boolean }
   ) {
     this.frameBytes = options.width * options.height * 4
     const filters = [
@@ -222,6 +222,8 @@ export class FrameStream {
         '-an',
         '-vf',
         filters.join(','),
+        // 静止画は1コマだけ読み、あとは同じコマを返し続ける。
+        ...(options.singleFrame ? ['-frames:v', '1'] : []),
         '-f',
         'rawvideo',
         '-pix_fmt',
