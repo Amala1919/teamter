@@ -7,6 +7,7 @@ type ProjectHandlers = Pick<
   | 'project.setMeta'
   | 'project.setConversationAi'
   | 'project.setEditing'
+  | 'credits.set'
   | 'layer.insert'
   | 'layer.update'
   | 'style.upsertSubtitle'
@@ -43,6 +44,14 @@ export const projectHandlers: ProjectHandlers = {
       if (command.duckFadeMs < 0) fail(command.op, '音量を下げる時間は0以上にしてください')
       draft.editing.duckFadeMs = Math.round(command.duckFadeMs)
     }
+  },
+
+  'credits.set': (draft, command) => {
+    if (command.generated !== undefined && command.generated !== draft.credits.generated) {
+      draft.credits.generated = command.generated
+      draft.credits.confirmedByUser = false
+    }
+    if (command.confirmedByUser !== undefined) draft.credits.confirmedByUser = command.confirmedByUser
   },
 
   'layer.update': (draft, command, env) => {

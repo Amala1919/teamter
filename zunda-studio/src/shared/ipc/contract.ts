@@ -1,3 +1,4 @@
+import type { ExportProgress, ExportRequest } from '../export/types'
 import type { MediaProbe, ProxyFormat, WaveformPeaks } from '../media/types'
 import type { ModelInfo, ProviderId, ProviderStatus } from '../ai/types'
 import type { AppErrorShape } from '../errors'
@@ -80,6 +81,12 @@ export interface IpcContract {
   'media:proxy': { args: [path: string, format: ProxyFormat]; result: string }
   /** 波形の表示用データ。 */
   'media:peaks': { args: [path: string]; result: WaveformPeaks }
+
+  /** mp4 の書き出しを始めてジョブIDを返す。進み具合は export:progress で届く。 */
+  'export:start': { args: [request: ExportRequest]; result: string }
+  'export:cancel': { args: [jobId: string]; result: void }
+  /** 概要欄などのテキストをファイルに書く。 */
+  'export:text': { args: [path: string, text: string]; result: void }
 }
 
 export type Channel = keyof IpcContract
@@ -94,6 +101,7 @@ export interface AppEvents {
   'voice:engine-status': EngineStatus
   /** プロキシ作成の進み具合(0〜1)。 */
   'media:proxy-progress': { path: string; ratio: number }
+  'export:progress': ExportProgress
 }
 
 export type EventName = keyof AppEvents

@@ -1129,3 +1129,32 @@ input[type='color'] {
   justify-content: space-between;
   margin-bottom: 4px;
 }
+
+/* ---------------------------------------------------------------- 書き出し */
+
+.export-dialog__progress {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  margin: 8px 0;
+}
+
+.export-dialog__progress progress {
+  flex: 1;
+  height: 10px;
+}
+
+.export-dialog__credits {
+  font-family: inherit;
+  width: 100%;
+}
+
+.export-dialog__error {
+  white-space: pre-wrap;
+}
+
+.button--primary {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: #fff;
+}

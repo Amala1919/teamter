@@ -52,6 +52,16 @@ export interface ProjectSetEditing {
   duckFadeMs?: Ms
 }
 
+/**
+ * 概要欄のクレジット文を保存する。文を変えたら確認済みの印は外れる(確認し直してもらう)。
+ * confirmedByUser は利用者の明示的な操作でのみ真にする(AI には公開しない)。
+ */
+export interface CreditsSet {
+  op: 'credits.set'
+  generated?: string
+  confirmedByUser?: boolean
+}
+
 // ------------------------------------------------------------------ レイヤー
 
 export interface LayerInsert {
@@ -420,6 +430,7 @@ export type Command =
   | ProjectSetMeta
   | ProjectSetConversationAi
   | ProjectSetEditing
+  | CreditsSet
   | LayerInsert
   | LayerUpdate
   | AssetAdd

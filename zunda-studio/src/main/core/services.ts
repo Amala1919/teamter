@@ -1,6 +1,7 @@
 import { AiService } from '../services/ai/ai-service'
 import { ClaudeCodeProvider } from '../services/ai/claude-code-provider'
 import { OpenCodeProvider } from '../services/ai/opencode-provider'
+import { ExportService } from '../services/export/export-service'
 import { FfmpegLocator } from '../services/media/ffmpeg'
 import { MediaService } from '../services/media/media-service'
 import { ProjectService } from '../services/project/project-service'
@@ -41,6 +42,9 @@ export interface Services {
   /** ffprobe・プロキシ・波形。 */
   mediaTools: MediaService
   ffmpeg: FfmpegLocator
+  exporter: ExportService
+  /** 保存ダイアログで選ばれた書き出し先。これ以外の場所には書き出さない。 */
+  saveTargets: Set<string>
   /** 終了時の後始末(アプリが起動した音声エンジンを止める等)。 */
   dispose: () => Promise<void>
 }
@@ -65,6 +69,7 @@ export async function createServices(options: ServicesOptions): Promise<Services
   const engines = new EngineManager(getSettings, events)
   const synthesis = new SynthesisService(engines, paths.cache.voice)
   const ffmpeg = new FfmpegLocator(getSettings, env)
+  const psd = new PsdService(paths.cache.psd)
   const mediaTools = new MediaService(ffmpeg, getSettings, events, { proxy: paths.cache.proxy, peaks: paths.cache.peaks })
 
   return {
@@ -79,9 +84,11 @@ export async function createServices(options: ServicesOptions): Promise<Services
     ai,
     engines,
     synthesis,
-    psd: new PsdService(paths.cache.psd),
+    psd,
     mediaTools,
     ffmpeg,
+    exporter: new ExportService(ffmpeg, getSettings, events, psd, synthesis, paths.cache.temp),
+    saveTargets: new Set(),
     dispose: () => engines.shutdown()
   }
 }

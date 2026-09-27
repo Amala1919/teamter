@@ -1,5 +1,8 @@
+import { useState } from 'react'
+
 import { toAppError } from '../../api'
 import { useEditorStore } from '../../state/store'
+import { ExportDialog } from '../export/ExportDialog'
 
 interface ToolbarProps {
   onError: (message: string | null) => void
@@ -14,6 +17,7 @@ export function Toolbar({ onError, onOpenSettings }: ToolbarProps): React.JSX.El
   const canRedo = useEditorStore((state) => state.redoStack.length > 0)
   const undoLabel = useEditorStore((state) => state.undoStack.at(-1)?.label)
   const { newProject, openProject, saveProject, undo, redo, dispatch } = useEditorStore.getState()
+  const [exportOpen, setExportOpen] = useState(false)
 
   const run = (action: () => Promise<void>): void => {
     onError(null)
@@ -58,6 +62,9 @@ export function Toolbar({ onError, onOpenSettings }: ToolbarProps): React.JSX.El
       </div>
 
       <div className="toolbar__group">
+        <button type="button" onClick={() => setExportOpen(true)} data-testid="open-export">
+          書き出し
+        </button>
         <button type="button" onClick={onOpenSettings} data-testid="open-settings">
           設定
         </button>
@@ -77,6 +84,7 @@ export function Toolbar({ onError, onOpenSettings }: ToolbarProps): React.JSX.El
         {dirty && <span className="toolbar__dirty" title="未保存の変更があります" />}
         <span className="toolbar__path">{filePath ?? '未保存'}</span>
       </div>
+      {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} />}
     </header>
   )
 }

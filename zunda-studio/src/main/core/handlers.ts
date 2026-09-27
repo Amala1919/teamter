@@ -1,3 +1,5 @@
+import { resolve } from 'node:path'
+
 import { z } from 'zod'
 
 import { PROVIDER_IDS } from '@shared/ai/types'
@@ -6,6 +8,7 @@ import type { Project } from '@shared/project/types'
 import type { SettingsPatch } from '@shared/settings/schema'
 
 import { PROJECT_FILE_EXTENSION } from '../services/project/store'
+import { writeFileAtomic } from './fs'
 import { AppError, toErrorShape } from './errors'
 import type { Services } from './services'
 
@@ -99,7 +102,22 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
   'psd:load': z.tuple([pathArg]),
   'media:probe': z.tuple([pathArg]),
   'media:proxy': z.tuple([pathArg, z.enum(['mp4', 'webm'])]),
-  'media:peaks': z.tuple([pathArg])
+  'media:peaks': z.tuple([pathArg]),
+  'export:start': z.tuple([
+    z
+      .object({
+        project: projectArg,
+        outputPath: pathArg,
+        startMs: z.number().min(0).optional(),
+        endMs: z.number().min(0).optional(),
+        fps: z.number().int().min(1).max(120).optional(),
+        height: z.number().int().min(144).max(4320).optional(),
+        crf: z.number().int().min(0).max(51).optional()
+      })
+      .loose()
+  ]) as unknown as z.ZodType<ChannelArgs<'export:start'>>,
+  'export:cancel': z.tuple([z.string().min(1).max(100)]),
+  'export:text': z.tuple([pathArg, z.string().max(1_000_000)])
 }
 
 export function createHandlers(services: Services): HandlerTable {
@@ -120,6 +138,10 @@ export function createHandlers(services: Services): HandlerTable {
       // 素材として選ばれたファイルは、プレビューで読めるよう配信を許可する。
       if (picked && ['video', 'audio', 'image', 'media', 'psd'].includes(request.kind)) {
         services.media.allowFiles(picked)
+      }
+      // 書き出し先は、保存ダイアログで選ばれた場所だけを受け付ける。
+      if (picked && ['exportVideo', 'exportText'].includes(request.kind)) {
+        for (const path of picked) services.saveTargets.add(resolve(path))
       }
       return picked
     },
@@ -168,7 +190,21 @@ export function createHandlers(services: Services): HandlerTable {
 
     'media:probe': (path) => requireAllowed(services, path).then(() => services.mediaTools.probe(path)),
     'media:proxy': (path, format) => requireAllowed(services, path).then(() => services.mediaTools.proxy(path, format)),
-    'media:peaks': (path) => requireAllowed(services, path).then(() => services.mediaTools.peaks(path))
+    'media:peaks': (path) => requireAllowed(services, path).then(() => services.mediaTools.peaks(path)),
+
+    'export:start': (request) => {
+      // 書き出し先は保存ダイアログで選ばれた場所に限る(任意の場所へ書かせない)。
+      if (!services.saveTargets.has(resolve(request.outputPath))) {
+        return Promise.reject(new AppError('ACCESS_DENIED', '書き出し先は保存ダイアログで選んでください'))
+      }
+      for (const asset of Object.values(request.project.assets)) services.media.allowFile(asset.path.absolute)
+      return Promise.resolve(services.exporter.start(request))
+    },
+    'export:cancel': (jobId) => Promise.resolve(services.exporter.cancel(jobId)),
+    'export:text': async (path, text) => {
+      if (!services.saveTargets.has(resolve(path))) throw new AppError('ACCESS_DENIED', '保存先は保存ダイアログで選んでください')
+      await writeFileAtomic(path, text)
+    }
   }
 }
 
