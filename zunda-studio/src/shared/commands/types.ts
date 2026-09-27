@@ -6,6 +6,7 @@
  * 残りは各フェーズで追加する(プロトコル仕様側には全体が定義済み)。
  */
 
+import type { GeneratedBy, ModelRef } from '../ai/types'
 import type {
   AiPersona,
   CharacterAuthorRole,
@@ -20,6 +21,12 @@ import type {
 export interface ProjectSetMeta {
   op: 'project.setMeta'
   title?: string
+}
+
+/** この動画で相方を演じるAIを決める。null ならアプリの既定値に従う。 */
+export interface ProjectSetConversationAi {
+  op: 'project.setConversationAi'
+  model: ModelRef | null
 }
 
 export interface LayerInsert {
@@ -76,6 +83,8 @@ export interface VoiceInsert {
   atMs: Ms
   layerId?: LayerId
   expressionId?: ExpressionId
+  /** AIが書いたセリフの生成元。AI自身には指定させず、アプリが付与する。 */
+  generatedBy?: GeneratedBy
   tempId?: string
 }
 
@@ -95,6 +104,7 @@ export interface VoiceSetSubtitleOverride {
 
 export type Command =
   | ProjectSetMeta
+  | ProjectSetConversationAi
   | LayerInsert
   | CharacterCreate
   | CharacterSetPersona

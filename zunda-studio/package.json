@@ -8,19 +8,28 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
+    "build:app": "electron-vite build",
+    "build:devhost": "vite build -c vite.devhost.config.ts",
+    "devhost": "npm run build:app && npm run build:devhost && node out/devhost/main.js",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json --composite false && tsc --noEmit -p tsconfig.web.json --composite false",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "npm run build:app && npm run build:devhost && playwright test"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^1.0.9",
+    "ag-psd": "^31.0.2",
     "immer": "^11.1.18",
     "nanoid": "^6.0.1",
+    "obs-websocket-js": "^5.0.8",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "zod": "^4.6.5",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/node": "^26.6.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

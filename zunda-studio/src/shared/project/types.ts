@@ -3,6 +3,8 @@
  * 時間はすべてミリ秒の整数で表す。
  */
 
+import type { GeneratedBy, ModelRef } from '../ai/types'
+
 export const PROJECT_FORMAT_VERSION = 1
 
 export type Ms = number
@@ -347,6 +349,8 @@ export interface VoiceItem extends ItemBase {
   voiceOverride: Partial<VoiceParams> | null
   subtitleOverride: SubtitleOverride | null
   expressionId: ExpressionId | null
+  /** AIが書いたセリフなら生成元。人間が書いたなら null。 */
+  generatedBy: GeneratedBy | null
   /** 未合成なら null。durationMs はここから導出される。 */
   synthesis: SynthesisResult | null
   /** 自動改行の結果。手動で編集できる。 */
@@ -468,6 +472,8 @@ export interface LiveEntry {
   bookmarked: boolean
   /** 台本に採用した場合、生成されたボイスアイテムのID。二重採用を防ぐ。 */
   adoptedItemId: ItemId | null
+  /** AIの発言なら生成元。 */
+  generatedBy: GeneratedBy | null
 }
 
 export interface LiveSession {
@@ -497,4 +503,10 @@ export interface Project {
   liveSessions: Record<LiveSessionId, LiveSession>
   credits: CreditsState
   chat: { messages: ChatMessage[] }
+  ai: ProjectAiSettings
+}
+
+export interface ProjectAiSettings {
+  /** この動画で相方を演じるAI。null ならアプリの既定値。 */
+  conversation: ModelRef | null
 }

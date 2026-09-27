@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { migrateProject, readProject, writeProject } from '@main/project/store'
+import { migrateProject, readProject, writeProject } from '@main/services/project/store'
 import { createEmptyProject } from '@shared/project/factory'
 import { PROJECT_FORMAT_VERSION } from '@shared/project/types'
 

@@ -1,14 +1,24 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
-import type { AppInfo, OpenedProject, SavedProject, ZundaApi } from '@shared/ipc/contract'
-import { IPC } from '@shared/ipc/contract'
-import type { Project } from '@shared/project/types'
+import type { EventEnvelope, IpcResult, ZundaBridge } from '@shared/ipc/contract'
 
-const api: ZundaApi = {
-  openProject: () => ipcRenderer.invoke(IPC.projectOpen) as Promise<OpenedProject | null>,
-  saveProject: (project: Project, path: string | null) =>
-    ipcRenderer.invoke(IPC.projectSave, project, path) as Promise<SavedProject | null>,
-  getAppInfo: () => ipcRenderer.invoke(IPC.appInfo) as Promise<AppInfo>
+// preload は main のモジュールを読み込めないため、チャネル名とスキームをここにも書く。
+const INVOKE_CHANNEL = 'zs:invoke'
+const EVENT_CHANNEL = 'zs:event'
+const MEDIA_SCHEME = 'zs-media'
+
+const bridge: ZundaBridge = {
+  runtime: 'electron',
+  invoke: (channel: string, args: unknown[]) =>
+    ipcRenderer.invoke(INVOKE_CHANNEL, channel, args) as Promise<IpcResult<unknown>>,
+  subscribe: (listener: (envelope: EventEnvelope) => void) => {
+    const handler = (_: unknown, envelope: EventEnvelope): void => listener(envelope)
+    ipcRenderer.on(EVENT_CHANNEL, handler)
+    return () => {
+      ipcRenderer.off(EVENT_CHANNEL, handler)
+    }
+  },
+  mediaUrl: (absolutePath: string) => `${MEDIA_SCHEME}://file/${encodeURIComponent(absolutePath)}`
 }
 
-contextBridge.exposeInMainWorld('zunda', api)
+contextBridge.exposeInMainWorld('zunda', bridge)

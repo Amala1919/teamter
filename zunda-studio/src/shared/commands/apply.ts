@@ -1,5 +1,7 @@
 import { produce } from 'immer'
 
+import { isSafeModelId } from '../ai/types'
+
 import type { Item, Layer, Project, VoiceItem } from '../project/types'
 import { CommandError, type Command } from './types'
 
@@ -55,6 +57,14 @@ function applyOne(
   switch (command.op) {
     case 'project.setMeta': {
       if (command.title !== undefined) draft.meta.title = command.title
+      return
+    }
+
+    case 'project.setConversationAi': {
+      if (command.model !== null && !isSafeModelId(command.model.model)) {
+        throw new CommandError(`モデルIDに使えない文字が含まれています: ${command.model.model}`, command.op)
+      }
+      draft.ai.conversation = command.model
       return
     }
 
@@ -192,6 +202,7 @@ function applyOne(
         voiceOverride: null,
         subtitleOverride: null,
         expressionId: command.expressionId ?? null,
+        generatedBy: command.generatedBy ?? null,
         synthesis: null,
         subtitleLines: [command.text]
       }

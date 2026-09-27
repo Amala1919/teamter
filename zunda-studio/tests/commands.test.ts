@@ -157,3 +157,37 @@ describe('layer.insert', () => {
     expect(next.layers.map((layer) => layer.index)).toEqual([0, 1, 2, 3, 4])
   })
 })
+
+describe('project.setConversationAi', () => {
+  it('この動画の相方を演じるAIを設定・解除できる', () => {
+    const project = createEmptyProject()
+    const set = apply(project, [
+      { op: 'project.setConversationAi', model: { providerId: 'opencode', model: 'opencode-go/kimi-k3' } }
+    ])
+    expect(set.ai.conversation).toEqual({ providerId: 'opencode', model: 'opencode-go/kimi-k3' })
+    const cleared = apply(set, [{ op: 'project.setConversationAi', model: null }])
+    expect(cleared.ai.conversation).toBeNull()
+  })
+
+  it('CLIに渡せない文字を含むモデルIDは拒否する', () => {
+    expect(() =>
+      apply(createEmptyProject(), [
+        { op: 'project.setConversationAi', model: { providerId: 'claude-code', model: 'x; rm -rf /' } }
+      ])
+    ).toThrow(CommandError)
+  })
+})
+
+describe('voice.insert の生成元', () => {
+  it('AIが書いたセリフには生成元を記録し、人間のセリフは null', () => {
+    const { project, characterId } = projectWithCharacter()
+    const generatedBy = { providerId: 'claude-code' as const, model: 'opus', at: '2026-01-01T00:00:00Z' }
+    const next = apply(project, [
+      { op: 'voice.insert', characterId, text: '人間が書いた', atMs: 0 },
+      { op: 'voice.insert', characterId, text: 'AIが書いた', atMs: 1000, generatedBy }
+    ])
+    const [human, ai] = voiceItemsInOrder(next)
+    expect(human!.generatedBy).toBeNull()
+    expect(ai!.generatedBy).toEqual(generatedBy)
+  })
+})

@@ -10,3 +10,8 @@ dist/
 *.wav
 *.mp3
 *.zsproj
+
+# テストの生成物
+test-results/
+playwright-report/
+.shot.mjs

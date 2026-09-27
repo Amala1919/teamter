@@ -71,6 +71,7 @@ export function createEmptyProject(options: CreateProjectOptions = {}): Project 
     items: [],
     liveSessions: {},
     credits: { generated: '', confirmedByUser: false },
-    chat: { messages: [] }
+    chat: { messages: [] },
+    ai: { conversation: null }
   }
 }

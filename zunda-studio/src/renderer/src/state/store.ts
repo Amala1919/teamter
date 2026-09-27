@@ -6,6 +6,8 @@ import { CommandError, type Command } from '@shared/commands/types'
 import { createEmptyProject } from '@shared/project/factory'
 import type { ItemId, Ms, Project } from '@shared/project/types'
 
+import { api } from '../api'
+
 /**
  * undo はコマンドの逆操作ではなく、適用前のプロジェクトのスナップショットで実現する。
  * immer が構造を共有するため、変更されていない部分はコピーされず、スナップショットは安価である。
@@ -116,11 +118,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }),
 
   openProject: async () => {
-    const opened = await window.zunda.openProject()
-    if (!opened) return
+    const picked = await api.invoke('dialog:pick', { kind: 'openProject' })
+    const path = picked?.[0]
+    if (!path) return
+    const project = await api.invoke('project:read', path)
     set({
-      project: opened.project,
-      filePath: opened.path,
+      project,
+      filePath: path,
       dirty: false,
       selectedItemIds: [],
       playheadMs: 0,
@@ -131,9 +135,24 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   saveProject: async (options) => {
     const { project, filePath } = get()
-    const target = options?.saveAs ? null : filePath
-    const saved = await window.zunda.saveProject(project, target)
-    if (!saved) return
-    set({ filePath: saved.path, dirty: false })
+    let target = options?.saveAs ? null : filePath
+    if (!target) {
+      const picked = await api.invoke('dialog:pick', {
+        kind: 'saveProject',
+        defaultName: `${sanitizeFileName(project.meta.title)}.zsproj`
+      })
+      target = picked?.[0] ?? null
+    }
+    if (!target) return
+    const written = await api.invoke('project:write', target, project)
+    // 保存時に素材の相対パスが更新されるので、保存結果を正とする。編集中に変わった分は失わないよう
+    // 保存前と同じオブジェクトのときだけ置き換える。
+    if (get().project === project) set({ project: written })
+    set({ filePath: target, dirty: get().project !== written })
   }
 }))
+
+function sanitizeFileName(name: string): string {
+  const cleaned = name.replace(/[\\/:*?"<>|]/g, '_').trim()
+  return cleaned === '' ? 'project' : cleaned
+}

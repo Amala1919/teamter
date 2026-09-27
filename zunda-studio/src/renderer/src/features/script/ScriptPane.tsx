@@ -4,8 +4,11 @@ import type { Command } from '@shared/commands/types'
 import { voiceItemsInOrder, itemEndMs } from '@shared/project/queries'
 import type { CharacterId } from '@shared/project/types'
 
+import { formatModelRef } from '@shared/ai/types'
+
 import { formatMs } from '../../lib/time'
 import { useEditorStore } from '../../state/store'
+import { CohostAiBar } from './CohostAiBar'
 
 /** 新しいセリフを前のセリフの後ろに置くときの間隔。 */
 const DEFAULT_GAP_MS = 200
@@ -99,6 +102,7 @@ export function ScriptPane({ onError }: ScriptPaneProps): React.JSX.Element {
         </div>
       ) : (
         <>
+          <CohostAiBar onError={onError} />
           <div className="script__controls">
             <select
               value={activeSpeaker ?? ''}
@@ -162,6 +166,11 @@ export function ScriptPane({ onError }: ScriptPaneProps): React.JSX.Element {
                       run([{ op: 'voice.setText', itemId: line.id, text }], 'セリフの編集')
                     }}
                   />
+                  {line.generatedBy && (
+                    <span className="script__generatedBy" data-testid="generated-by">
+                      {formatModelRef(line.generatedBy)} が書いたセリフ
+                    </span>
+                  )}
                   {line.synthesis === null && (
                     <span className="script__pending">
                       未合成(尺は文字数からの暫定値。Phase 1 で実測値に置き換わる)
