@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { PLAIN_CIPHER, SecretStore } from '@main/core/secret-store'
 import { AiService } from '@main/services/ai/ai-service'
 import { CLAUDE_MODELS } from '@main/services/ai/claude-code-provider'
-import { apiModelName, formatsFor, modelPrefix } from '@main/services/ai/opencode-api'
+import { apiModelName, baseUrlFor, formatsFor, modelPrefix, usesOfficialEndpoints } from '@main/services/ai/opencode-api'
 import { OpenCodeProvider } from '@main/services/ai/opencode-provider'
 import { groupModels, markRecommended, OPENCODE_RECOMMENDED } from '@shared/ai/models'
 import type { ModelInfo } from '@shared/ai/types'
@@ -53,9 +53,39 @@ describe('OpenCode の API(キーで接続)', () => {
     expect(recommended).not.toContain('opencode-go/kimi-k2.7-code')
   })
 
-  it('キーが無い・間違っているときも、内蔵の候補は選べる', async () => {
-    expect((await provider(null).listModels()).length).toBeGreaterThan(5)
+  it('キーが無い・間違っているときも、内蔵の一覧(Go と Zen の全モデル)から選べる', async () => {
+    const models = await provider(null).listModels()
+    expect(models.length).toBeGreaterThan(100)
+    const { recommended, groups } = groupModels(models)
+    expect(groups.map((group) => group.label)).toEqual(['OpenCode Go(月額プラン)', 'OpenCode Zen(従量課金)'])
+    // おすすめは契約しているプラン(既定は Go)から選ぶ
+    expect(recommended.every((model) => model.id.startsWith('opencode-go/'))).toBe(true)
+    const zen = groups[1]!.models
+    expect(zen.find((model) => model.id === 'opencode/claude-opus-5')).toMatchObject({ label: 'Claude Opus 5' })
+    expect(zen.find((model) => model.id === 'opencode/big-pickle')).toMatchObject({ note: '無料' })
     expect((await provider('sk-wrong').listModels()).some((model) => model.source === 'static')).toBe(true)
+  })
+
+  it('公式の接続先では、1つのキーで Go と Zen のモデルをそれぞれの接続先へ送る', () => {
+    const go = 'https://opencode.ai/zen/go/v1'
+    const zen = 'https://opencode.ai/zen/v1'
+    expect(usesOfficialEndpoints(go)).toBe(true)
+    expect(baseUrlFor('opencode/claude-opus-5', go)).toBe(zen)
+    expect(baseUrlFor('opencode-go/kimi-k3', zen)).toBe(go)
+    expect(baseUrlFor('opencode/claude-opus-5', 'http://127.0.0.1:9/v1')).toBe('http://127.0.0.1:9/v1')
+    // 形式は内蔵の一覧で決まる(同じ名前でもプランで違うことがある)
+    expect(formatsFor('opencode-go/minimax-m3')[0]).toBe('messages')
+    expect(formatsFor('opencode/minimax-m3')[0]).toBe('chat')
+    expect(formatsFor('opencode/gemini-3.8-flash')[0]).toBe('gemini')
+    expect(formatsFor('opencode/claude-opus-5')[0]).toBe('messages')
+  })
+
+  it('Gemini の形式でも呼べる(考え中の部分は返事に含めない)', async () => {
+    mock.calls.length = 0
+    const result = await provider(GOOD_KEY).generate('opencode/gemini-3.8-flash', { system: 's', turns: [{ role: 'user', content: 'やあ' }] })
+    expect(result.text).toBe('(gemini-3.8-flash が gemini で答えました)')
+    expect(mock.calls.map((call) => call.path)).toEqual(['/models/gemini-3.8-flash:generateContent'])
+    expect(mock.calls[0]!.body['systemInstruction']).toEqual({ parts: [{ text: 's' }] })
   })
 
   it('モデルごとに合った形式(chat / messages / responses)で呼ぶ', async () => {
@@ -118,6 +148,7 @@ describe('OpenCode の API(キーで接続)', () => {
     expect(formatsFor('qwen3.8-max')[0]).toBe('messages')
     expect(formatsFor('grok-4.7')[0]).toBe('responses')
     expect(formatsFor('kimi-k3')).toEqual(['chat', 'messages', 'responses'])
+    expect(formatsFor('gemini-9-flash')).toEqual(['gemini', 'chat', 'messages', 'responses'])
   })
 })
 
@@ -150,9 +181,10 @@ describe('APIキーの保管', () => {
 
 describe('モデルのおすすめ', () => {
   it('Claude はエイリアスを勧め、それ以外の版も全て選べる', () => {
-    const { recommended, others } = groupModels(CLAUDE_MODELS)
+    const { recommended, groups } = groupModels(CLAUDE_MODELS)
     expect(recommended.map((model) => model.id)).toEqual(['sonnet', 'opus', 'haiku'])
-    expect(others.map((model) => model.id)).toEqual(expect.arrayContaining(['fable', 'claude-opus-4-8', 'claude-sonnet-4-5', 'claude-haiku-4-5']))
+    expect(groups).toHaveLength(1)
+    expect(groups[0]!.models.map((model) => model.id)).toEqual(expect.arrayContaining(['fable', 'claude-opus-4-8', 'claude-sonnet-4-5', 'claude-haiku-4-5']))
   })
 
   it('手入力のモデルは勧めず、一覧の最後に置く', () => {
@@ -161,8 +193,8 @@ describe('モデルのおすすめ', () => {
       { id: 'opencode-go/kimi-k3', label: 'x', source: 'cli' },
       { id: 'opencode-go/aaa', label: 'x', source: 'cli' }
     ]
-    const { recommended, others } = groupModels(markRecommended(models, OPENCODE_RECOMMENDED))
+    const { recommended, groups } = groupModels(markRecommended(models, OPENCODE_RECOMMENDED))
     expect(recommended.map((model) => model.id)).toEqual(['opencode-go/kimi-k3'])
-    expect(others.map((model) => model.id)).toEqual(['opencode-go/aaa', 'opencode-go/kimi-k9'])
+    expect(groups.flatMap((group) => group.models.map((model) => model.id))).toEqual(['opencode-go/aaa', 'opencode-go/kimi-k9'])
   })
 })

@@ -32,6 +32,8 @@ export interface ModelInfo {
   note?: string
   /** 画面の「おすすめ」に並べるもの。 */
   recommended?: boolean
+  /** 一覧で見出しを付けてまとめる単位(OpenCode Go / OpenCode Zen など)。 */
+  group?: string
 }
 
 export type ProviderState =

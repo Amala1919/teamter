@@ -11,31 +11,15 @@ import { AppError } from '../../core/errors'
 import { resolveExecutable, runProcess } from '../../core/process'
 import { cliFailure, spawnFailure } from './cli-errors'
 import { extractJson } from './json'
-import { OpenCodeApi, type FetchLike } from './opencode-api'
+import { OpenCodeApi, usesOfficialEndpoints, type FetchLike } from './opencode-api'
 import { jsonInstruction, turnsToPrompt, type LlmProvider } from './provider'
 import { markRecommended, OPENCODE_RECOMMENDED } from '@shared/ai/models'
+import { catalogEntry, OPENCODE_CATALOG, opencodePlan } from '@shared/ai/opencode-catalog'
+import { OPENCODE_GO_BASE_URL, OPENCODE_ZEN_BASE_URL } from '@shared/settings/schema'
 
 const LABEL = 'OpenCode'
 const AGENT_NAME = 'zunda-studio'
 
-/**
- * API・CLIからモデル一覧を取れないときに出す候補(OpenCode Go の公式ドキュメント時点の一覧)。
- * 実際の一覧は API の /models(または `opencode models`)から取得し、そちらを優先する。
- */
-export const OPENCODE_GO_FALLBACK_MODELS: ModelInfo[] = [
-  'kimi-k3',
-  'glm-5.3',
-  'glm-5.2',
-  'qwen3.8-max',
-  'qwen3.8-flash',
-  'deepseek-v4-pro',
-  'deepseek-v4-flash',
-  'minimax-m3',
-  'gpt-6-luna',
-  'grok-4.7',
-  'mimo-v2.6-pro',
-  'longcat-2.0'
-].map((id) => ({ id: `opencode-go/${id}`, label: `opencode-go/${id}`, source: 'static' as const }))
 
 /** OpenCode のツール権限キー。全て拒否して純粋な文章生成にする。 */
 const DENIED_PERMISSIONS = [
@@ -123,39 +107,57 @@ export class OpenCodeProvider implements LlmProvider {
   }
 
   async listModels(): Promise<ModelInfo[]> {
-    return markRecommended(await this.listAllModels(), OPENCODE_RECOMMENDED)
+    // おすすめは、契約しているプラン(接続先が Zen なら Zen、それ以外は Go)のモデルから選ぶ。
+    const prefer = this.usesApi() && this.config().baseUrl.replace(/\/+$/, '') === OPENCODE_ZEN_BASE_URL ? 'opencode/' : 'opencode-go/'
+    return markRecommended(await this.listAllModels(), OPENCODE_RECOMMENDED, prefer)
   }
 
+  /**
+   * 選べるモデルの一覧。API(または opencode コマンド)から取れたものを先に、内蔵の一覧にしか無いものを後ろに並べる。
+   * 内蔵の一覧も出すのは、キーを入れる前や一覧を取れないときでも選べるようにするため。
+   */
   private async listAllModels(): Promise<ModelInfo[]> {
     const config = this.config()
-    const custom = config.customModels.map<ModelInfo>((id) => ({ id, label: id, source: 'custom' }))
+    const custom = config.customModels.map<ModelInfo>((id) => ({ id, label: id, source: 'custom', group: '手入力したモデル' }))
+    let live: string[] = []
+    let includeCatalog = true
     if (this.usesApi()) {
-      if (!this.getApiKey()) return [...OPENCODE_GO_FALLBACK_MODELS, ...custom]
-      try {
-        const ids = await this.api.listModels(this.apiOptions())
-        if (ids.length === 0) return [...OPENCODE_GO_FALLBACK_MODELS, ...custom]
-        return [...ids.map<ModelInfo>((id) => ({ id, label: id, source: 'cli' })), ...custom]
-      } catch {
-        return [...OPENCODE_GO_FALLBACK_MODELS, ...custom]
-      }
+      if (this.getApiKey()) live = await this.listFromApi()
+      // 独自の接続先では、OpenCode の一覧が当てはまるとは限らない。取れたものだけ出す。
+      includeCatalog = usesOfficialEndpoints(config.baseUrl) || live.length === 0
+    } else {
+      // コマンドの一覧は、そのコマンドで実際に使えるもの。取れたときはそれだけを出す。
+      live = await this.listFromCli()
+      includeCatalog = live.length === 0
     }
-    const executablePath = await this.executable()
-    if (!executablePath) return [...OPENCODE_GO_FALLBACK_MODELS, ...custom]
+    const ids = [...new Set([...live, ...(includeCatalog ? OPENCODE_CATALOG.map((entry) => entry.id) : [])])]
+    const liveSet = new Set(live)
+    return [...ids.map((id) => describeModel(id, liveSet.has(id) ? 'cli' : 'static')), ...custom]
+  }
 
+  /** 公式の接続先なら、Go と Zen の両方の一覧を取る(1つのキーで両方使える)。 */
+  private async listFromApi(): Promise<string[]> {
+    const options = this.apiOptions()
+    const bases = usesOfficialEndpoints(options.baseUrl) ? [OPENCODE_GO_BASE_URL, OPENCODE_ZEN_BASE_URL] : [options.baseUrl]
+    const results = await Promise.allSettled(bases.map((baseUrl) => this.api.listModels({ ...options, baseUrl })))
+    return results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
+  }
+
+  /** opencode コマンドに登録されている全プロバイダのモデル。 */
+  private async listFromCli(): Promise<string[]> {
+    const executablePath = await this.executable()
+    if (!executablePath) return []
     try {
-      const args = config.providerFilter ? ['models', config.providerFilter] : ['models']
       const run = await runProcess({
         command: executablePath,
-        args,
+        args: ['models'],
         cwd: this.workDirectory,
         env: this.childEnv(null),
         timeoutMs: 30_000
       })
-      const models = parseModelList(run.stdout)
-      if (run.exitCode !== 0 || models.length === 0) return [...OPENCODE_GO_FALLBACK_MODELS, ...custom]
-      return [...models.map<ModelInfo>((id) => ({ id, label: id, source: 'cli' })), ...custom]
+      return run.exitCode === 0 ? parseModelList(run.stdout) : []
     } catch {
-      return [...OPENCODE_GO_FALLBACK_MODELS, ...custom]
+      return []
     }
   }
 
@@ -229,6 +231,22 @@ export class OpenCodeProvider implements LlmProvider {
     }
     if (system !== null) env['OPENCODE_CONFIG_CONTENT'] = JSON.stringify(agentConfig(system))
     return env
+  }
+}
+
+const PLAN_GROUPS = { go: 'OpenCode Go(月額プラン)', zen: 'OpenCode Zen(従量課金)' } as const
+
+/** 一覧に出す形。名前は内蔵の一覧から、無ければ ID のまま。 */
+export function describeModel(id: string, source: ModelInfo['source']): ModelInfo {
+  const entry = catalogEntry(id)
+  const plan = opencodePlan(id)
+  const group = plan === 'other' ? `その他のプロバイダ(${id.split('/')[0]})` : PLAN_GROUPS[plan]
+  return {
+    id,
+    label: entry ? entry.name : id,
+    source,
+    group,
+    ...(entry?.free ? { note: '無料' } : {})
   }
 }
 

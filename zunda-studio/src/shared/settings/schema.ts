@@ -43,8 +43,6 @@ const aiSchema = z
             baseUrl: z.string().url().default(OPENCODE_GO_BASE_URL),
             executablePath,
             customModels: z.array(z.string()).default([]),
-            /** モデル一覧をこのプロバイダに絞る。空文字なら全プロバイダを表示する。 */
-            providerFilter: z.string().default('opencode-go'),
             timeoutMs: z.number().int().positive().default(180_000)
           })
           .prefault({})
