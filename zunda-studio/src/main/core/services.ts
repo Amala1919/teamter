@@ -1,6 +1,8 @@
 import { AiService } from '../services/ai/ai-service'
 import { ClaudeCodeProvider } from '../services/ai/claude-code-provider'
 import { OpenCodeProvider } from '../services/ai/opencode-provider'
+import { FfmpegLocator } from '../services/media/ffmpeg'
+import { MediaService } from '../services/media/media-service'
 import { ProjectService } from '../services/project/project-service'
 import { PsdService } from '../services/psd/psd-service'
 import { EngineManager } from '../services/voice/engine-manager'
@@ -36,6 +38,9 @@ export interface Services {
   engines: EngineManager
   synthesis: SynthesisService
   psd: PsdService
+  /** ffprobe・プロキシ・波形。 */
+  mediaTools: MediaService
+  ffmpeg: FfmpegLocator
   /** 終了時の後始末(アプリが起動した音声エンジンを止める等)。 */
   dispose: () => Promise<void>
 }
@@ -59,6 +64,8 @@ export async function createServices(options: ServicesOptions): Promise<Services
 
   const engines = new EngineManager(getSettings, events)
   const synthesis = new SynthesisService(engines, paths.cache.voice)
+  const ffmpeg = new FfmpegLocator(getSettings, env)
+  const mediaTools = new MediaService(ffmpeg, getSettings, events, { proxy: paths.cache.proxy, peaks: paths.cache.peaks })
 
   return {
     runtime: options.runtime,
@@ -73,6 +80,8 @@ export async function createServices(options: ServicesOptions): Promise<Services
     engines,
     synthesis,
     psd: new PsdService(paths.cache.psd),
+    mediaTools,
+    ffmpeg,
     dispose: () => engines.shutdown()
   }
 }

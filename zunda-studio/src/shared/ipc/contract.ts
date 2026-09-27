@@ -1,3 +1,4 @@
+import type { MediaProbe, ProxyFormat, WaveformPeaks } from '../media/types'
 import type { ModelInfo, ProviderId, ProviderStatus } from '../ai/types'
 import type { AppErrorShape } from '../errors'
 import type { Project } from '../project/types'
@@ -70,6 +71,13 @@ export interface IpcContract {
 
   /** PSD を解析してレイヤーツリーを返す。各レイヤーの画像はキャッシュに PNG として置かれる。 */
   'psd:load': { args: [path: string]; result: PsdManifest }
+
+  /** 素材の長さ・大きさ・符号化方式を調べる(ffprobe)。 */
+  'media:probe': { args: [path: string]; result: MediaProbe }
+  /** 編集用の軽い動画を用意して、その場所を返す。 */
+  'media:proxy': { args: [path: string, format: ProxyFormat]; result: string }
+  /** 波形の表示用データ。 */
+  'media:peaks': { args: [path: string]; result: WaveformPeaks }
 }
 
 export type Channel = keyof IpcContract
@@ -82,6 +90,8 @@ export type IpcResult<T> = { ok: true; value: T } | { ok: false; error: AppError
 export interface AppEvents {
   'settings:changed': AppSettings
   'voice:engine-status': EngineStatus
+  /** プロキシ作成の進み具合(0〜1)。 */
+  'media:proxy-progress': { path: string; ratio: number }
 }
 
 export type EventName = keyof AppEvents

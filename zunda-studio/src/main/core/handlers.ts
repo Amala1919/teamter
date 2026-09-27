@@ -95,7 +95,10 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
     })
   ]),
   'voice:dict:delete': z.tuple([engineIdArg, z.string().min(1).max(100)]),
-  'psd:load': z.tuple([pathArg])
+  'psd:load': z.tuple([pathArg]),
+  'media:probe': z.tuple([pathArg]),
+  'media:proxy': z.tuple([pathArg, z.enum(['mp4', 'webm'])]),
+  'media:peaks': z.tuple([pathArg])
 }
 
 export function createHandlers(services: Services): HandlerTable {
@@ -160,8 +163,18 @@ export function createHandlers(services: Services): HandlerTable {
         return Promise.reject(new AppError('ACCESS_DENIED', 'プロジェクトに登録されていない PSD は読み込めません'))
       }
       return services.psd.load(path)
-    }
+    },
+
+    'media:probe': (path) => requireAllowed(services, path).then(() => services.mediaTools.probe(path)),
+    'media:proxy': (path, format) => requireAllowed(services, path).then(() => services.mediaTools.proxy(path, format)),
+    'media:peaks': (path) => requireAllowed(services, path).then(() => services.mediaTools.peaks(path))
   }
+}
+
+/** 利用者が選んだ・プロジェクトに登録された素材に限る(任意のファイルを ffmpeg に読ませない)。 */
+function requireAllowed(services: Services, path: string): Promise<void> {
+  if (services.media.isAllowed(path)) return Promise.resolve()
+  return Promise.reject(new AppError('ACCESS_DENIED', 'プロジェクトに登録されていないファイルは扱えません'))
 }
 
 /**
