@@ -1,0 +1,106 @@
+#!/usr/bin/env node
+// Claude Code CLI の模擬。引数・標準入力・システムプロンプトを FAKE_LOG に記録し、FAKE_MODE に応じた出力を返す。
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+
+const argv = process.argv.slice(2)
+const mode = process.env.FAKE_MODE ?? 'text'
+
+if (argv.includes('--version')) {
+  process.stdout.write('9.9.9 (Claude Code)\n')
+  process.exit(0)
+}
+
+const input = readFileSync(0, 'utf8')
+const option = (name) => {
+  const index = argv.indexOf(name)
+  return index >= 0 ? argv[index + 1] : undefined
+}
+const systemFile = option('--system-prompt-file')
+
+if (process.env.FAKE_LOG) {
+  appendFileSync(
+    process.env.FAKE_LOG,
+    JSON.stringify({
+      argv,
+      stdin: input,
+      cwd: process.cwd(),
+      system: systemFile && existsSync(systemFile) ? readFileSync(systemFile, 'utf8') : null,
+      hasApiKey: 'ANTHROPIC_API_KEY' in process.env
+    }) + '\n'
+  )
+}
+
+
+/**
+ * FAKE_RESPONSE_DIR が指定され、そこに queue.json(応答の配列)があれば、先頭の1件を取り出して返す。
+ * E2E テストが AI の応答を1件ずつ用意するための仕組み。呼ばれた内容は calls.jsonl に残す。
+ */
+function takeQueued(record) {
+  const dir = process.env.FAKE_RESPONSE_DIR
+  if (!dir) return undefined
+  appendFileSync(join(dir, 'calls.jsonl'), JSON.stringify(record) + '\n')
+  const file = join(dir, 'queue.json')
+  if (!existsSync(file)) return undefined
+  const queue = JSON.parse(readFileSync(file, 'utf8'))
+  if (!Array.isArray(queue) || queue.length === 0) return undefined
+  const [head, ...rest] = queue
+  writeFileSync(file, JSON.stringify(rest))
+  return head
+}
+
+const reply = process.env.FAKE_REPLY ?? 'こんにちはなのだ'
+
+function nextSequenceItem() {
+  const sequence = JSON.parse(process.env.FAKE_SEQUENCE ?? '[]')
+  const counterFile = process.env.FAKE_COUNTER
+  const count = counterFile && existsSync(counterFile) ? Number(readFileSync(counterFile, 'utf8')) : 0
+  if (counterFile) writeFileSync(counterFile, String(count + 1))
+  return sequence[Math.min(count, sequence.length - 1)]
+}
+
+function result(fields) {
+  process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', is_error: false, ...fields }) + '\n')
+}
+
+const queued = takeQueued({ system: systemFile && existsSync(systemFile) ? readFileSync(systemFile, 'utf8') : null, stdin: input, model: option('--model') })
+if (queued !== undefined) {
+  if (typeof queued === 'string') result({ result: queued })
+  else result({ result: JSON.stringify(queued), structured_output: queued })
+  process.exit(0)
+}
+
+switch (mode) {
+  case 'text':
+    result({ result: reply })
+    break
+  case 'structured':
+    result({ result: '', structured_output: JSON.parse(process.env.FAKE_STRUCTURED ?? '{}') })
+    break
+  case 'structured-in-text':
+    result({ result: '```json\n' + (process.env.FAKE_STRUCTURED ?? '{}') + '\n```' })
+    break
+  case 'sequence': {
+    const item = nextSequenceItem()
+    result({ result: JSON.stringify(item), structured_output: item })
+    break
+  }
+  case 'login':
+    process.stdout.write(
+      JSON.stringify({ type: 'result', subtype: 'error', is_error: true, result: 'Invalid API key · Please run /login' }) + '\n'
+    )
+    process.exit(1)
+    break
+  case 'rate':
+    process.stdout.write(
+      JSON.stringify({ type: 'result', subtype: 'error', is_error: true, result: 'Claude AI usage limit reached' }) + '\n'
+    )
+    process.exit(1)
+    break
+  case 'sleep':
+    setTimeout(() => result({ result: reply }), 10_000)
+    break
+  default:
+    process.stderr.write(`unknown FAKE_MODE ${mode}\n`)
+    process.exit(2)
+}

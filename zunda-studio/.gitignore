@@ -1,0 +1,20 @@
+node_modules/
+out/
+dist/
+.vite/
+*.log
+
+# 素材・成果物はリポジトリに入れない(docs/REQUIREMENTS.md のライセンス要件 L-1)
+*.psd
+*.mp4
+*.wav
+*.mp3
+*.zsproj
+
+# テストの生成物
+test-results/
+playwright-report/
+.shot.mjs
+
+# 同梱する音声エンジン(公式の配布物を各自で置く)
+vendor/

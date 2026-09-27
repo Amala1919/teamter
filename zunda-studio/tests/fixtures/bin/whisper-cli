@@ -1,0 +1,27 @@
+#!/usr/bin/env node
+// whisper.cpp の CLI の模擬。-m のモデルと -f の WAV(16kHz モノラル)を確かめ、決まった文を返す。
+import { existsSync, readFileSync } from 'node:fs'
+
+const argv = process.argv.slice(2)
+const option = (name) => {
+  const index = argv.indexOf(name)
+  return index >= 0 ? argv[index + 1] : undefined
+}
+const model = option('-m')
+const file = option('-f')
+if (!model || !existsSync(model)) {
+  process.stderr.write('error: failed to load model\n')
+  process.exit(1)
+}
+if (!file || !existsSync(file)) {
+  process.stderr.write('error: input file not found\n')
+  process.exit(1)
+}
+const wav = readFileSync(file)
+const sampleRate = wav.readUInt32LE(24)
+const channels = wav.readUInt16LE(22)
+if (wav.subarray(0, 4).toString() !== 'RIFF' || sampleRate !== 16000 || channels !== 1) {
+  process.stderr.write(`error: expected 16kHz mono wav, got ${sampleRate}Hz ${channels}ch\n`)
+  process.exit(1)
+}
+process.stdout.write(`\n ${process.env.FAKE_TRANSCRIPT ?? 'ボスの弱点はどこなのだ'}\n`)

@@ -1,0 +1,12 @@
+#!/usr/bin/env node
+// 音声エンジンの実行ファイルの模擬。--port で指定されたポートで模擬 VOICEVOX を起動する。
+import { startMockVoicevox } from '../mock-voicevox.mjs'
+
+const index = process.argv.indexOf('--port')
+const port = index >= 0 ? Number(process.argv[index + 1]) : 50021
+if (process.env.FAKE_ENGINE_CRASH === '1') {
+  process.stderr.write('model load failed\n')
+  process.exit(3)
+}
+await new Promise((resolve) => setTimeout(resolve, Number(process.env.FAKE_ENGINE_BOOT_MS ?? 300)))
+await startMockVoicevox({ port })
