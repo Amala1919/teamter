@@ -18,7 +18,9 @@ zunda-studioでは、自分のセリフを書けば相方の返答がAIから返
 
 ## 状態
 
-Phase 0(骨格構築)。まだ動画は書き出せない。進行状況は [docs/ROADMAP.md](docs/ROADMAP.md) を参照。
+Phase 0〜7 を実装済み(台本と音声合成、PSD 立ち絵、素材・タイムライン・ズーム・書き出し、AI の相方と編集チャット、録画中のライブ、録画からの下書きと投稿文、自動保存・辞書・インストーラ)。未着手は .ymmp の読み込みなど。進行状況と検証の状況は [docs/ROADMAP.md](docs/ROADMAP.md) を参照。
+
+導入と使い方は [docs/SETUP.md](docs/SETUP.md) を参照。
 
 ## ドキュメント
 
@@ -28,21 +30,25 @@ Phase 0(骨格構築)。まだ動画は書き出せない。進行状況は [doc
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | プロセス構成、レンダリング方式、音声合成の統合 |
 | [docs/PROJECT_FORMAT.md](docs/PROJECT_FORMAT.md) | プロジェクトファイルとデータモデルの仕様 |
 | [docs/AI_EDIT_PROTOCOL.md](docs/AI_EDIT_PROTOCOL.md) | AIがタイムラインを編集するためのコマンド仕様 |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | フェーズ計画と完了条件 |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | フェーズ計画と完了条件、検証の状況 |
+| [docs/SETUP.md](docs/SETUP.md) | 導入(VOICEVOX・ffmpeg・AI・whisper・OBS)と使い方 |
 
 ## 開発
 
 ```sh
 npm install
-npm run dev        # Electron を開発モードで起動
-npm run typecheck  # 型チェック
-npm run test       # ユニットテスト
+npm run dev            # Electron を開発モードで起動
+npm run typecheck      # 型チェック
+npm run test           # ユニットテスト
+npm run test:e2e       # 画面のテスト(テスト用ホスト + Chromium)
+npm run test:electron  # 実物の Electron での確認(先に npm run dist -- --dir)
+npm run dist:win       # Windows のインストーラ
 ```
 
 ## 素材とライセンスについて
 
 このリポジトリは**音声ライブラリ・立ち絵素材・BGMを一切同梱しない**。すべてユーザーが用意した素材を読み込む。
 
-VOICEVOX ENGINEはアプリから自動起動する形で利用するが、エンジン本体はビルド時・初回起動時に公式配布物を取得する方式とし、リポジトリにはバイナリを置かない(LGPL-3.0を含むデュアルライセンスのため、配布形態は [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) の「ライセンス要件」に従う)。
+VOICEVOX ENGINEはアプリから自動起動する形で利用する。インストール済みの VOICEVOX を自動で探すほか、配布物を作るときに公式の VOICEVOX ENGINE を `vendor/voicevox-engine/` に置けば改変せずに同梱する。リポジトリにはバイナリを置かない(LGPL-3.0を含むデュアルライセンスのため、配布形態は [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) の「ライセンス要件」に従う)。
 
 VOICEVOXの音声ライブラリは利用規約でクレジット表記が必要である。本アプリは使用したキャラクターを追跡し、`VOICEVOX:ずんだもん` 形式のクレジット文を自動生成する。ただし**最終的な規約遵守の責任は動画の投稿者にある**ため、生成されたクレジットの確認は必須とする。
