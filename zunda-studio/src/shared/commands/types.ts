@@ -12,6 +12,7 @@ import type {
   Asset,
   AssetId,
   AssetLicense,
+  ChatMessage,
   PortraitConfig,
   CharacterAuthorRole,
   Effect,
@@ -36,6 +37,7 @@ import type {
 export interface ProjectSetMeta {
   op: 'project.setMeta'
   title?: string
+  synopsis?: string
 }
 
 /** この動画で相方を演じるAIを決める。null ならアプリの既定値に従う。 */
@@ -60,6 +62,18 @@ export interface CreditsSet {
   op: 'credits.set'
   generated?: string
   confirmedByUser?: boolean
+}
+
+/** 編集チャットの発言を記録する。取り消しの対象にはしない(アプリの内部処理だけが発行する)。 */
+export interface ChatAppend {
+  op: 'chat.append'
+  message: ChatMessage
+}
+
+export interface ChatSetOutcome {
+  op: 'chat.setOutcome'
+  messageId: string
+  outcome: 'applied' | 'rejected'
 }
 
 // ------------------------------------------------------------------ レイヤー
@@ -431,6 +445,8 @@ export type Command =
   | ProjectSetConversationAi
   | ProjectSetEditing
   | CreditsSet
+  | ChatAppend
+  | ChatSetOutcome
   | LayerInsert
   | LayerUpdate
   | AssetAdd

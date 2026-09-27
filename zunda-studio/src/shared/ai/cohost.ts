@@ -1,0 +1,218 @@
+import { z } from 'zod'
+
+import { formatMs } from '../lib/time'
+import { voiceItemsInOrder } from '../project/queries'
+import type { BanterRole, Character, CharacterId, ItemId, Project, VoiceItem } from '../project/types'
+import type { ChatTurn, GenerateRequest } from './types'
+
+/**
+ * 相方(AIが演じるキャラクター)の返答を作るための依頼文と、返ってきた内容の検証。
+ * 仕様は docs/AI_EDIT_PROTOCOL.md 2章。
+ */
+
+export interface CohostRequest {
+  /** このセリフの後に続ける。null なら台本の最後。 */
+  afterItemId: ItemId | null
+  /** 何人分の候補を作るか(B-7)。 */
+  candidates: number
+  /** 何往復ぶん続けるか(B-8)。1 なら相方の返答1行だけ。2以上なら両者のセリフを交互に作る。 */
+  rounds: number
+  /** 書かせるキャラクター。省略すると AI の役のキャラクター。自分の役を指定すると提案になる(B-10)。 */
+  characterId?: CharacterId
+  /** その場の指示(「もっと辛口で」など)。 */
+  instruction?: string
+}
+
+export interface CohostLine {
+  characterId: CharacterId
+  text: string
+  expressionId: string | null
+}
+
+export interface CohostCandidate {
+  lines: CohostLine[]
+  /** 目安の長さを大きく超える、使わせない表現を含む、など。 */
+  warnings: string[]
+}
+
+/** 直近の何行を原文のまま渡すか。掛け合いのテンポは直前の流れに強く依存するため、ここは削らない。 */
+export const RECENT_LINES = 40
+/** それより前は話者と冒頭だけを縮めて渡す。 */
+const OLDER_LINE_CHARS = 24
+const OLDER_LINES_MAX = 120
+
+const BANTER_ROLE_TEXT: Record<BanterRole, string> = {
+  tsukkomi: 'ツッコミ役。相手のボケや言い間違いに的確にツッコむ',
+  boke: 'ボケ役。とぼけた発言や勘違いで笑いを取る',
+  navigator: '進行役・解説役。状況を整理し、視聴者に分かるよう補足する',
+  free: '自由な立ち位置'
+}
+
+export const cohostResponseSchema = z.object({
+  candidates: z
+    .array(
+      z.object({
+        lines: z
+          .array(
+            z.object({
+              speaker: z.string().min(1).describe('話すキャラクターの名前'),
+              text: z.string().min(1).max(400).describe('セリフ。改行や話者名は含めない'),
+              expression: z.string().nullable().describe('表情の名前。合うものが無ければ null')
+            })
+          )
+          .min(1)
+          .max(12)
+      })
+    )
+    .min(1)
+    .max(5)
+})
+
+export type CohostResponse = z.infer<typeof cohostResponseSchema>
+
+function aiCharacter(project: Project, request: CohostRequest): Character {
+  const chosen = request.characterId ? project.characters[request.characterId] : undefined
+  const character = chosen ?? Object.values(project.characters).find((candidate) => candidate.authorRole === 'ai')
+  if (!character) throw new Error('相方(AIの役)のキャラクターがいません')
+  return character
+}
+
+/** この位置までの会話(発話順)。 */
+export function conversationUntil(project: Project, afterItemId: ItemId | null): VoiceItem[] {
+  const lines = voiceItemsInOrder(project)
+  if (afterItemId === null) return lines
+  const index = lines.findIndex((line) => line.id === afterItemId)
+  return index < 0 ? lines : lines.slice(0, index + 1)
+}
+
+function speakerName(project: Project, line: VoiceItem): string {
+  return project.characters[line.characterId]?.name ?? '?'
+}
+
+function expressionNames(character: Character): string[] {
+  return Object.values(character.portrait?.expressions ?? {}).map((expression) => expression.name)
+}
+
+function describePersona(character: Character): string {
+  const persona = character.persona
+  if (!persona) return `${character.name}(性格の設定なし。自然な話し方で)`
+  return [
+    `名前: ${character.name}`,
+    persona.personality ? `性格: ${persona.personality}` : null,
+    persona.speechStyle ? `口調: ${persona.speechStyle}` : null,
+    `掛け合いでの立ち位置: ${BANTER_ROLE_TEXT[persona.banterRole]}`,
+    `1回のセリフの長さの目安: ${persona.targetLengthChars}文字前後`,
+    persona.forbidden.length > 0 ? `使ってはいけない表現: ${persona.forbidden.join(' / ')}` : null
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+/** 返答を依頼する文を作る。 */
+export function buildCohostPrompt(project: Project, request: CohostRequest): Omit<GenerateRequest, 'jsonSchema'> {
+  const actor = aiCharacter(project, request)
+  const conversation = conversationUntil(project, request.afterItemId)
+  const others = Object.values(project.characters).filter((character) => character.id !== actor.id)
+  const rounds = Math.max(1, Math.min(6, request.rounds))
+  const candidates = Math.max(1, Math.min(5, request.candidates))
+  const suggestingForUser = actor.authorRole === 'user'
+
+  const expressionHelp = [actor, ...(rounds > 1 ? others : [])]
+    .map((character) => {
+      const names = expressionNames(character)
+      return names.length > 0 ? `${character.name}の表情: ${names.join(' / ')}` : null
+    })
+    .filter(Boolean)
+
+  const system = [
+    'あなたはYouTubeのゲーム実況動画(ゆっくり実況・VOICEVOX実況の形式)で、掛け合いのセリフを書く役目です。',
+    suggestingForUser
+      ? `今回は投稿者本人が演じる「${actor.name}」のセリフの案を出します。投稿者が選んで直す前提の下書きです。`
+      : `あなたは相方の「${actor.name}」を演じます。人物像を最後まで崩さないでください。`,
+    '',
+    '## 演じる人物',
+    describePersona(actor),
+    others.length > 0 ? `\n## 掛け合いの相手\n${others.map((other) => `${other.name}${other.authorRole === 'user' ? '(投稿者本人が演じる)' : ''}`).join('\n')}` : '',
+    project.meta.synopsis?.trim() ? `\n## 動画の企画メモ\n${project.meta.synopsis.trim()}` : '',
+    '',
+    '## 守ること',
+    '- セリフは字幕と合成音声でそのまま使われる。話者名・かっこ・ト書き・絵文字・改行を入れない',
+    '- 直前の流れを受けて、自然に会話を続ける。前のセリフを繰り返さない',
+    rounds === 1
+      ? `- ${actor.name}のセリフを1つだけ書く`
+      : `- ${actor.name}と相手が交互に話す形で、合計${rounds}個のセリフを書く。最初は${actor.name}`,
+    `- 案を${candidates}通り出す。案ごとに違う切り口にする`,
+    expressionHelp.length > 0 ? `- 各セリフに合う表情を次の中から選ぶ(合うものが無ければ null)\n  ${expressionHelp.join('\n  ')}` : '- 表情は null にする',
+    '- 出力は指定のJSONだけ'
+  ]
+    .filter((line) => line !== '')
+    .join('\n')
+
+  const older = conversation.slice(0, Math.max(0, conversation.length - RECENT_LINES)).slice(-OLDER_LINES_MAX)
+  const recent = conversation.slice(-RECENT_LINES)
+  const transcript = [
+    older.length > 0 ? `(これより前の流れ。冒頭だけ)\n${older.map((line) => `${speakerName(project, line)}: ${truncate(line.text, OLDER_LINE_CHARS)}`).join('\n')}\n` : '',
+    recent.length > 0
+      ? `## ここまでの会話\n${recent.map((line) => `[${formatMs(line.startMs)}] ${speakerName(project, line)}: ${line.text}`).join('\n')}`
+      : '## ここまでの会話\n(まだ何も話していない。動画の冒頭のセリフを書く)'
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  const instruction = request.instruction?.trim()
+  const turns: ChatTurn[] = [
+    {
+      role: 'user',
+      content: [transcript, '', instruction ? `## 今回の指示\n${instruction}` : '', `${actor.name}の次のセリフを書いてください。`]
+        .filter((line) => line !== '')
+        .join('\n')
+    }
+  ]
+  return { system, turns }
+}
+
+function truncate(text: string, length: number): string {
+  return text.length > length ? `${text.slice(0, length)}…` : text
+}
+
+/** 返ってきた内容を、キャラクターIDと表情IDに解決する。名前が合わなければ交互の順で割り当てる。 */
+export function interpretCohostResponse(project: Project, request: CohostRequest, response: CohostResponse): CohostCandidate[] {
+  const actor = aiCharacter(project, request)
+  const conversation = conversationUntil(project, request.afterItemId)
+  const previousSpeaker = conversation.at(-1)?.characterId
+  const partner =
+    (previousSpeaker && previousSpeaker !== actor.id ? project.characters[previousSpeaker] : undefined) ??
+    Object.values(project.characters).find((character) => character.id !== actor.id)
+  const byName = new Map(Object.values(project.characters).map((character) => [character.name, character]))
+
+  return response.candidates.map((candidate) => {
+    const warnings: string[] = []
+    const lines = candidate.lines.map((line, index): CohostLine => {
+      const alternate = index % 2 === 0 ? actor : (partner ?? actor)
+      const character = request.rounds > 1 ? (byName.get(line.speaker.trim()) ?? alternate) : actor
+      const expression = Object.values(character.portrait?.expressions ?? {}).find(
+        (candidateExpression) => candidateExpression.name === line.expression || candidateExpression.id === line.expression
+      )
+      const text = cleanLine(line.text, character.name)
+      const persona = character.persona
+      if (persona) {
+        const hit = persona.forbidden.filter((word) => word !== '' && text.includes(word))
+        if (hit.length > 0) warnings.push(`使わせない表現を含んでいます: ${hit.join('、')}`)
+        if (text.length > persona.targetLengthChars * 2.5) warnings.push(`${character.name}のセリフが目安(${persona.targetLengthChars}文字)よりかなり長いです`)
+      }
+      return { characterId: character.id, text, expressionId: expression?.id ?? null }
+    })
+    return { lines: lines.slice(0, request.rounds > 1 ? request.rounds : 1), warnings }
+  })
+}
+
+/** 「名前: セリフ」「「セリフ」」のような余計な飾りを外す。 */
+export function cleanLine(text: string, name: string): string {
+  let result = text.replace(/\s*\n\s*/g, '').trim()
+  for (const prefix of [`${name}:`, `${name}:`, `${name}「`]) {
+    if (result.startsWith(prefix)) result = result.slice(prefix.length).trim()
+  }
+  if (/^「.*」$/.test(result)) result = result.slice(1, -1)
+  if (result.endsWith('」') && !result.includes('「')) result = result.slice(0, -1)
+  return result.trim()
+}

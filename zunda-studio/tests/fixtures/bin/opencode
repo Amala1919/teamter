@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // OpenCode CLI の模擬。run / models / --version に応答し、run の引数・入力・エージェント定義を FAKE_LOG に記録する。
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 const argv = process.argv.slice(2)
 const mode = process.env.FAKE_MODE ?? 'text'
@@ -50,7 +51,31 @@ function nextSequenceItem() {
 
 const text = (value) => emit({ type: 'text', part: { type: 'text', text: value, time: { start: 1, end: 2 } } })
 
+
+/**
+ * FAKE_RESPONSE_DIR が指定され、そこに queue.json(応答の配列)があれば、先頭の1件を取り出して返す。
+ * E2E テストが AI の応答を1件ずつ用意するための仕組み。呼ばれた内容は calls.jsonl に残す。
+ */
+function takeQueued(record) {
+  const dir = process.env.FAKE_RESPONSE_DIR
+  if (!dir) return undefined
+  appendFileSync(join(dir, 'calls.jsonl'), JSON.stringify(record) + '\n')
+  const file = join(dir, 'queue.json')
+  if (!existsSync(file)) return undefined
+  const queue = JSON.parse(readFileSync(file, 'utf8'))
+  if (!Array.isArray(queue) || queue.length === 0) return undefined
+  const [head, ...rest] = queue
+  writeFileSync(file, JSON.stringify(rest))
+  return head
+}
+
 emit({ type: 'step_start', part: { type: 'step-start' } })
+const queued = takeQueued({ stdin: input, model: argv[argv.indexOf('--model') + 1], config: process.env.OPENCODE_CONFIG_CONTENT ?? null })
+if (queued !== undefined) {
+  text(typeof queued === 'string' ? queued : JSON.stringify(queued))
+  emit({ type: 'step_finish', part: { type: 'step-finish', reason: 'stop' } })
+  process.exit(0)
+}
 switch (mode) {
   case 'text':
     text(process.env.FAKE_REPLY ?? '了解したわ')

@@ -472,6 +472,8 @@ export interface ProjectMeta {
   updatedAt: string
   /** まばたきや振動の乱数を決定論的にするための種。 */
   renderSeed: number
+  /** 企画メモ(動画の題材・見どころ)。相方の返答や下書きで話題がそれないように AI に渡す。 */
+  synopsis?: string
 }
 
 export interface CreditsState {
@@ -481,13 +483,19 @@ export interface CreditsState {
 }
 
 export interface ChatMessage {
+  id: string
   role: 'user' | 'assistant'
   content: string
+  /** 送受信の実時刻(エポックミリ秒)。 */
   atMs: number
   /** アシスタントが提案したコマンド列(適用済みでも履歴として残す)。 */
   proposedCommands?: unknown[]
-  applied?: boolean
-  transactionId?: string
+  /** 提案をどうしたか。未定なら undefined。 */
+  outcome?: 'applied' | 'rejected'
+  /** 返事をしたAI。 */
+  generatedBy?: GeneratedBy
+  /** 失敗した呼び出し(AIに繋がらない等)の記録。 */
+  error?: string
 }
 
 // ------------------------------------------------ ライブセッション(録画中の記録)

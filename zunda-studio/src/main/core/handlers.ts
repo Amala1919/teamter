@@ -2,6 +2,9 @@ import { resolve } from 'node:path'
 
 import { z } from 'zod'
 
+import { buildCohostPrompt, cohostResponseSchema, interpretCohostResponse } from '@shared/ai/cohost'
+import { editorResponseSchema, toCommands } from '@shared/ai/edit-commands'
+import { buildEditorPrompt } from '@shared/ai/editor'
 import { PROVIDER_IDS } from '@shared/ai/types'
 import type { Channel, ChannelArgs, ChannelResult, IpcResult } from '@shared/ipc/contract'
 import type { Project } from '@shared/project/types'
@@ -100,6 +103,24 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
   ]),
   'voice:dict:delete': z.tuple([engineIdArg, z.string().min(1).max(100)]),
   'psd:load': z.tuple([pathArg]),
+  'ai:cohost': z.tuple([
+    projectArg,
+    z.object({
+      afterItemId: z.string().max(100).nullable(),
+      candidates: z.number().int().min(1).max(5),
+      rounds: z.number().int().min(1).max(6),
+      characterId: z.string().max(100).optional(),
+      instruction: z.string().max(2000).optional()
+    })
+  ]) as unknown as z.ZodType<ChannelArgs<'ai:cohost'>>,
+  'ai:edit': z.tuple([
+    projectArg,
+    z.object({
+      message: z.string().min(1).max(8000),
+      selection: z.array(z.string().max(100)).max(1000),
+      history: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().max(20_000) })).max(100)
+    })
+  ]) as unknown as z.ZodType<ChannelArgs<'ai:edit'>>,
   'media:probe': z.tuple([pathArg]),
   'media:proxy': z.tuple([pathArg, z.enum(['mp4', 'webm'])]),
   'media:peaks': z.tuple([pathArg]),
@@ -164,6 +185,20 @@ export function createHandlers(services: Services): HandlerTable {
           turns: [{ role: 'user', content: '「接続できたのだ」とだけ返してください。' }]
         })
       return { text: result.text, durationMs: result.durationMs }
+    },
+
+    'ai:cohost': async (project, request) => {
+      if (!Object.values(project.characters).some((character) => character.authorRole === 'ai') && !request.characterId) {
+        throw new AppError('INVALID_ARGUMENT', '相方(AIの役)のキャラクターがいません。キャラクター画面で「AI(相方)」にしてください')
+      }
+      const { value, result } = await services.ai.generateStructured('conversation', buildCohostPrompt(project, request), cohostResponseSchema, {
+        projectConversation: project.ai.conversation
+      })
+      return { candidates: interpretCohostResponse(project, request, value), generatedBy: result.generatedBy }
+    },
+    'ai:edit': async (project, request) => {
+      const { value, result } = await services.ai.generateStructured('editor', buildEditorPrompt(project, request), editorResponseSchema)
+      return { reply: value.reply, commands: toCommands(value.commands), generatedBy: result.generatedBy }
     },
 
     'voice:engines': () => Promise.resolve(services.engines.statusList()),

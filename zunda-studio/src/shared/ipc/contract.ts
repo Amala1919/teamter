@@ -1,6 +1,9 @@
+import type { CohostCandidate, CohostRequest } from '../ai/cohost'
+import type { EditorRequest } from '../ai/editor'
+import type { Command } from '../commands/types'
 import type { ExportProgress, ExportRequest } from '../export/types'
 import type { MediaProbe, ProxyFormat, WaveformPeaks } from '../media/types'
-import type { ModelInfo, ProviderId, ProviderStatus } from '../ai/types'
+import type { GeneratedBy, ModelInfo, ProviderId, ProviderStatus } from '../ai/types'
 import type { AppErrorShape } from '../errors'
 import type { Project } from '../project/types'
 import type { PsdManifest } from '../psd/types'
@@ -61,6 +64,10 @@ export interface IpcContract {
   'ai:providers': { args: []; result: ProviderStatus[] }
   'ai:models': { args: [providerId: ProviderId]; result: ModelInfo[] }
   'ai:test': { args: [providerId: ProviderId, model: string]; result: { text: string; durationMs: number } }
+  /** 相方の返答(候補)を作る。台本には入れず、採用は利用者が決める。 */
+  'ai:cohost': { args: [project: Project, request: CohostRequest]; result: { candidates: CohostCandidate[]; generatedBy: GeneratedBy } }
+  /** 編集の指示をコマンド列の提案にする。適用は利用者が差分を確かめてから行う。 */
+  'ai:edit': { args: [project: Project, request: EditorRequest]; result: { reply: string; commands: Command[]; generatedBy: GeneratedBy } }
 
   'voice:engines': { args: []; result: EngineStatus[] }
   'voice:ensure': { args: [engineId: string]; result: EngineStatus }

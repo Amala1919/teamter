@@ -9,6 +9,7 @@ import { useVoiceStore } from '../../state/voice'
 import { CharacterDialog } from '../characters/CharacterDialog'
 import { BulkInputDialog, type BulkLine } from './BulkInputDialog'
 import { CohostAiBar } from './CohostAiBar'
+import { CohostControls } from './CohostPanel'
 import { ScriptLine } from './ScriptLine'
 
 interface ScriptPaneProps {
@@ -177,10 +178,8 @@ export function ScriptPane({ onError }: ScriptPaneProps): React.JSX.Element {
             <button type="button" onClick={() => setDialog('bulk')} data-testid="open-bulk">
               まとめて入力
             </button>
-            <button type="button" disabled title="Phase 4 で有効になる">
-              相方の返答を生成
-            </button>
           </div>
+          <CohostControls onError={onError} />
 
           {failedCount > 0 && firstFailure?.state === 'error' && (
             <div className="banner banner--error" role="alert" data-testid="synthesis-banner">

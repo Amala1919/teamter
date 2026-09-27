@@ -97,7 +97,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const entry = undoStack.at(-1)
     if (!entry) return
     set({
-      project: entry.project,
+      // チャットの記録は編集の対象ではないので、取り消しても今のまま残す。
+      project: { ...entry.project, chat: project.chat },
       undoStack: undoStack.slice(0, -1),
       redoStack: [...redoStack, { label: entry.label, project }],
       dirty: true
@@ -109,7 +110,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const entry = redoStack.at(-1)
     if (!entry) return
     set({
-      project: entry.project,
+      project: { ...entry.project, chat: project.chat },
       redoStack: redoStack.slice(0, -1),
       undoStack: [...undoStack, { label: entry.label, project }],
       dirty: true

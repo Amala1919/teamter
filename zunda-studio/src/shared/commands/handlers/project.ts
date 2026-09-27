@@ -8,10 +8,14 @@ type ProjectHandlers = Pick<
   | 'project.setConversationAi'
   | 'project.setEditing'
   | 'credits.set'
+  | 'chat.append'
+  | 'chat.setOutcome'
   | 'layer.insert'
   | 'layer.update'
   | 'style.upsertSubtitle'
 >
+
+const CHAT_LIMIT = 500
 
 const COLOR_PATTERN = /^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/
 
@@ -21,6 +25,7 @@ export const projectHandlers: ProjectHandlers = {
       if (command.title.trim() === '') fail(command.op, 'プロジェクト名が空です')
       draft.meta.title = command.title
     }
+    if (command.synopsis !== undefined) draft.meta.synopsis = command.synopsis
   },
 
   'project.setConversationAi': (draft, command) => {
@@ -52,6 +57,19 @@ export const projectHandlers: ProjectHandlers = {
       draft.credits.confirmedByUser = false
     }
     if (command.confirmedByUser !== undefined) draft.credits.confirmedByUser = command.confirmedByUser
+  },
+
+  'chat.append': (draft, command) => {
+    if (draft.chat.messages.some((message) => message.id === command.message.id)) fail(command.op, '同じ発言がすでにあります')
+    draft.chat.messages.push(command.message)
+    // 履歴が際限なく伸びないよう、古いものから捨てる。
+    if (draft.chat.messages.length > CHAT_LIMIT) draft.chat.messages.splice(0, draft.chat.messages.length - CHAT_LIMIT)
+  },
+
+  'chat.setOutcome': (draft, command) => {
+    const message = draft.chat.messages.find((candidate) => candidate.id === command.messageId)
+    if (!message) fail(command.op, '発言が見つかりません')
+    message.outcome = command.outcome
   },
 
   'layer.update': (draft, command, env) => {

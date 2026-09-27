@@ -1,10 +1,10 @@
-import { existsSync, mkdtempSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { defineConfig } from '@playwright/test'
 
-import { DEVHOST_PORT, MOCK_VOICEVOX_PORT } from './e2e/ports'
+import { AI_RESPONSE_DIR, DEVHOST_PORT, MOCK_VOICEVOX_PORT } from './e2e/ports'
 
 /**
  * E2E テスト。ビルド済みのレンダラをテスト用ホスト(src/devhost)で配信し、Chromium で操作する。
@@ -12,6 +12,7 @@ import { DEVHOST_PORT, MOCK_VOICEVOX_PORT } from './e2e/ports'
  */
 const userData = mkdtempSync(join(tmpdir(), 'zunda-e2e-'))
 const preinstalledChromium = '/opt/pw-browsers/chromium'
+mkdirSync(AI_RESPONSE_DIR, { recursive: true })
 
 export default defineConfig({
   testDir: 'e2e',
@@ -40,7 +41,8 @@ export default defineConfig({
       stdout: 'pipe',
       env: {
         FAKE_MODE: 'text',
-        FAKE_REPLY: '接続できたのだ'
+        FAKE_REPLY: '接続できたのだ',
+        FAKE_RESPONSE_DIR: AI_RESPONSE_DIR
       }
     }
   ]
