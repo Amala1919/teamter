@@ -13,6 +13,7 @@ import type {
   AssetId,
   AssetLicense,
   ChatMessage,
+  PublishInfo,
   PortraitConfig,
   CharacterAuthorRole,
   Effect,
@@ -77,6 +78,12 @@ export interface ChatSetOutcome {
   op: 'chat.setOutcome'
   messageId: string
   outcome: 'applied' | 'rejected'
+}
+
+/** 投稿用の文を保存する(利用者が直した内容をそのまま置き換える)。 */
+export interface PublishSet {
+  op: 'publish.set'
+  publish: PublishInfo
 }
 
 // ------------------------------------------------------------------ レイヤー
@@ -505,6 +512,7 @@ export type Command =
   | ProjectSetConversationAi
   | ProjectSetEditing
   | CreditsSet
+  | PublishSet
   | ChatAppend
   | ChatSetOutcome
   | LayerInsert

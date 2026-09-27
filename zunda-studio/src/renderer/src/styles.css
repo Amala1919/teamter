@@ -1596,3 +1596,38 @@ input[type='color'] {
   justify-content: space-between;
   padding: 3px 0;
 }
+
+.publish__titles,
+.publish__chapters {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+}
+
+.publish__titles {
+  flex-flow: row wrap;
+}
+
+.publish__chapters li {
+  display: flex;
+  gap: 6px;
+}
+
+.publish__chapters input[type='text'] {
+  flex: 1;
+}
+
+.publish__chapters .publish__time {
+  flex: none;
+  width: 72px;
+}
+
+.chat__header {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+}

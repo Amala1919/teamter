@@ -557,6 +557,20 @@ export interface Project {
   chat: { messages: ChatMessage[] }
   ai: ProjectAiSettings
   editing: EditingSettings
+  /** 投稿用の文(タイトル案・概要欄・チャプター)。AIの下書きを利用者が直して使う(A-6, E-4)。 */
+  publish?: PublishInfo
+}
+
+export interface Chapter {
+  atMs: Ms
+  title: string
+}
+
+export interface PublishInfo {
+  titles: string[]
+  description: string
+  chapters: Chapter[]
+  generatedBy: GeneratedBy | null
 }
 
 export interface EditingSettings {

@@ -1,4 +1,5 @@
 import type { CohostCandidate, CohostRequest } from '../ai/cohost'
+import type { DraftRequest } from '../ai/draft'
 import type { EditorRequest } from '../ai/editor'
 import type { Command } from '../commands/types'
 import type { ExportProgress, ExportRequest } from '../export/types'
@@ -6,7 +7,7 @@ import type { MediaProbe, ProxyFormat, WaveformPeaks } from '../media/types'
 import type { GeneratedBy, ModelInfo, ProviderId, ProviderStatus } from '../ai/types'
 import type { AppErrorShape } from '../errors'
 import type { LiveProfile, LiveSessionSummary, LiveState } from '../live/types'
-import type { AiPersona, LiveEntry, LiveSession, Project } from '../project/types'
+import type { AiPersona, LiveEntry, LiveSession, Project, PublishInfo } from '../project/types'
 import type { PsdManifest } from '../psd/types'
 import type { AppSettings, SettingsPatch } from '../settings/schema'
 import type {
@@ -69,6 +70,10 @@ export interface IpcContract {
   'ai:test': { args: [providerId: ProviderId, model: string]; result: { text: string; durationMs: number } }
   /** 相方の返答(候補)を作る。台本には入れず、採用は利用者が決める。 */
   'ai:cohost': { args: [project: Project, request: CohostRequest]; result: { candidates: CohostCandidate[]; generatedBy: GeneratedBy } }
+  /** 録画とライブの記録から、台本とタイムラインの下書き(コマンドの提案)を作る。 */
+  'ai:draft': { args: [project: Project, request: DraftRequest]; result: { reply: string; commands: Command[]; generatedBy: GeneratedBy; candidates: number } }
+  /** 投稿用の文(タイトル案・概要欄・チャプター)の下書きを作る。 */
+  'ai:publish': { args: [project: Project]; result: PublishInfo }
   /** 編集の指示をコマンド列の提案にする。適用は利用者が差分を確かめてから行う。 */
   'ai:edit': { args: [project: Project, request: EditorRequest]; result: { reply: string; commands: Command[]; generatedBy: GeneratedBy } }
 

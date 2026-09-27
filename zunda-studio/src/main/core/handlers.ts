@@ -5,7 +5,10 @@ import { z } from 'zod'
 
 import { buildCohostPrompt, cohostResponseSchema, interpretCohostResponse } from '@shared/ai/cohost'
 import { editorResponseSchema, toCommands } from '@shared/ai/edit-commands'
+import { buildDraftPrompt, liveMomentsFor, wrapDraftCommands } from '@shared/ai/draft'
 import { buildEditorPrompt } from '@shared/ai/editor'
+import { candidateSegments } from '@shared/media/analysis'
+import { buildPublishPrompt, interpretPublishResponse, publishResponseSchema } from '@shared/ai/publish'
 import { PROVIDER_IDS } from '@shared/ai/types'
 import type { Channel, ChannelArgs, ChannelResult, IpcResult } from '@shared/ipc/contract'
 import type { Project } from '@shared/project/types'
@@ -130,6 +133,15 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
       history: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().max(20_000) })).max(100)
     })
   ]) as unknown as z.ZodType<ChannelArgs<'ai:edit'>>,
+  'ai:publish': z.tuple([projectArg]) as unknown as z.ZodType<ChannelArgs<'ai:publish'>>,
+  'ai:draft': z.tuple([
+    projectArg,
+    z.object({
+      recordingAssetId: z.string().min(1).max(100),
+      targetMs: z.number().min(30_000).max(60 * 60 * 1000),
+      instruction: z.string().max(4000).optional()
+    })
+  ]) as unknown as z.ZodType<ChannelArgs<'ai:draft'>>,
   'media:probe': z.tuple([pathArg]),
   'media:proxy': z.tuple([pathArg, z.enum(['mp4', 'webm'])]),
   'media:peaks': z.tuple([pathArg]),
@@ -233,6 +245,28 @@ export function createHandlers(services: Services): HandlerTable {
         projectConversation: project.ai.conversation
       })
       return { candidates: interpretCohostResponse(project, request, value), generatedBy: result.generatedBy }
+    },
+    'ai:draft': async (project, request) => {
+      const asset = project.assets[request.recordingAssetId]
+      if (!asset || asset.type !== 'video') throw new AppError('INVALID_ARGUMENT', '録画(動画)の素材を選んでください')
+      await requireAllowed(services, asset.path.absolute)
+      const analysis = await services.analysis.analyze(asset.path.absolute)
+      const moments = liveMomentsFor(project, request.recordingAssetId)
+      const candidates = candidateSegments(analysis, {
+        markers: moments.filter((moment) => moment.kind === 'marker' || moment.kind === 'note').map((moment) => moment.atMs),
+        talks: moments.filter((moment) => moment.kind !== 'marker').map((moment) => moment.atMs)
+      })
+      const { value, result } = await services.ai.generateStructured('editor', buildDraftPrompt(project, request, candidates), editorResponseSchema)
+      return {
+        reply: value.reply,
+        commands: wrapDraftCommands(project, toCommands(value.commands)),
+        generatedBy: result.generatedBy,
+        candidates: candidates.length
+      }
+    },
+    'ai:publish': async (project) => {
+      const { value, result } = await services.ai.generateStructured('editor', buildPublishPrompt(project), publishResponseSchema)
+      return { ...interpretPublishResponse(project, value), generatedBy: result.generatedBy }
     },
     'ai:edit': async (project, request) => {
       const { value, result } = await services.ai.generateStructured('editor', buildEditorPrompt(project, request), editorResponseSchema)

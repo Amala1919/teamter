@@ -407,6 +407,7 @@ function TimelineItem(props: TimelineItemProps): React.JSX.Element {
       data-testid="timeline-item"
       data-item-type={item.type}
       data-item-id={item.id}
+      data-asset-id={'assetId' in item ? item.assetId : undefined}
       role="button"
       aria-pressed={props.selected}
     >

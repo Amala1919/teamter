@@ -15,7 +15,11 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json --composite false && tsc --noEmit -p tsconfig.web.json --composite false",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "npm run build:app && npm run build:devhost && playwright test"
+    "test:e2e": "npm run build:app && npm run build:devhost && playwright test",
+    "dist": "npm run build && electron-builder",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "test:electron": "playwright test -c playwright.electron.config.ts"
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.0.9",
@@ -35,6 +39,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.2.0",
     "electron": "^44.4.5",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "typescript": "^7.0.2",
     "vite": "^7.3.6",

@@ -19,7 +19,8 @@ export function registerMediaScheme(): void {
   protocol.registerSchemesAsPrivileged([
     {
       scheme: MEDIA_SCHEME,
-      privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true }
+      // corsEnabled: 動画を canvas に描く(crossOrigin の <video>)ために CORS の応答を返せるようにする。
+      privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, corsEnabled: true }
     }
   ])
 }
@@ -45,7 +46,8 @@ export function bindMediaProtocol(services: Services): void {
     try {
       const response = await serveMedia(services.media, path, request.headers.get('range'))
       const body = response.body ? (Readable.toWeb(response.body) as ReadableStream) : null
-      return new Response(body, { status: response.status, headers: response.headers })
+      // 配信するのは許可リストにあるファイルだけなので、アプリの画面(file:// など)からの読み込みを許す。
+      return new Response(body, { status: response.status, headers: { ...response.headers, 'Access-Control-Allow-Origin': '*' } })
     } catch (error) {
       const shape = toErrorShape(error)
       return new Response(shape.message, { status: shape.code === 'ACCESS_DENIED' ? 403 : 404 })

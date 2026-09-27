@@ -14,5 +14,6 @@ export function formatDurationJa(timeMs: Ms): string {
   const totalSeconds = Math.round(timeMs / 1000)
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
-  return minutes === 0 ? `${seconds}秒` : `${minutes}分${seconds}秒`
+  if (minutes === 0) return `${seconds}秒`
+  return seconds === 0 ? `${minutes}分` : `${minutes}分${seconds}秒`
 }

@@ -1,0 +1,34 @@
+# インストーラの作成(npm run dist)。docs/SETUP.md の「配布用に作る」を参照。
+appId: io.github.zunda-studio
+productName: zunda-studio
+copyright: zunda-studio
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/main/**
+  - out/preload/**
+  - out/renderer/**
+  - package.json
+asarUnpack:
+  # ネイティブのモジュールは asar の外に出す必要がある。
+  - '**/node_modules/@napi-rs/**'
+extraResources:
+  # 公式の VOICEVOX ENGINE を vendor/voicevox-engine に置いて作ると、アプリに同梱される(無ければ同梱しない)。
+  # エンジンは改変せずに同梱し、ライセンス文書も一緒に置くこと(REQUIREMENTS.md L-2)。
+  - from: vendor/voicevox-engine
+    to: voicevox-engine
+    filter:
+      - '**/*'
+win:
+  target: nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+mac:
+  target: dmg
+  category: public.app-category.video
+linux:
+  target: AppImage
+  category: AudioVideo

@@ -8,6 +8,7 @@ import { formatDurationJa } from '../../lib/time'
 import { dryRun, useChatStore } from '../../state/ai'
 import { useSettingsStore } from '../../state/settings'
 import { useEditorStore } from '../../state/store'
+import { DraftDialog } from './DraftDialog'
 
 /** 差分に並べるセリフの上限。多いときは「他N件」にまとめる。 */
 const SCRIPT_PREVIEW = 8
@@ -22,6 +23,7 @@ export function ChatPane(): React.JSX.Element {
   const sending = useChatStore((state) => state.sending)
   const send = useChatStore((state) => state.send)
   const [draft, setDraft] = useState('')
+  const [draftOpen, setDraftOpen] = useState(false)
   const logRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -38,7 +40,13 @@ export function ChatPane(): React.JSX.Element {
 
   return (
     <div className="chat" data-testid="chat">
-      <p className="chat__model chat__model--header">{editorModel ? `編集AI: ${formatModelRef(editorModel)}` : '編集AI 未設定'}</p>
+      <div className="chat__header">
+        <p className="chat__model chat__model--header">{editorModel ? `編集AI: ${formatModelRef(editorModel)}` : '編集AI 未設定'}</p>
+        <button type="button" className="button--small" disabled={!editorModel || sending} onClick={() => setDraftOpen(true)} data-testid="open-draft">
+          録画から下書き
+        </button>
+      </div>
+      {draftOpen && <DraftDialog onClose={() => setDraftOpen(false)} />}
 
       <div className="chat__log" ref={logRef}>
         {messages.length === 0 ? (

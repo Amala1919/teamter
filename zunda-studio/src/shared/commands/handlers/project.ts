@@ -1,5 +1,6 @@
 import { isSafeModelId } from '../../ai/types'
 import type { Layer } from '../../project/types'
+import { normalizeChapters } from '../../project/chapters'
 import { fail, insertLayer, requireLayer, refreshSubtitleLines, type HandlerTable } from '../env'
 
 type ProjectHandlers = Pick<
@@ -8,6 +9,7 @@ type ProjectHandlers = Pick<
   | 'project.setConversationAi'
   | 'project.setEditing'
   | 'credits.set'
+  | 'publish.set'
   | 'chat.append'
   | 'chat.setOutcome'
   | 'layer.insert'
@@ -57,6 +59,13 @@ export const projectHandlers: ProjectHandlers = {
       draft.credits.confirmedByUser = false
     }
     if (command.confirmedByUser !== undefined) draft.credits.confirmedByUser = command.confirmedByUser
+  },
+
+  'publish.set': (draft, command) => {
+    const { publish } = command
+    if (publish.titles.some((title) => title.length > 200)) fail(command.op, 'タイトルが長すぎます')
+    if (publish.description.length > 10_000) fail(command.op, '概要欄が長すぎます')
+    draft.publish = { ...publish, chapters: normalizeChapters(publish.chapters) }
   },
 
   'chat.append': (draft, command) => {

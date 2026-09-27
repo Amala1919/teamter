@@ -1,5 +1,5 @@
 {
-  "include": ["src/main/**/*", "src/preload/**/*", "src/shared/**/*", "src/devhost/**/*", "tests/**/*", "e2e/**/*", "electron.vite.config.ts", "vite.devhost.config.ts", "vitest.config.ts", "playwright.config.ts"],
+  "include": ["src/main/**/*", "src/preload/**/*", "src/shared/**/*", "src/devhost/**/*", "tests/**/*", "e2e/**/*", "e2e-electron/**/*", "electron.vite.config.ts", "vite.devhost.config.ts", "vitest.config.ts", "playwright.config.ts", "playwright.electron.config.ts"],
   "compilerOptions": {
     "composite": true,
     "target": "ES2022",

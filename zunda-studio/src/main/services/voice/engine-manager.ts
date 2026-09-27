@@ -7,6 +7,7 @@ import type { EngineStatus } from '@shared/voice/types'
 import { AppError } from '../../core/errors'
 import type { EventBus } from '../../core/events'
 import { spawnProcess } from '../../core/process'
+import { discoverEngineExecutable } from './engine-discovery'
 import { VoicevoxClient } from './voicevox-client'
 
 const STARTUP_TIMEOUT_MS = 120_000
@@ -25,7 +26,9 @@ export class EngineManager {
 
   constructor(
     private readonly getSettings: () => AppSettings,
-    private readonly events: EventBus
+    private readonly events: EventBus,
+    /** 場所が設定されていないときに、同梱・インストール済みのエンジンを探す。テストでは差し替える。 */
+    private readonly discover: (engine: VoiceEngineSettings) => Promise<string | null> = (engine) => discoverEngineExecutable(engine)
   ) {}
 
   engines(): VoiceEngineSettings[] {
@@ -101,12 +104,13 @@ export class EngineManager {
     const probed = await this.probe(engineId)
     if (probed.state === 'ready') return probed
 
-    if (!engine.executablePath || !engine.autoLaunch) {
+    const executablePath = engine.autoLaunch ? (engine.executablePath ?? (await this.discover(engine))) : null
+    if (!executablePath) {
       return this.update(engine, {
         state: 'unavailable',
-        message: engine.executablePath
+        message: !engine.autoLaunch
           ? `${engine.label} が起動していません(自動起動は無効)`
-          : `${engine.label} が起動していません。エンジンの場所を設定するか、${engine.label} を起動してください`
+          : `${engine.label} が起動していません。${engine.label} をインストールするか、エンジンの場所を設定してください`
       })
     }
 
@@ -119,9 +123,9 @@ export class EngineManager {
     let child: ChildProcess
     try {
       child = spawnProcess({
-        command: engine.executablePath,
+        command: executablePath,
         args: ['--host', url.hostname, '--port', port],
-        cwd: dirname(engine.executablePath)
+        cwd: dirname(executablePath)
       })
     } catch (error) {
       return this.update(engine, { state: 'unavailable', message: `${engine.label} を起動できません: ${String(error)}` })

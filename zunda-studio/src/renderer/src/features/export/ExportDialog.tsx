@@ -4,11 +4,13 @@ import type { ExportProgress } from '@shared/export/types'
 import { generateCredits } from '@shared/project/credits'
 import { itemEndMs, projectDurationMs } from '@shared/project/queries'
 import { toSrt } from '@shared/project/srt'
+import { chapterLines, MIN_CHAPTERS } from '@shared/project/chapters'
 
 import { api, toAppError } from '../../api'
 import { formatMs } from '../../lib/time'
 import { useEditorStore } from '../../state/store'
 import { Modal } from '../../ui/Modal'
+import { PublishSection } from './PublishSection'
 
 const HEIGHTS = [
   { value: 0, label: 'プロジェクトと同じ' },
@@ -52,6 +54,14 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
 
   const draft = useMemo(() => generateCredits(project), [project])
   const creditsText = project.credits.generated || draft.text
+  // 概要欄にそのまま貼れる形: 本文 → チャプター → クレジット。
+  const fullDescription = [
+    project.publish?.description.trim(),
+    project.publish && project.publish.chapters.length >= MIN_CHAPTERS ? chapterLines(project.publish.chapters, projectDurationMs(project)) : '',
+    creditsText.trim()
+  ]
+    .filter(Boolean)
+    .join('\n\n')
   const unsynthesized = project.items.filter((item) => item.type === 'voice' && item.synthesis === null).length
   const duration = projectDurationMs(project)
   const selection = project.items.filter((item) => selectedItemIds.includes(item.id))
@@ -112,7 +122,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
       const picked = await api.invoke('dialog:pick', { kind: 'exportText', defaultName: `${project.meta.title}_概要欄.txt` })
       const path = picked?.[0]
       if (!path) return
-      await api.invoke('export:text', path, creditsText)
+      await api.invoke('export:text', path, fullDescription)
       setSavedText(path)
     } catch (caught) {
       setError(toAppError(caught).message)
@@ -120,7 +130,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
   }
 
   return (
-    <Modal title="書き出し" onClose={running ? () => {} : onClose} wide>
+    <Modal title="書き出しと投稿文" onClose={running ? () => {} : onClose} wide>
       <div className="settings-section export-dialog">
         {error && (
           <div className="banner banner--error" role="alert">
@@ -219,6 +229,8 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
           </div>
         </section>
 
+        <PublishSection onError={setError} />
+
         <section data-testid="credits-section">
           <h3>概要欄のクレジット</h3>
           <p className="note">使っているキャラクターと素材から作った下書きです。規約どおりか確かめてから投稿してください。</p>
@@ -246,11 +258,11 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
             >
               素材から作り直す
             </button>
-            <button type="button" className="button--small" onClick={() => void navigator.clipboard?.writeText(creditsText)}>
-              コピー
+            <button type="button" className="button--small" onClick={() => void navigator.clipboard?.writeText(fullDescription)} title="本文・チャプター・クレジットをまとめてコピー">
+              概要欄をコピー
             </button>
-            <button type="button" className="button--small" onClick={() => void saveDescription()} data-testid="credits-save">
-              テキストに保存
+            <button type="button" className="button--small" onClick={() => void saveDescription()} data-testid="credits-save" title="本文・チャプター・クレジットをまとめて保存">
+              概要欄をテキストに保存
             </button>
             <label className="field__row">
               <input

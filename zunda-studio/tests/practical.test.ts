@@ -1,7 +1,11 @@
+import { chmod, copyFile, mkdir } from 'node:fs/promises'
+import { join, resolve } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import { EventBus } from '@main/core/events'
 import { AutosaveService } from '@main/services/project/autosave'
+import { discoverEngineExecutable, engineCandidates } from '@main/services/voice/engine-discovery'
 import { EngineManager } from '@main/services/voice/engine-manager'
 import { SynthesisService } from '@main/services/voice/synthesis-service'
 import { applyCommands, type CommandContext } from '@shared/commands/apply'
@@ -13,7 +17,7 @@ import type { AccentPhrase, Project, VoiceItem } from '@shared/project/types'
 import { accentPhrasesToKana } from '@shared/voice/kana'
 
 import { startMockVoicevox } from './fixtures/mock-voicevox.mjs'
-import { settingsWith, tempDir } from './helpers/env'
+import { FIXTURE_BIN, settingsWith, tempDir } from './helpers/env'
 
 let counter = 0
 const context = (): CommandContext => ({ newId: (prefix) => `${prefix}_${++counter}`, now: () => new Date('2026-01-01T00:00:00Z') })
@@ -118,5 +122,36 @@ describe('自動保存', () => {
     await service.clear('edit_abcdef123')
     expect(await service.list()).toEqual([])
     await expect(service.write('../../x', null, project)).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' })
+  })
+})
+
+describe('音声エンジンの自動検出', () => {
+  it('同梱したエンジンを最優先にし、インストール先の候補を OS ごとに並べる', () => {
+    const windows = engineCandidates({ id: 'voicevox', label: 'VOICEVOX' }, { platform: 'win32', env: { LOCALAPPDATA: 'C:\\Users\\a\\AppData\\Local' }, home: 'C:\\Users\\a', resourcesPath: 'C:\\app\\resources' })
+    expect(windows[0]).toContain('voicevox-engine')
+    expect(windows.some((path) => path.includes('Programs') && path.includes('vv-engine') && path.endsWith('run.exe'))).toBe(true)
+    const mac = engineCandidates({ id: 'aivisspeech', label: 'AivisSpeech' }, { platform: 'darwin', env: {}, home: '/Users/a', resourcesPath: null })
+    expect(mac).toContain('/Applications/AivisSpeech.app/Contents/Resources/AivisSpeech-Engine/run')
+  })
+
+  it('場所を設定しなくても、見つけたエンジンを起動して使える', async () => {
+    const resources = await tempDir('zs-resources-')
+    const engineDir = join(resources, 'voicevox-engine')
+    await mkdir(engineDir, { recursive: true })
+    await copyFile(join(FIXTURE_BIN, 'fake-engine'), join(engineDir, 'run'))
+    await chmod(join(engineDir, 'run'), 0o755)
+    // 同梱したエンジンは、同梱の模擬VOICEVOXを import するので、同じ場所に置いた形にする。
+    await copyFile(resolve('tests/fixtures/mock-voicevox.mjs'), join(resources, 'mock-voicevox.mjs'))
+    const port = 50_200 + Math.floor(Math.random() * 500)
+    const settings = settingsWith({ voice: { engines: [{ id: 'voicevox', label: 'VOICEVOX', url: `http://127.0.0.1:${port}`, executablePath: null, autoLaunch: true }] } })
+    const engines = new EngineManager(() => settings, new EventBus(), (engine) =>
+      discoverEngineExecutable(engine, { platform: process.platform, env: {}, home: '/nonexistent', resourcesPath: resources })
+    )
+    try {
+      const status = await engines.ensure('voicevox')
+      expect(status).toMatchObject({ state: 'ready', managed: true })
+    } finally {
+      await engines.shutdown()
+    }
   })
 })

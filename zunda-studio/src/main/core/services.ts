@@ -8,6 +8,7 @@ import { LiveService } from '../services/live/live-service'
 import { connectObs, type ObsConnector } from '../services/live/obs-link'
 import { Transcriber } from '../services/live/transcriber'
 import { FfmpegLocator } from '../services/media/ffmpeg'
+import { AnalysisService } from '../services/media/analysis-service'
 import { MediaService } from '../services/media/media-service'
 import { AutosaveService } from '../services/project/autosave'
 import { ProjectService } from '../services/project/project-service'
@@ -59,6 +60,7 @@ export interface Services {
   psd: PsdService
   /** ffprobe・プロキシ・波形。 */
   mediaTools: MediaService
+  analysis: AnalysisService
   ffmpeg: FfmpegLocator
   exporter: ExportService
   /** 保存ダイアログで選ばれた書き出し先。これ以外の場所には書き出さない。 */
@@ -117,6 +119,7 @@ export async function createServices(options: ServicesOptions): Promise<Services
     synthesis,
     psd,
     mediaTools,
+    analysis: new AnalysisService(ffmpeg, mediaTools, join(paths.cache.root, 'analysis')),
     ffmpeg,
     exporter: new ExportService(ffmpeg, getSettings, events, psd, synthesis, paths.cache.temp),
     saveTargets: new Set(),
