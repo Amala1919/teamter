@@ -69,7 +69,10 @@ test.describe('実用の機能(読み方・辞書・自動保存・SRT・相方�
   })
 
   test('保存しないまま落ちても、次に開いたときに復元できる', async ({ page }) => {
-    await page.addInitScript(() => window.localStorage.setItem('zs.autosaveIntervalMs', '300'))
+    // e2e は DOM の型を読み込まないので、ブラウザ側の localStorage は形だけ書いて使う。
+    await page.addInitScript(() =>
+      (globalThis as unknown as { localStorage: { setItem(key: string, value: string): void } }).localStorage.setItem('zs.autosaveIntervalMs', '300')
+    )
     await openFresh(page)
     await page.getByRole('button', { name: /ずんだもん\(あなた\)/ }).click()
     await addLines(page, 'ずんだもん:消えたら困るセリフなのだ')
