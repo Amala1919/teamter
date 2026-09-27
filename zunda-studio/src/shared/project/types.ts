@@ -371,6 +371,11 @@ export interface VoiceItem extends ItemBase {
   subtitleLines: string[]
   /** 字幕の改行を手で決めたか。テキストを書き換えると自動に戻る。 */
   subtitleLinesManual: boolean
+  /**
+   * 読み方の上書き(AquesTalk 風のカタカナ表記。例: コンニチワ'/ズンダモン'デス)。
+   * null ならテキストから自動で読む。テキストを書き換えると外れる(V-6)。
+   */
+  reading?: string | null
 }
 
 export interface VideoItem extends ItemBase {

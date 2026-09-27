@@ -6,7 +6,7 @@ import type { MediaProbe, ProxyFormat, WaveformPeaks } from '../media/types'
 import type { GeneratedBy, ModelInfo, ProviderId, ProviderStatus } from '../ai/types'
 import type { AppErrorShape } from '../errors'
 import type { LiveProfile, LiveSessionSummary, LiveState } from '../live/types'
-import type { LiveEntry, LiveSession, Project } from '../project/types'
+import type { AiPersona, LiveEntry, LiveSession, Project } from '../project/types'
 import type { PsdManifest } from '../psd/types'
 import type { AppSettings, SettingsPatch } from '../settings/schema'
 import type {
@@ -39,6 +39,8 @@ export type PickKind =
   | 'media'
   | 'image'
   | 'psd'
+  /** 相方の設定(ペルソナ)の JSON。 */
+  | 'persona'
   | 'exportVideo'
   | 'exportText'
   | 'executable'
@@ -109,6 +111,23 @@ export interface IpcContract {
   'live:read': { args: [sessionId: string]; result: LiveSession & { recordingPath: string | null } }
   /** ライブ用の小さなウィンドウを開く。開けない環境(テスト用ホスト)なら false。 */
   'live:openWindow': { args: []; result: boolean }
+
+  /** 書き出した相方の設定(ペルソナ)を読み込む(B-9)。ファイル選択で選んだものに限る。 */
+  'persona:read': { args: [path: string]; result: AiPersona }
+
+  /** 自動保存(T-5)。保存したら clear する。起動時に list に残っていれば復元を勧める。 */
+  'autosave:write': { args: [key: string, filePath: string | null, project: Project]; result: void }
+  'autosave:list': { args: []; result: AutosaveEntry[] }
+  'autosave:read': { args: [key: string]; result: Project }
+  'autosave:clear': { args: [key: string]; result: void }
+}
+
+export interface AutosaveEntry {
+  key: string
+  /** 元のプロジェクトファイル。未保存の新規なら null。 */
+  filePath: string | null
+  title: string
+  savedAt: string
 }
 
 export type Channel = keyof IpcContract

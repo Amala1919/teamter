@@ -1,3 +1,5 @@
+import { join } from 'node:path'
+
 import { AiService } from '../services/ai/ai-service'
 import { ClaudeCodeProvider } from '../services/ai/claude-code-provider'
 import { OpenCodeProvider } from '../services/ai/opencode-provider'
@@ -7,6 +9,7 @@ import { connectObs, type ObsConnector } from '../services/live/obs-link'
 import { Transcriber } from '../services/live/transcriber'
 import { FfmpegLocator } from '../services/media/ffmpeg'
 import { MediaService } from '../services/media/media-service'
+import { AutosaveService } from '../services/project/autosave'
 import { ProjectService } from '../services/project/project-service'
 import { PsdService } from '../services/psd/psd-service'
 import { EngineManager } from '../services/voice/engine-manager'
@@ -60,8 +63,11 @@ export interface Services {
   exporter: ExportService
   /** 保存ダイアログで選ばれた書き出し先。これ以外の場所には書き出さない。 */
   saveTargets: Set<string>
+  /** ファイル選択で選ばれた、読み込んでよいファイル(相方の設定など)。 */
+  readableFiles: Set<string>
   live: LiveService
   windows: WindowControl | null
+  autosave: AutosaveService
   /** 終了時の後始末(アプリが起動した音声エンジンを止める等)。 */
   dispose: () => Promise<void>
 }
@@ -114,8 +120,10 @@ export async function createServices(options: ServicesOptions): Promise<Services
     ffmpeg,
     exporter: new ExportService(ffmpeg, getSettings, events, psd, synthesis, paths.cache.temp),
     saveTargets: new Set(),
+    readableFiles: new Set(),
     live,
     windows: options.windows ?? null,
+    autosave: new AutosaveService(join(paths.userData, 'autosave')),
     dispose: async () => {
       options.windows?.unregisterHotkeys()
       await live.dispose()

@@ -161,7 +161,8 @@ async function synthesizeOne(itemId: string, signature: string): Promise<void> {
       engineId: voice.engineId,
       speakerId: voice.speakerId,
       text,
-      params: voice.params
+      params: voice.params,
+      ...(current.item.reading ? { kana: current.item.reading } : {})
     })
     useVoiceStore.setState({ wavPaths: { ...useVoiceStore.getState().wavPaths, [outcome.cacheKey]: outcome.wavPath } })
 

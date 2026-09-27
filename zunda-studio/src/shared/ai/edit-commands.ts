@@ -62,6 +62,11 @@ export const aiCommandSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('voice.setSubtitleOverride'), itemId: id, styleId: id.optional(), color: color.optional(), sizeScale: z.number().positive().max(4).optional() }),
   z.object({ op: z.literal('voice.setSubtitleLines'), itemId: id, lines: z.array(z.string().max(200)).max(8).nullable() }),
   z.object({ op: z.literal('voice.setGapAfter'), itemId: id, gapMs: ms }),
+  z.object({
+    op: z.literal('voice.setReading'),
+    itemId: id,
+    reading: z.string().max(1000).nullable().describe("読み方(カタカナ。アクセントの位置の後に '、区切りは /)")
+  }),
   // アイテム共通
   z.object({ op: z.literal('item.setTimeRange'), itemId: id, startMs: ms.optional(), durationMs: ms.optional() }),
   z.object({ op: z.literal('item.trim'), itemId: id, startMs: ms.optional(), endMs: ms.optional() }),

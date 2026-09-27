@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ExportProgress } from '@shared/export/types'
 import { generateCredits } from '@shared/project/credits'
 import { itemEndMs, projectDurationMs } from '@shared/project/queries'
+import { toSrt } from '@shared/project/srt'
 
 import { api, toAppError } from '../../api'
 import { formatMs } from '../../lib/time'
@@ -47,6 +48,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
   const [jobId, setJobId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [savedText, setSavedText] = useState<string | null>(null)
+  const [srtSpeaker, setSrtSpeaker] = useState(false)
 
   const draft = useMemo(() => generateCredits(project), [project])
   const creditsText = project.credits.generated || draft.text
@@ -87,6 +89,19 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
       setJobId(id)
     } catch (caught) {
       setProgress(null)
+      setError(toAppError(caught).message)
+    }
+  }
+
+  const saveSrt = async (): Promise<void> => {
+    setError(null)
+    try {
+      const picked = await api.invoke('dialog:pick', { kind: 'exportText', defaultName: `${project.meta.title}.srt` })
+      const path = picked?.[0]
+      if (!path) return
+      await api.invoke('export:text', path, toSrt(project, { withSpeaker: srtSpeaker }))
+      setSavedText(path)
+    } catch (caught) {
       setError(toAppError(caught).message)
     }
   }
@@ -187,6 +202,20 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
                 書き出す
               </button>
             )}
+          </div>
+        </section>
+
+        <section>
+          <h3>字幕ファイル(SRT)</h3>
+          <p className="note">YouTube の字幕としてアップロードできます。画面に焼き込む字幕とは別に使えます。</p>
+          <div className="field__row field__row--wrap">
+            <label className="field__row">
+              <input type="checkbox" checked={srtSpeaker} onChange={(event) => setSrtSpeaker(event.target.checked)} />
+              話者名を付ける
+            </label>
+            <button type="button" className="button--small" onClick={() => void saveSrt()} disabled={project.items.every((item) => item.type !== 'voice')} data-testid="srt-save">
+              SRT を保存
+            </button>
           </div>
         </section>
 

@@ -65,7 +65,8 @@ function moraFor(char, previousVowel) {
   }
   const consonant = CONSONANTS[char] ?? (/[ぁ-ゖ]/.test(char) ? null : 'k')
   return {
-    text: char,
+    // 本物のエンジンと同じく、モーラの文字はカタカナで返す。
+    text: /[ぁ-ゖ]/.test(char) ? String.fromCharCode(char.charCodeAt(0) + 0x60) : char,
     consonant,
     consonant_length: consonant ? 0.06 : null,
     vowel,
@@ -194,7 +195,10 @@ export function startMockVoicevox({ port = 0, delayMs = 0 } = {}) {
         const text = url.searchParams.get('text') ?? ''
         if (!knownStyle) return json(422, { detail: 'unknown speaker' })
         if (text.includes('💥')) return json(500, { detail: 'engine exploded' })
-        const accent_phrases = textToAccentPhrases(text)
+        // 本物と同じく、ユーザー辞書の語はその読みで読む。
+        let spoken = text
+        for (const word of dictionary.values()) spoken = spoken.split(word.surface).join(word.pronunciation)
+        const accent_phrases = textToAccentPhrases(spoken)
         return json(200, {
           accent_phrases,
           speedScale: 1,

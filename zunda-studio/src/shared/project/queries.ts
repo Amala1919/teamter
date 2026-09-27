@@ -65,5 +65,5 @@ export function effectiveVoice(project: Project, item: VoiceItem): EffectiveVoic
 /** 合成結果が今のセリフ・声に対応しているかを判定するための署名。 */
 export function synthesisSignature(project: Project, item: VoiceItem): string | null {
   const voice = effectiveVoice(project, item)
-  return voice ? JSON.stringify([voice.engineId, voice.speakerId, item.text, voice.params]) : null
+  return voice ? JSON.stringify([voice.engineId, voice.speakerId, item.text, voice.params, item.reading ?? null]) : null
 }

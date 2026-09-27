@@ -19,6 +19,8 @@ type VoiceHandlers = Pick<
   HandlerTable,
   | 'voice.insert'
   | 'voice.setText'
+  | 'voice.setReading'
+  | 'voice.invalidateSynthesis'
   | 'voice.delete'
   | 'voice.move'
   | 'voice.setCharacter'
@@ -106,8 +108,32 @@ export const voiceHandlers: VoiceHandlers = {
     if (item.text === command.text) return
     item.text = command.text
     item.subtitleLinesManual = false
+    // 読みの上書きは前のテキストに対するものなので外す。
+    item.reading = null
     refreshSubtitleLines(draft, item)
     invalidateSynthesis(item)
+  },
+
+  'voice.setReading': (draft, command, env) => {
+    const item = findVoiceItem(draft, env.resolve(command.itemId), command.op)
+    const reading = command.reading === null ? null : command.reading.trim()
+    if (reading !== null) {
+      if (reading === '') fail(command.op, '読みが空です')
+      if (reading.length > 1000) fail(command.op, '読みが長すぎます')
+      // カタカナ・長音・アクセント記号(')・区切り(/ 、)・無声化(_)・疑問(？)だけを受け付ける。
+      if (!/^[\u30A1-\u30FC'/、_？?]+$/.test(reading)) fail(command.op, '読みはカタカナとアクセント記号(\' / 、 _ ？)で書いてください')
+    }
+    if ((item.reading ?? null) === reading) return
+    item.reading = reading
+    invalidateSynthesis(item)
+  },
+
+  'voice.invalidateSynthesis': (draft, command) => {
+    for (const item of draft.items) {
+      if (item.type !== 'voice' || !item.synthesis) continue
+      if (command.engineId !== undefined && draft.characters[item.characterId]?.voice.engineId !== command.engineId) continue
+      invalidateSynthesis(item)
+    }
   },
 
   'voice.delete': (draft, command, env) => {

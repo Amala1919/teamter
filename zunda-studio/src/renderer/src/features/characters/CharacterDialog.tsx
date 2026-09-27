@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import type { Command } from '@shared/commands/types'
 import type { AiPersona, BanterRole, Character, CharacterId, VoiceParams } from '@shared/project/types'
 
-import { toAppError } from '../../api'
+import { api, toAppError } from '../../api'
 import { useSettingsStore } from '../../state/settings'
 import { useEditorStore } from '../../state/store'
 import { useVoiceStore } from '../../state/voice'
@@ -143,6 +143,7 @@ function CharacterEditor({ character, run, onDeleted }: CharacterEditorProps): R
   const style = useEditorStore((state) => state.project.subtitleStyles[character.subtitleStyleId])
   const [speakerError, setSpeakerError] = useState<string | null>(null)
   const [persona, setPersona] = useState<AiPersona>(character.persona ?? DEFAULT_PERSONA)
+  const [personaVersion, setPersonaVersion] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -339,9 +340,17 @@ function CharacterEditor({ character, run, onDeleted }: CharacterEditorProps): R
       )}
 
       {character.authorRole === 'ai' && (
-        <section data-testid="persona-editor">
+        <section data-testid="persona-editor" key={personaVersion}>
           <h3>相方のペルソナ</h3>
           <p className="note">会話AIは、ここに書いた人物として返答を書きます。録画中のライブ会話でも同じ人物として話します。</p>
+          <PersonaTransfer
+            name={character.name}
+            persona={persona}
+            onImport={(next) => {
+              commitPersona(next)
+              setPersonaVersion((version) => version + 1)
+            }}
+          />
           <label className="field">
             <span className="field__label">性格</span>
             <textarea
@@ -417,6 +426,70 @@ function CharacterEditor({ character, run, onDeleted }: CharacterEditorProps): R
           このキャラクターを削除
         </button>
       </section>
+    </div>
+  )
+}
+
+/** 相方の設定をファイルに書き出す・読み込む(B-9)。別のプロジェクトでも同じ相方を使える。 */
+function PersonaTransfer({
+  name,
+  persona,
+  onImport
+}: {
+  name: string
+  persona: AiPersona
+  onImport: (persona: AiPersona) => void
+}): React.JSX.Element {
+  const [message, setMessage] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const onError = (text: string): void => {
+    setMessage(null)
+    setError(text)
+  }
+  return (
+    <div className="field__row field__row--wrap">
+      <button
+        type="button"
+        className="button--small"
+        onClick={() =>
+          void api
+            .invoke('dialog:pick', { kind: 'exportText', defaultName: `${name}_相方設定.json` })
+            .then(async (picked) => {
+              if (!picked?.[0]) return
+              await api.invoke('export:text', picked[0], JSON.stringify({ format: 'zunda-studio/persona', version: 1, name, persona }, null, 2))
+              setError(null)
+              setMessage(`書き出しました: ${picked[0]}`)
+            })
+            .catch((error: unknown) => onError(toAppError(error).message))
+        }
+        data-testid="persona-export"
+      >
+        設定を書き出す
+      </button>
+      <button
+        type="button"
+        className="button--small"
+        onClick={() =>
+          void api
+            .invoke('dialog:pick', { kind: 'persona' })
+            .then(async (picked) => {
+              if (!picked?.[0]) return
+              onImport(await api.invoke('persona:read', picked[0]))
+              setError(null)
+              setMessage('読み込みました')
+            })
+            .catch((error: unknown) => onError(toAppError(error).message))
+        }
+        data-testid="persona-import"
+      >
+        設定を読み込む
+      </button>
+      {message && <span className="status status--ok">{message}</span>}
+      {error && (
+        <span className="status status--error" data-testid="persona-error">
+          {error}
+        </span>
+      )}
     </div>
   )
 }

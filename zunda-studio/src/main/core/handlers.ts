@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
 import { z } from 'zod'
@@ -33,6 +34,13 @@ const projectArg = z
   .loose()
 
 const engineIdArg = z.string().min(1).max(100)
+const personaSchema = z.object({
+  personality: z.string().max(2000),
+  speechStyle: z.string().max(2000),
+  banterRole: z.enum(['tsukkomi', 'boke', 'navigator', 'free']),
+  forbidden: z.array(z.string().max(200)).max(200),
+  targetLengthChars: z.number().int().min(1).max(1000)
+})
 const accentPhraseSchema = z
   .object({
     moras: z.array(z.object({ text: z.string(), vowel: z.string(), vowelLength: z.number(), pitch: z.number() }).loose()),
@@ -72,6 +80,7 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
         'audio',
         'image',
         'psd',
+        'persona',
         'exportVideo',
         'exportText',
         'executable',
@@ -159,6 +168,11 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
   'live:list': z.tuple([]),
   'live:read': z.tuple([z.string().min(1).max(100)]),
   'live:openWindow': z.tuple([]),
+  'autosave:write': z.tuple([z.string().min(1).max(40), pathArg.nullable(), projectArg]) as unknown as z.ZodType<ChannelArgs<'autosave:write'>>,
+  'autosave:list': z.tuple([]),
+  'persona:read': z.tuple([pathArg]),
+  'autosave:read': z.tuple([z.string().min(1).max(40)]),
+  'autosave:clear': z.tuple([z.string().min(1).max(40)]),
   'export:text': z.tuple([pathArg, z.string().max(1_000_000)])
 }
 
@@ -180,6 +194,9 @@ export function createHandlers(services: Services): HandlerTable {
       // 素材として選ばれたファイルは、プレビューで読めるよう配信を許可する。
       if (picked && ['video', 'audio', 'image', 'media', 'psd'].includes(request.kind)) {
         services.media.allowFiles(picked)
+      }
+      if (picked && request.kind === 'persona') {
+        for (const path of picked) services.readableFiles.add(resolve(path))
       }
       // 書き出し先は、保存ダイアログで選ばれた場所だけを受け付ける。
       if (picked && ['exportVideo', 'exportText'].includes(request.kind)) {
@@ -233,8 +250,15 @@ export function createHandlers(services: Services): HandlerTable {
     },
     'voice:resolve': (cacheKey) => services.synthesis.resolve(cacheKey),
     'voice:dict:list': async (engineId) => (await services.engines.require(engineId)).userDict(),
-    'voice:dict:add': async (engineId, word) => (await services.engines.require(engineId)).addUserDictWord(word),
-    'voice:dict:delete': async (engineId, wordId) => (await services.engines.require(engineId)).deleteUserDictWord(wordId),
+    'voice:dict:add': async (engineId, word) => {
+      const id = await (await services.engines.require(engineId)).addUserDictWord(word)
+      await services.synthesis.bumpDictionary(engineId)
+      return id
+    },
+    'voice:dict:delete': async (engineId, wordId) => {
+      await (await services.engines.require(engineId)).deleteUserDictWord(wordId)
+      await services.synthesis.bumpDictionary(engineId)
+    },
 
     'psd:load': (path) => {
       // 利用者が選んだ・プロジェクトに登録された PSD に限る(任意のファイルを解析させない)。
@@ -275,6 +299,29 @@ export function createHandlers(services: Services): HandlerTable {
     'live:list': () => services.live.list(),
     'live:read': (sessionId) => services.live.read(sessionId),
     'live:openWindow': () => Promise.resolve(services.windows?.openLive() ?? false),
+
+    'autosave:write': (key, filePath, project) => services.autosave.write(key, filePath, project),
+    'autosave:list': () => services.autosave.list(),
+    'persona:read': async (path) => {
+      if (!services.readableFiles.has(resolve(path))) throw new AppError('ACCESS_DENIED', 'ファイルはファイル選択で選んでください')
+      let raw: unknown
+      try {
+        raw = JSON.parse(await readFile(path, 'utf8'))
+      } catch {
+        throw new AppError('INVALID_ARGUMENT', '相方の設定として読めないファイルです')
+      }
+      const envelope = raw as { persona?: unknown }
+      const parsed = personaSchema.safeParse(envelope.persona ?? raw)
+      if (!parsed.success) throw new AppError('INVALID_ARGUMENT', '相方の設定として読めないファイルです')
+      return parsed.data
+    },
+    'autosave:read': async (key) => {
+      const project = await services.autosave.read(key)
+      // 復元したプロジェクトの素材は、元のファイルを開いたときと同じく配信を許可する。
+      for (const asset of Object.values(project.assets)) services.media.allowFile(asset.path.absolute)
+      return project
+    },
+    'autosave:clear': (key) => services.autosave.clear(key),
     'export:text': async (path, text) => {
       if (!services.saveTargets.has(resolve(path))) throw new AppError('ACCESS_DENIED', '保存先は保存ダイアログで選んでください')
       await writeFileAtomic(path, text)

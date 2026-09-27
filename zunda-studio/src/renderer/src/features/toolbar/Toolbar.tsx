@@ -19,6 +19,10 @@ export function Toolbar({ onError, onOpenSettings }: ToolbarProps): React.JSX.El
   const { newProject, openProject, saveProject, undo, redo, dispatch } = useEditorStore.getState()
   const [exportOpen, setExportOpen] = useState(false)
 
+  /** 保存していない変更があれば、捨ててよいか確かめる。 */
+  const confirmDiscard = (): boolean =>
+    !useEditorStore.getState().dirty || window.confirm('保存していない変更があります。破棄して進みますか?')
+
   const run = (action: () => Promise<void>): void => {
     onError(null)
     action().catch((error: unknown) => {
@@ -38,10 +42,10 @@ export function Toolbar({ onError, onOpenSettings }: ToolbarProps): React.JSX.El
   return (
     <header className="toolbar">
       <div className="toolbar__group">
-        <button type="button" onClick={() => newProject()}>
+        <button type="button" onClick={() => confirmDiscard() && newProject()}>
           新規
         </button>
-        <button type="button" onClick={() => run(openProject)}>
+        <button type="button" onClick={() => confirmDiscard() && run(openProject)}>
           開く
         </button>
         <button type="button" onClick={() => run(() => saveProject())}>

@@ -5,6 +5,7 @@ import type { AppSettings, VoiceEngineSettings } from '@shared/settings/schema'
 import { useSettingsStore } from '../../state/settings'
 import { useVoiceStore } from '../../state/voice'
 import { PathField } from '../../ui/PathField'
+import { UserDictionary } from './UserDictionary'
 
 interface VoiceSettingsProps {
   settings: AppSettings
@@ -119,6 +120,7 @@ export function VoiceSettings({ settings, onError }: VoiceSettingsProps): React.
           </button>
         ))}
       </section>
+      <UserDictionary engines={settings.voice.engines} />
     </div>
   )
 }

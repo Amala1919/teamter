@@ -213,6 +213,15 @@ input[type='text'] {
   flex: 1;
 }
 
+.banner--warn {
+  background: #3a331d;
+  border-bottom: 1px solid #e0b04a;
+}
+
+.banner--warn span {
+  flex: 1;
+}
+
 /* -------------------------------------------------------------------- 台本 */
 
 .script__controls {
@@ -1572,4 +1581,18 @@ input[type='color'] {
 
 .live-log__link .field--inline > select {
   flex: 1;
+}
+
+.dict-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+
+.dict-list li {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
 }

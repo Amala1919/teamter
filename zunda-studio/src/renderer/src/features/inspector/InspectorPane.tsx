@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react'
+
 import type { Command } from '@shared/commands/types'
 import { effectiveVoice, findItem, itemEndMs, voiceItemsInOrder } from '@shared/project/queries'
 import type { VoiceItem, VoiceParams } from '@shared/project/types'
+import { accentPhrasesToKana } from '@shared/voice/kana'
 
 import { formatMs } from '../../lib/time'
 import { deleteSelection, useEditorStore } from '../../state/store'
@@ -147,6 +150,8 @@ function VoiceInspector({ item }: { item: VoiceItem }): React.JSX.Element {
         </section>
       )}
 
+      <ReadingEditor item={item} run={run} />
+
       <section>
         <label className="field">
           <span className="field__label">字幕の改行</span>
@@ -172,5 +177,48 @@ function VoiceInspector({ item }: { item: VoiceItem }): React.JSX.Element {
         )}
       </section>
     </div>
+  )
+}
+
+/** 読み方を直す(V-6)。今の読みをカタカナとアクセント記号で見せ、直した読みで合成し直す。 */
+function ReadingEditor({ item, run }: { item: VoiceItem; run: (commands: Command[], label: string) => void }): React.JSX.Element {
+  const current = item.reading ?? (item.synthesis ? accentPhrasesToKana(item.synthesis.accentPhrases) : '')
+  const [draft, setDraft] = useState(current)
+  useEffect(() => setDraft(current), [current])
+  return (
+    <section data-testid="reading-editor">
+      <label className="field">
+        <span className="field__label">
+          読み方{item.reading ? '(手で直した読み)' : '(自動)'}
+        </span>
+        <input
+          type="text"
+          value={draft}
+          placeholder="合成が終わると、今の読みが出ます"
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && draft.trim() !== '' && draft !== current) run([{ op: 'voice.setReading', itemId: item.id, reading: draft }], '読み方の変更')
+          }}
+          data-testid="reading-input"
+        />
+      </label>
+      <p className="note">カタカナで書き、アクセントの山の後に「'」、言葉の区切りに「/」、息継ぎに「、」を入れます。例: ズンダモ'ン/ナノ'ダ</p>
+      <span className="field__row">
+        <button
+          type="button"
+          className="button--small"
+          disabled={draft.trim() === '' || draft === current}
+          onClick={() => run([{ op: 'voice.setReading', itemId: item.id, reading: draft }], '読み方の変更')}
+          data-testid="reading-apply"
+        >
+          この読みで合成
+        </button>
+        {item.reading && (
+          <button type="button" className="button--small" onClick={() => run([{ op: 'voice.setReading', itemId: item.id, reading: null }], '読み方を自動に戻す')}>
+            自動に戻す
+          </button>
+        )}
+      </span>
+    </section>
   )
 }

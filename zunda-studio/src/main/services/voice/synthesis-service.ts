@@ -48,8 +48,30 @@ export class SynthesisService {
     return (await fileExists(path)) ? path : null
   }
 
+  /**
+   * ユーザー辞書を変えたことを記録する。テキストからの索引は辞書の版ごとに分けてあるので、
+   * 辞書を変えた後は同じ文でもエンジンに読みを聞き直す(古い読みのまま使い回さない)。
+   */
+  async bumpDictionary(engineId: string): Promise<void> {
+    await writeFileAtomic(this.dictionaryVersionPath(engineId), String(Date.now()))
+  }
+
+  private dictionaryVersionPath(engineId: string): string {
+    return join(this.cacheDirectory, `dict-${hash(engineId).slice(0, 16)}.version`)
+  }
+
+  private async dictionaryVersion(engineId: string): Promise<string> {
+    try {
+      return (await readFile(this.dictionaryVersionPath(engineId), 'utf8')).trim()
+    } catch {
+      return '0'
+    }
+  }
+
   async synthesize(request: SynthesisRequest): Promise<SynthesisOutcome> {
-    const textKey = request.accentPhrases ? null : hash({ kind: 'text', ...pickRequestKey(request) })
+    const textKey = request.accentPhrases
+      ? null
+      : hash({ kind: 'text', ...pickRequestKey(request), dictionary: await this.dictionaryVersion(request.engineId) })
     if (textKey) {
       const indexed = await this.readIndex(textKey)
       if (indexed) {

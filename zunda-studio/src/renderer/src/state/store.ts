@@ -35,6 +35,8 @@ interface EditorState {
   project: Project
   filePath: string | null
   dirty: boolean
+  /** 自動保存の置き場所を分けるための、開いている間だけのキー。 */
+  sessionKey: string
   selectedItemIds: ItemId[]
   playheadMs: Ms
   undoStack: HistoryEntry[]
@@ -50,6 +52,8 @@ interface EditorState {
 
   newProject: () => void
   openProject: () => Promise<void>
+  /** 自動保存から復元する。保存されていない変更として開く。 */
+  restoreProject: (project: Project, filePath: string | null, sessionKey: string) => void
   saveProject: (options?: { saveAs?: boolean }) => Promise<void>
 }
 
@@ -62,6 +66,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   project: createEmptyProject(),
   filePath: null,
   dirty: false,
+  sessionKey: newSessionKey(),
   selectedItemIds: [],
   playheadMs: 0,
   undoStack: [],
@@ -120,26 +125,31 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setPlayhead: (timeMs) => set({ playheadMs: Math.max(0, Math.round(timeMs)) }),
   setSelection: (itemIds) => set({ selectedItemIds: itemIds }),
 
-  newProject: () =>
+  newProject: () => {
+    discardAutosave(get().sessionKey)
     set({
       project: createEmptyProject(),
       filePath: null,
       dirty: false,
+      sessionKey: newSessionKey(),
       selectedItemIds: [],
       playheadMs: 0,
       undoStack: [],
       redoStack: []
-    }),
+    })
+  },
 
   openProject: async () => {
     const picked = await api.invoke('dialog:pick', { kind: 'openProject' })
     const path = picked?.[0]
     if (!path) return
     const project = await api.invoke('project:read', path)
+    discardAutosave(get().sessionKey)
     set({
       project,
       filePath: path,
       dirty: false,
+      sessionKey: newSessionKey(),
       selectedItemIds: [],
       playheadMs: 0,
       undoStack: [],
@@ -162,9 +172,52 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     // 保存時に素材の相対パスが更新されるので、保存結果を正とする。編集中に変わった分は失わないよう
     // 保存前と同じオブジェクトのときだけ置き換える。
     if (get().project === project) set({ project: written })
-    set({ filePath: target, dirty: get().project !== written })
-  }
+    const dirty = get().project !== written
+    set({ filePath: target, dirty })
+    // 保存できたら、自動保存の写しは要らない。
+    if (!dirty) discardAutosave(get().sessionKey)
+  },
+
+  restoreProject: (project, filePath, sessionKey) =>
+    set({
+      project,
+      filePath,
+      dirty: true,
+      sessionKey,
+      selectedItemIds: [],
+      playheadMs: 0,
+      undoStack: [],
+      redoStack: []
+    })
 }))
+
+function newSessionKey(): string {
+  return `edit_${nanoid(12)}`
+}
+
+function discardAutosave(key: string): void {
+  void api.invoke('autosave:clear', key).catch(() => {})
+}
+
+/** 自動保存の間隔。 */
+const AUTOSAVE_INTERVAL_MS = 15_000
+
+/**
+ * 保存していない変更を一定間隔でアプリのデータ置き場に写す。止める関数を返す。
+ * 変わっていなければ書かない(immer の構造共有で、変更の有無は参照の比較で分かる)。
+ */
+export function startAutosave(intervalMs = AUTOSAVE_INTERVAL_MS): () => void {
+  let written: Project | null = null
+  const timer = window.setInterval(() => {
+    const { project, dirty, filePath, sessionKey } = useEditorStore.getState()
+    if (!dirty || project === written) return
+    written = project
+    void api.invoke('autosave:write', sessionKey, filePath, project).catch(() => {
+      written = null
+    })
+  }, intervalMs)
+  return () => window.clearInterval(timer)
+}
 
 function sanitizeFileName(name: string): string {
   const cleaned = name.replace(/[\\/:*?"<>|]/g, '_').trim()

@@ -9,7 +9,8 @@ import { TimelinePane } from './features/timeline/TimelinePane'
 import { Toolbar } from './features/toolbar/Toolbar'
 import { togglePlayback } from './playback/player'
 import { useSettingsStore } from './state/settings'
-import { deleteSelection, useEditorStore } from './state/store'
+import { RecoveryBanner } from './features/toolbar/RecoveryBanner'
+import { deleteSelection, startAutosave, useEditorStore } from './state/store'
 
 export function App(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null)
@@ -19,6 +20,18 @@ export function App(): React.JSX.Element {
   useEffect(() => {
     loadSettings().catch((caught: unknown) => setError(String(caught)))
   }, [loadSettings])
+
+  useEffect(() => {
+    // テストでは間隔を短くできるようにする。
+    let interval: number | undefined
+    try {
+      const configured = Number(window.localStorage.getItem('zs.autosaveIntervalMs'))
+      if (configured > 0) interval = configured
+    } catch {
+      // 保存領域が使えなくても既定の間隔で動かす。
+    }
+    return startAutosave(interval)
+  }, [])
   const undo = useEditorStore((state) => state.undo)
   const redo = useEditorStore((state) => state.redo)
   const saveProject = useEditorStore((state) => state.saveProject)
@@ -61,6 +74,7 @@ export function App(): React.JSX.Element {
     <div className="app">
       <div className="app__header">
         <Toolbar onError={setError} onOpenSettings={() => setSettingsOpen(true)} />
+        <RecoveryBanner onError={setError} />
         {error !== null && (
           <div className="banner banner--error" role="alert">
             <span>{error}</span>

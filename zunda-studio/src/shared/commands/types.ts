@@ -272,6 +272,22 @@ export interface VoiceSetSubtitleLines {
   lines: string[] | null
 }
 
+/** 読み方を直す(カタカナとアクセント記号)。null で自動の読みに戻す。 */
+export interface VoiceSetReading {
+  op: 'voice.setReading'
+  itemId: ItemId
+  reading: string | null
+}
+
+/**
+ * 合成結果を捨てて、合成し直させる(ユーザー辞書を変えたとき)。engineId を指定すると、その音声エンジンのセリフだけ。
+ * アプリの内部処理だけが発行する。
+ */
+export interface VoiceInvalidateSynthesis {
+  op: 'voice.invalidateSynthesis'
+  engineId?: string
+}
+
 /** 次のセリフまでの間を決める。後ろのアイテムを全てずらす。 */
 export interface VoiceSetGapAfter {
   op: 'voice.setGapAfter'
@@ -534,6 +550,8 @@ export type Command =
   | VoiceSetSubtitleOverride
   | VoiceSetSubtitleLines
   | VoiceSetGapAfter
+  | VoiceSetReading
+  | VoiceInvalidateSynthesis
   | VoiceApplySynthesis
 
 export type CommandOp = Command['op']
