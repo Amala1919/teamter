@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { ChatPane } from './features/chat/ChatPane'
+import { SidePane } from './features/chat/SidePane'
 import { InspectorPane } from './features/inspector/InspectorPane'
 import { PreviewPane } from './features/preview/PreviewPane'
 import { ScriptPane } from './features/script/ScriptPane'
@@ -76,7 +76,7 @@ export function App(): React.JSX.Element {
           <PreviewPane onError={setError} />
           <InspectorPane onError={setError} />
         </div>
-        <ChatPane />
+        <SidePane onError={setError} />
       </div>
       <TimelinePane onError={setError} />
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}

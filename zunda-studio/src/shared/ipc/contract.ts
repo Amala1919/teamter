@@ -5,7 +5,8 @@ import type { ExportProgress, ExportRequest } from '../export/types'
 import type { MediaProbe, ProxyFormat, WaveformPeaks } from '../media/types'
 import type { GeneratedBy, ModelInfo, ProviderId, ProviderStatus } from '../ai/types'
 import type { AppErrorShape } from '../errors'
-import type { Project } from '../project/types'
+import type { LiveProfile, LiveSessionSummary, LiveState } from '../live/types'
+import type { LiveEntry, LiveSession, Project } from '../project/types'
 import type { PsdManifest } from '../psd/types'
 import type { AppSettings, SettingsPatch } from '../settings/schema'
 import type {
@@ -94,6 +95,20 @@ export interface IpcContract {
   'export:cancel': { args: [jobId: string]; result: void }
   /** 概要欄などのテキストをファイルに書く。 */
   'export:text': { args: [path: string, text: string]; result: void }
+
+  /** ライブ(録画中の会話)。相方の設定は編集画面のプロジェクトから写して渡す。 */
+  'live:setProfile': { args: [profile: LiveProfile]; result: LiveState }
+  'live:state': { args: []; result: LiveState }
+  'live:start': { args: []; result: LiveState }
+  'live:say': { args: [text: string, kind: 'chat' | 'question' | 'note']; result: LiveEntry[] }
+  'live:mark': { args: [text: string]; result: LiveEntry }
+  'live:stop': { args: []; result: LiveState }
+  /** 押しながら話した声を文字にする。 */
+  'live:transcribe': { args: [audio: string]; result: string }
+  'live:list': { args: []; result: LiveSessionSummary[] }
+  'live:read': { args: [sessionId: string]; result: LiveSession & { recordingPath: string | null } }
+  /** ライブ用の小さなウィンドウを開く。開けない環境(テスト用ホスト)なら false。 */
+  'live:openWindow': { args: []; result: boolean }
 }
 
 export type Channel = keyof IpcContract
@@ -109,6 +124,10 @@ export interface AppEvents {
   /** プロキシ作成の進み具合(0〜1)。 */
   'media:proxy-progress': { path: string; ratio: number }
   'export:progress': ExportProgress
+  'live:state': LiveState
+  'live:entry': { sessionId: string; entry: LiveEntry }
+  /** ライブ中のホットキー(押しながら話すの開始・終了)。 */
+  'live:hotkey': { action: 'toggle-talk' }
 }
 
 export type EventName = keyof AppEvents

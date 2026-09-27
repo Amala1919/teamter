@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type { Command } from '@shared/commands/types'
+import { entryTimelineMs } from '@shared/live/timing'
 import { itemEndMs, projectDurationMs } from '@shared/project/queries'
 import type { Item, Layer, Ms, Project } from '@shared/project/types'
 import { ZOOM_METHOD_LABELS } from '@shared/render/zoom'
@@ -47,6 +48,19 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
   const visibleMs = Math.max(projectDurationMs(project) + TAIL_MS, MIN_VISIBLE_MS)
   const contentWidth = (visibleMs / 1000) * pxPerSecond
   const msToPx = (ms: Ms): number => (ms / 1000) * pxPerSecond
+
+  // ライブで打った目印を、録画の場面の位置に出す(R-9)。
+  const liveMarkers = useMemo(() => {
+    const markers: { key: string; atMs: Ms; text: string }[] = []
+    for (const session of Object.values(project.liveSessions)) {
+      for (const entry of session.entries) {
+        if (!entry.bookmarked) continue
+        const atMs = entryTimelineMs(project, session, entry)
+        if (atMs !== null) markers.push({ key: `${session.id}:${entry.id}`, atMs, text: entry.text })
+      }
+    }
+    return markers
+  }, [project])
 
   const layersFrontFirst = useMemo(() => [...project.layers].sort((a, b) => b.index - a.index), [project.layers])
   const itemsByLayer = useMemo(() => {
@@ -199,6 +213,21 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
           <div className="timeline__row timeline__row--ruler">
             <div className="timeline__header timeline__header--corner" />
             <div className="timeline__ruler" onPointerDown={scrub} data-testid="timeline-ruler">
+              {liveMarkers.map((marker) => (
+                <span
+                  key={marker.key}
+                  className="timeline__marker"
+                  style={{ left: `${msToPx(marker.atMs)}px` }}
+                  title={`ライブの目印: ${marker.text}`}
+                  data-testid="timeline-live-marker"
+                  onPointerDown={(event) => {
+                    event.stopPropagation()
+                    setPlayhead(marker.atMs)
+                  }}
+                >
+                  ★
+                </span>
+              ))}
               {Array.from({ length: Math.ceil(visibleMs / 1000 / step) + 1 }, (_, index) => (
                 <span key={index} className="timeline__tick" style={{ left: `${index * step * pxPerSecond}px` }}>
                   {formatMs(index * step * 1000).replace(/\.\d+$/, '')}

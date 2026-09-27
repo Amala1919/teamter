@@ -1,9 +1,9 @@
 import { join } from 'node:path'
 
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, globalShortcut, shell } from 'electron'
 
 import { createHandlers } from './core/handlers'
-import { createServices, type Services } from './core/services'
+import { createServices, type Services, type WindowControl } from './core/services'
 import {
   bindEvents,
   bindIpc,
@@ -15,6 +15,58 @@ import {
 const isDevelopment = !app.isPackaged
 
 registerMediaScheme()
+
+function loadRenderer(window: BrowserWindow, hash = ''): void {
+  const devServerUrl = process.env['ELECTRON_RENDERER_URL']
+  if (isDevelopment && devServerUrl) {
+    void window.loadURL(`${devServerUrl}${hash ? `#${hash}` : ''}`)
+  } else {
+    void window.loadFile(join(import.meta.dirname, '../renderer/index.html'), hash ? { hash } : {})
+  }
+}
+
+let liveWindow: BrowserWindow | null = null
+let alwaysOnTop = true
+
+/** ライブ用の小さなウィンドウ。ゲームの上に重ねて使うので、既定で最前面に出す(ARCHITECTURE.md 2.6)。 */
+const windowControl: WindowControl = {
+  openLive: () => {
+    if (liveWindow && !liveWindow.isDestroyed()) {
+      liveWindow.show()
+      liveWindow.focus()
+      return true
+    }
+    liveWindow = new BrowserWindow({
+      width: 420,
+      height: 600,
+      minWidth: 320,
+      minHeight: 360,
+      title: 'ライブ — zunda-studio',
+      alwaysOnTop,
+      backgroundColor: '#14181d',
+      autoHideMenuBar: true,
+      webPreferences: {
+        preload: join(import.meta.dirname, '../preload/index.mjs'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false
+      }
+    })
+    liveWindow.on('closed', () => {
+      liveWindow = null
+    })
+    loadRenderer(liveWindow, 'live')
+    return true
+  },
+  registerHotkey: (accelerator, handler) => {
+    try {
+      return globalShortcut.register(accelerator, handler)
+    } catch {
+      return false
+    }
+  },
+  unregisterHotkeys: () => globalShortcut.unregisterAll()
+}
 
 function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
@@ -41,12 +93,7 @@ function createMainWindow(): BrowserWindow {
     return { action: 'deny' }
   })
 
-  const devServerUrl = process.env['ELECTRON_RENDERER_URL']
-  if (isDevelopment && devServerUrl) {
-    void window.loadURL(devServerUrl)
-  } else {
-    void window.loadFile(join(import.meta.dirname, '../renderer/index.html'))
-  }
+  loadRenderer(window)
   return window
 }
 
@@ -56,8 +103,10 @@ async function start(): Promise<Services> {
     userData: app.getPath('userData'),
     runtime: 'electron',
     appVersion: app.getVersion(),
-    picker: new ElectronFilePicker()
+    picker: new ElectronFilePicker(),
+    windows: windowControl
   })
+  alwaysOnTop = services.settings.get().live.alwaysOnTop
   bindIpc(createHandlers(services))
   bindEvents(services)
   bindMediaProtocol(services)

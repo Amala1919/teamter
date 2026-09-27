@@ -138,6 +138,27 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
       .loose()
   ]) as unknown as z.ZodType<ChannelArgs<'export:start'>>,
   'export:cancel': z.tuple([z.string().min(1).max(100)]),
+  'live:setProfile': z.tuple([
+    z
+      .object({
+        aiName: z.string().min(1).max(100),
+        persona: z.object({ personality: z.string(), speechStyle: z.string(), banterRole: z.string(), forbidden: z.array(z.string()), targetLengthChars: z.number() }).loose().nullable(),
+        userName: z.string().min(1).max(100),
+        model: z.object({ providerId: z.enum(PROVIDER_IDS), model: z.string().min(1).max(200) }).nullable(),
+        voice: z.object({ engineId: z.string().max(100), speakerId: z.number(), params: voiceParamsSchema }).nullable(),
+        projectTitle: z.string().max(200)
+      })
+      .loose()
+  ]) as unknown as z.ZodType<ChannelArgs<'live:setProfile'>>,
+  'live:state': z.tuple([]),
+  'live:start': z.tuple([]),
+  'live:say': z.tuple([z.string().min(1).max(4000), z.enum(['chat', 'question', 'note'])]),
+  'live:mark': z.tuple([z.string().max(400)]),
+  'live:stop': z.tuple([]),
+  'live:transcribe': z.tuple([z.string().min(1).max(30 * 1024 * 1024)]),
+  'live:list': z.tuple([]),
+  'live:read': z.tuple([z.string().min(1).max(100)]),
+  'live:openWindow': z.tuple([]),
   'export:text': z.tuple([pathArg, z.string().max(1_000_000)])
 }
 
@@ -236,11 +257,39 @@ export function createHandlers(services: Services): HandlerTable {
       return Promise.resolve(services.exporter.start(request))
     },
     'export:cancel': (jobId) => Promise.resolve(services.exporter.cancel(jobId)),
+
+    'live:setProfile': (profile) => Promise.resolve(services.live.setProfile(profile)),
+    'live:state': () => Promise.resolve(services.live.state()),
+    'live:start': async () => {
+      const state = await services.live.start()
+      registerLiveHotkeys(services)
+      return state
+    },
+    'live:say': (text, kind) => services.live.say(text, kind),
+    'live:mark': (text) => services.live.mark(text),
+    'live:stop': async () => {
+      services.windows?.unregisterHotkeys()
+      return services.live.stop()
+    },
+    'live:transcribe': (audio) => services.live.transcribe(audio),
+    'live:list': () => services.live.list(),
+    'live:read': (sessionId) => services.live.read(sessionId),
+    'live:openWindow': () => Promise.resolve(services.windows?.openLive() ?? false),
     'export:text': async (path, text) => {
       if (!services.saveTargets.has(resolve(path))) throw new AppError('ACCESS_DENIED', '保存先は保存ダイアログで選んでください')
       await writeFileAtomic(path, text)
     }
   }
+}
+
+/** ライブ中だけ、ゲームを操作したまま使えるホットキーを登録する(R-9)。 */
+function registerLiveHotkeys(services: Services): void {
+  const windows = services.windows
+  if (!windows) return
+  const { markerHotkey, pushToTalkHotkey } = services.settings.get().live
+  windows.unregisterHotkeys()
+  windows.registerHotkey(markerHotkey, () => void services.live.mark().catch(() => {}))
+  windows.registerHotkey(pushToTalkHotkey, () => services.events.emit('live:hotkey', { action: 'toggle-talk' }))
 }
 
 /** 利用者が選んだ・プロジェクトに登録された素材に限る(任意のファイルを ffmpeg に読ませない)。 */

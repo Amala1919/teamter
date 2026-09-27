@@ -37,11 +37,8 @@ export function ChatPane(): React.JSX.Element {
   }
 
   return (
-    <section className="pane pane--chat" data-testid="chat">
-      <header className="pane__header">
-        <h2>チャット</h2>
-        <span className="pane__count">{editorModel ? formatModelRef(editorModel) : '編集AI 未設定'}</span>
-      </header>
+    <div className="chat" data-testid="chat">
+      <p className="chat__model chat__model--header">{editorModel ? `編集AI: ${formatModelRef(editorModel)}` : '編集AI 未設定'}</p>
 
       <div className="chat__log" ref={logRef}>
         {messages.length === 0 ? (
@@ -82,7 +79,7 @@ export function ChatPane(): React.JSX.Element {
           送信
         </button>
       </form>
-    </section>
+    </div>
   )
 }
 

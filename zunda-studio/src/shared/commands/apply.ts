@@ -5,6 +5,7 @@ import type { ApplyEnv, CommandContext, HandlerTable } from './env'
 import { assetHandlers } from './handlers/asset'
 import { characterHandlers } from './handlers/character'
 import { itemHandlers } from './handlers/item'
+import { liveHandlers } from './handlers/live'
 import { mediaHandlers } from './handlers/media'
 import { projectHandlers } from './handlers/project'
 import { voiceHandlers } from './handlers/voice'
@@ -25,6 +26,7 @@ const HANDLERS: HandlerTable = {
   ...assetHandlers,
   ...characterHandlers,
   ...itemHandlers,
+  ...liveHandlers,
   ...mediaHandlers,
   ...voiceHandlers,
   ...zoomHandlers

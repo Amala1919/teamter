@@ -24,6 +24,9 @@ import type {
   ExpressionId,
   ItemId,
   LayerId,
+  LiveEntryId,
+  LiveSession,
+  LiveSessionId,
   Ms,
   SubtitleStyle,
   SubtitleStyleId,
@@ -440,6 +443,47 @@ export interface ZoomUpdate {
   outMs?: Ms
 }
 
+// ------------------------------------------------------------------ ライブの記録
+
+/** ライブの記録をプロジェクトに取り込む。既にあれば発言を足し、採用済みの印や手で直したずれは残す。 */
+export interface LiveImportSession {
+  op: 'live.importSession'
+  session: LiveSession
+}
+
+/** 録画とのずれを直す(R-6)。 */
+export interface LiveSetOffset {
+  op: 'live.setOffset'
+  sessionId: LiveSessionId
+  offsetMs: Ms
+}
+
+/** どの録画素材の会話か。null で結び付けを外す。 */
+export interface LiveLinkRecording {
+  op: 'live.linkRecording'
+  sessionId: LiveSessionId
+  assetId: AssetId | null
+}
+
+export interface LiveRemoveSession {
+  op: 'live.removeSession'
+  sessionId: LiveSessionId
+}
+
+/**
+ * ライブの発言を台本に採用する(R-5)。自分の発言は自分の役、相方の発言は相方の役のセリフになる。
+ * atMs を省略すると、発言がタイムラインのどこにあたるかから決める。
+ */
+export interface ScriptAdoptLiveEntry {
+  op: 'script.adoptLiveEntry'
+  sessionId: LiveSessionId
+  entryId: LiveEntryId
+  atMs?: Ms
+  /** 話者を明示する(役に合うキャラクターが複数いるとき)。 */
+  characterId?: CharacterId
+  tempId?: string
+}
+
 export type Command =
   | ProjectSetMeta
   | ProjectSetConversationAi
@@ -475,6 +519,11 @@ export type Command =
   | MediaPlaceShape
   | ZoomInsert
   | ZoomUpdate
+  | LiveImportSession
+  | LiveSetOffset
+  | LiveLinkRecording
+  | LiveRemoveSession
+  | ScriptAdoptLiveEntry
   | VoiceInsert
   | VoiceSetText
   | VoiceDelete

@@ -1320,3 +1320,256 @@ input[type='color'] {
   gap: 6px;
   justify-content: flex-end;
 }
+
+.timeline__marker {
+  color: #ffd24a;
+  cursor: pointer;
+  font-size: 12px;
+  position: absolute;
+  top: 2px;
+  transform: translateX(-50%);
+  z-index: 1;
+}
+
+/* ---------------------------------------------------------------- 右の欄(チャット・ライブの記録) */
+
+.pane--side {
+  padding-top: 0;
+}
+
+.side__tabs {
+  flex: none;
+}
+
+.chat {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.chat__model--header {
+  margin: 4px 0 6px;
+  text-align: left;
+}
+
+.live-log {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-top: 6px;
+}
+
+.live-log__toolbar,
+.live-log__link {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.live-log__search {
+  width: 100%;
+}
+
+.live-log__entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.live-log__entry {
+  align-items: flex-start;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.live-log__entry--ai .live-log__text {
+  color: #b9d7f5;
+}
+
+.live-log__entry--marked {
+  background: rgba(255, 210, 74, 0.07);
+}
+
+.live-log__time {
+  flex: none;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  padding: 1px 4px;
+}
+
+.live-log__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.live-log__speaker {
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+.live-log__text {
+  word-break: break-all;
+}
+
+.live-log__actions {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.live-import {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.live-import__row {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 6px 0;
+}
+
+.live-import__row > span {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------------------------------------------------------------- ライブ用ウィンドウ */
+
+.live {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  padding: 10px;
+}
+
+.live__header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.live__clock {
+  color: #ff6b6b;
+  font-variant-numeric: tabular-nums;
+}
+
+.live__obs {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  margin-left: auto;
+  padding: 1px 8px;
+}
+
+.live__obs--error {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.live__start {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.live__log {
+  flex: 1;
+  list-style: none;
+  margin: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.live__entry {
+  display: flex;
+  gap: 6px;
+  padding: 3px 0;
+}
+
+.live__time {
+  color: var(--text-dim);
+  flex: none;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  padding-top: 2px;
+}
+
+.live__speaker {
+  color: var(--text-dim);
+  flex: none;
+  font-size: 11px;
+  padding-top: 2px;
+}
+
+.live__entry--ai .live__text {
+  color: #b9d7f5;
+}
+
+.live__entry--note .live__text {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.live__marker {
+  color: #ffd24a;
+}
+
+.live__input {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.live__kinds,
+.live__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.live__talk {
+  flex: 1;
+  min-height: 40px;
+}
+
+.live__talk--on {
+  background: #6b1f1f;
+  border-color: #ff6b6b;
+}
+
+.live__settings {
+  font-size: 12px;
+}
+
+.field--inline > .field__label {
+  flex: none;
+  white-space: nowrap;
+}
+
+.field--inline > select {
+  min-width: 0;
+}
+
+.live-log__link .field--inline {
+  flex: 1;
+  min-width: 0;
+}
+
+.live-log__link .field--inline > select {
+  flex: 1;
+}

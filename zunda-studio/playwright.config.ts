@@ -25,7 +25,12 @@ export default defineConfig({
     trace: 'retain-on-failure',
     launchOptions: {
       ...(existsSync(preinstalledChromium) ? { executablePath: preinstalledChromium } : {}),
-      args: ['--autoplay-policy=no-user-gesture-required']
+      args: [
+        '--autoplay-policy=no-user-gesture-required',
+        // 押しながら話すを試すため、マイクは偽物(ビープ音)を使い、許可を自動で与える。
+        '--use-fake-device-for-media-stream',
+        '--use-fake-ui-for-media-stream'
+      ]
     }
   },
   webServer: [
