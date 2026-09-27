@@ -7,6 +7,8 @@ import { join } from 'node:path'
 export interface AppPaths {
   userData: string
   settingsFile: string
+  /** APIキーなど(暗号化して置く)。 */
+  secretsFile: string
   /** 録画中の会話記録。消えると取り戻せないのでキャッシュには置かない。 */
   live: string
   cache: {
@@ -26,6 +28,7 @@ export function createAppPaths(userData: string): AppPaths {
   return {
     userData,
     settingsFile: join(userData, 'settings.json'),
+    secretsFile: join(userData, 'secrets.json'),
     live: join(userData, 'live'),
     cache: {
       root,

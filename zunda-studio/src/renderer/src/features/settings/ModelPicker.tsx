@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 
-import { PROVIDER_IDS, isSafeModelId, type ModelRef, type ProviderId } from '@shared/ai/types'
+import { groupModels } from '@shared/ai/models'
+import { PROVIDER_IDS, isSafeModelId, type ModelInfo, type ModelRef, type ProviderId } from '@shared/ai/types'
 
 import { api, toAppError } from '../../api'
 import { useSettingsStore } from '../../state/settings'
 
 const PROVIDER_LABELS: Record<ProviderId, string> = {
   'claude-code': 'Claude(サブスク / Claude Code)',
-  opencode: 'OpenCode(OpenCode Go 等)'
+  opencode: 'OpenCode(OpenCode Go など)'
 }
 
 const CUSTOM = '__custom__'
@@ -37,6 +38,7 @@ export function ModelPicker({ value, onChange, inheritLabel, testId }: ModelPick
     if (value) void loadModels(value.providerId)
   }, [value, loadModels])
 
+  const groups = groupModels(models ?? [])
   const inList = value !== null && (models ?? []).some((model) => model.id === value.model)
   const showCustom = value !== null && (customMode || (!inList && models !== undefined))
 
@@ -59,7 +61,7 @@ export function ModelPicker({ value, onChange, inheritLabel, testId }: ModelPick
     }
     const id = providerId as ProviderId
     void loadModels(id).then((list) => {
-      const first = list[0]
+      const first = list.find((model) => model.recommended === true) ?? list[0]
       onChange(first ? { providerId: id, model: first.id } : { providerId: id, model: '' })
     })
   }
@@ -113,12 +115,17 @@ export function ModelPicker({ value, onChange, inheritLabel, testId }: ModelPick
           data-testid={testId ? `${testId}-model` : undefined}
         >
           {loading && <option value={value.model}>読み込み中…</option>}
-          {(models ?? []).map((model) => (
-            <option key={model.id} value={model.id} title={model.note}>
-              {model.label}
-              {model.note ? ` — ${model.note}` : ''}
-            </option>
-          ))}
+          {groups.recommended.length > 0 && (
+            <optgroup label="おすすめ">
+              {groups.recommended.map(renderOption)}
+            </optgroup>
+          )}
+          {groups.others.length > 0 &&
+            (groups.recommended.length > 0 ? (
+              <optgroup label="その他のモデル">{groups.others.map(renderOption)}</optgroup>
+            ) : (
+              groups.others.map(renderOption)
+            ))}
           <option value={CUSTOM}>その他(モデルIDを入力)</option>
         </select>
       )}
@@ -158,5 +165,14 @@ export function ModelPicker({ value, onChange, inheritLabel, testId }: ModelPick
         </span>
       )}
     </div>
+  )
+}
+
+function renderOption(model: ModelInfo): React.JSX.Element {
+  return (
+    <option key={model.id} value={model.id} title={model.note}>
+      {model.label}
+      {model.note ? ` — ${model.note}` : ''}
+    </option>
   )
 }

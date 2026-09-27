@@ -21,7 +21,7 @@ export function fakeCliSettings(patch: SettingsPatch = {}): AppSettings {
       ai: {
         providers: {
           'claude-code': { executablePath: join(FIXTURE_BIN, 'claude'), timeoutMs: 20_000 },
-          opencode: { executablePath: join(FIXTURE_BIN, 'opencode'), timeoutMs: 20_000 }
+          opencode: { connection: 'cli', executablePath: join(FIXTURE_BIN, 'opencode'), timeoutMs: 20_000 }
         }
       }
     }),

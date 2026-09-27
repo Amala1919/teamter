@@ -20,19 +20,29 @@ import { jsonInstruction, turnsToPrompt, type LlmProvider } from './provider'
 const LABEL = 'Claude Code'
 
 /**
- * 内蔵の候補。サブスクで使えるモデルはプランによって異なるため、選べても実行時に断られることがある。
- * エイリアスは Claude Code 側で常に最新版を指すので、既定ではエイリアスを勧める。
+ * サブスクで選べるモデルの一覧。Claude Code にはモデル一覧を返すコマンドが無いため内蔵する。
+ * プランによって使えないモデルもあり、選べても実行時に断られることがある(接続テストで確かめられる)。
+ * エイリアスは Claude Code 側で常に最新版を指すので、おすすめはエイリアスにする。
  */
 export const CLAUDE_MODELS: ModelInfo[] = [
-  { id: 'sonnet', label: 'Sonnet(最新・エイリアス)', source: 'static', note: '速さと質のバランスが良い' },
-  { id: 'opus', label: 'Opus(最新・エイリアス)', source: 'static', note: '文章の質を優先するとき' },
-  { id: 'haiku', label: 'Haiku(最新・エイリアス)', source: 'static', note: '速さ優先。ライブ向き' },
-  { id: 'fable', label: 'Fable(最新・エイリアス)', source: 'static', note: '最上位。プランによっては使えない' },
+  { id: 'sonnet', label: 'Sonnet(最新)', source: 'static', recommended: true, note: '速さと質のバランスが良い。迷ったらこれ' },
+  { id: 'opus', label: 'Opus(最新)', source: 'static', recommended: true, note: '文章の質を優先するとき。編集AI向き' },
+  { id: 'haiku', label: 'Haiku(最新)', source: 'static', recommended: true, note: '速さ優先。ライブ向き' },
+  { id: 'fable', label: 'Fable(最新)', source: 'static', note: '最上位。プランによっては使えない' },
   { id: 'claude-fable-5-1', label: 'Claude Fable 5.1', source: 'static' },
+  { id: 'claude-fable-5', label: 'Claude Fable 5', source: 'static' },
   { id: 'claude-opus-5-5', label: 'Claude Opus 5.5', source: 'static' },
   { id: 'claude-opus-5', label: 'Claude Opus 5', source: 'static' },
+  { id: 'claude-opus-4-8', label: 'Claude Opus 4.8', source: 'static' },
+  { id: 'claude-opus-4-7', label: 'Claude Opus 4.7', source: 'static' },
+  { id: 'claude-opus-4-6', label: 'Claude Opus 4.6', source: 'static' },
+  { id: 'claude-opus-4-5', label: 'Claude Opus 4.5', source: 'static' },
   { id: 'claude-sonnet-5', label: 'Claude Sonnet 5', source: 'static' },
-  { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', source: 'static' }
+  { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', source: 'static' },
+  { id: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5', source: 'static' },
+  { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', source: 'static' },
+  { id: 'claude-sonnet-4-0', label: 'Claude Sonnet 4(旧)', source: 'static' },
+  { id: 'claude-opus-4-0', label: 'Claude Opus 4(旧)', source: 'static' }
 ]
 
 /** --json-schema をコマンドラインで渡せる上限。cmd.exe 経由の起動は 8191 文字で打ち切られるため余裕を持たせる。 */

@@ -13,13 +13,17 @@ import { MediaService } from '../services/media/media-service'
 import { AutosaveService } from '../services/project/autosave'
 import { ProjectService } from '../services/project/project-service'
 import { PsdService } from '../services/psd/psd-service'
+import { discoverEngineExecutable, defaultDiscoveryContext } from '../services/voice/engine-discovery'
+import { EngineInstaller } from '../services/voice/engine-installer'
 import { EngineManager } from '../services/voice/engine-manager'
 import { SynthesisService } from '../services/voice/synthesis-service'
 import type { FilePicker } from './dialog'
 import { EventBus } from './events'
 import { MediaAccess } from './media-access'
+import { PLAIN_CIPHER, SecretStore, type SecretCipher } from './secret-store'
 import { createAppPaths, ensureAppDirectories, type AppPaths } from './paths'
 import { SettingsStore } from './settings-store'
+import { sevenZipPath } from './seven-zip'
 
 export interface ServicesOptions {
   userData: string
@@ -32,6 +36,12 @@ export interface ServicesOptions {
   windows?: WindowControl
   /** OBS への接続。テストでは偽物に差し替える。 */
   connectObs?: ObsConnector
+  /** APIキーの暗号化(Electron は OS の鍵保管庫)。無ければ暗号化せずに置く。 */
+  cipher?: SecretCipher
+  /** VOICEVOX ENGINE の配布元。テストでは模擬サーバーに向ける。 */
+  engineRelease?: { latestUrl: string; downloadBase: string }
+  /** HTTP の呼び出し(AI の API など)。テストで差し替える。 */
+  fetch?: (input: string, init?: RequestInit) => Promise<Response>
 }
 
 /** ライブ用ウィンドウとホットキー。テスト用ホストでは用意しない。 */
@@ -51,11 +61,14 @@ export interface Services {
   paths: AppPaths
   events: EventBus
   settings: SettingsStore
+  secrets: SecretStore
   media: MediaAccess
   picker: FilePicker
   projects: ProjectService
   ai: AiService
   engines: EngineManager
+  /** VOICEVOX ENGINE の自動インストール。 */
+  engineInstaller: EngineInstaller
   synthesis: SynthesisService
   psd: PsdService
   /** ffprobe・プロキシ・波形。 */
@@ -81,6 +94,8 @@ export async function createServices(options: ServicesOptions): Promise<Services
   const events = new EventBus()
   const settings = new SettingsStore(paths.settingsFile, events)
   await settings.load()
+  const secrets = new SecretStore(paths.secretsFile, options.cipher ?? PLAIN_CIPHER)
+  await secrets.load()
 
   const media = new MediaAccess()
   media.allowRoot(paths.cache.root)
@@ -89,9 +104,18 @@ export async function createServices(options: ServicesOptions): Promise<Services
   const env = options.env ?? process.env
   const ai = new AiService(getSettings)
   ai.register(new ClaudeCodeProvider(getSettings, paths.cache.aiWork, env))
-  ai.register(new OpenCodeProvider(getSettings, paths.cache.aiWork, env))
+  ai.register(new OpenCodeProvider(getSettings, paths.cache.aiWork, env, () => secrets.get('opencode.apiKey'), options.fetch))
 
-  const engines = new EngineManager(getSettings, events)
+  const engineInstaller = new EngineInstaller({
+    root: join(paths.userData, 'engines'),
+    sevenZipPath: await sevenZipPath(),
+    events,
+    ...(options.engineRelease ? { release: options.engineRelease } : {}),
+    ...(options.fetch ? { fetch: options.fetch } : {})
+  })
+  const engines = new EngineManager(getSettings, events, (engine) =>
+    discoverEngineExecutable(engine, { ...defaultDiscoveryContext(), installedEngine: engineInstaller.executablePath })
+  )
   const synthesis = new SynthesisService(engines, paths.cache.voice)
   const ffmpeg = new FfmpegLocator(getSettings, env)
   const psd = new PsdService(paths.cache.psd)
@@ -111,11 +135,13 @@ export async function createServices(options: ServicesOptions): Promise<Services
     paths,
     events,
     settings,
+    secrets,
     media,
     picker: options.picker,
     projects: new ProjectService(media),
     ai,
     engines,
+    engineInstaller,
     synthesis,
     psd,
     mediaTools,
@@ -128,6 +154,7 @@ export async function createServices(options: ServicesOptions): Promise<Services
     windows: options.windows ?? null,
     autosave: new AutosaveService(join(paths.userData, 'autosave')),
     dispose: async () => {
+      engineInstaller.cancel()
       options.windows?.unregisterHotkeys()
       await live.dispose()
       await engines.shutdown()

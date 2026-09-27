@@ -37,6 +37,8 @@ interface Entry {
   sourceStartMs: Ms
   gain: GainPoint[] | null
   loop: { buffer: Float32Array; offsetFrames: number } | null
+  /** 再生速度(動画の速度変更)。 */
+  rate: number
   stream: PcmStream | null
   done: boolean
 }
@@ -76,7 +78,7 @@ export async function mixAudio(options: MixOptions): Promise<void> {
     const base = { item, fromFrame: toFrame(from - startMs), toFrame: toFrame(to - startMs), stream: null, done: false }
     if (item.type === 'voice') {
       if (!item.synthesis) throw new AppError('INVALID_ARGUMENT', `音声が合成されていないセリフがあります: ${item.text}`)
-      entries.push({ ...base, path: await options.voicePath(item), sourceStartMs: from - item.startMs, gain: null, loop: null })
+      entries.push({ ...base, path: await options.voicePath(item), sourceStartMs: from - item.startMs, gain: null, loop: null, rate: 1 })
     } else if (item.type === 'audio' || item.type === 'video') {
       const asset = project.assets[item.assetId]
       if (!asset || (asset.type === 'video' && !asset.hasAudio) || item.volume === 0) continue
@@ -85,10 +87,10 @@ export async function mixAudio(options: MixOptions): Promise<void> {
         const buffer = await decodeAll(options.ffmpeg, options.env, asset.path.absolute, item.inMs, sourceSpanMs(item))
         const spanFrames = buffer.length / CHANNELS
         const offsetFrames = toFrame(from - item.startMs) % spanFrames
-        entries.push({ ...base, path: asset.path.absolute, sourceStartMs: 0, gain, loop: { buffer, offsetFrames } })
+        entries.push({ ...base, path: asset.path.absolute, sourceStartMs: 0, gain, loop: { buffer, offsetFrames }, rate: 1 })
       } else {
         const rate = item.type === 'video' ? item.playbackRate : 1
-        entries.push({ ...base, path: asset.path.absolute, sourceStartMs: item.inMs + (from - item.startMs) * rate, gain, loop: null })
+        entries.push({ ...base, path: asset.path.absolute, sourceStartMs: item.inMs + (from - item.startMs) * rate, gain, loop: null, rate })
       }
     }
   }
@@ -153,7 +155,8 @@ async function readEntry(entry: Entry, fromFrame: number, count: number, options
     options.env,
     entry.path,
     entry.sourceStartMs,
-    ((entry.toFrame - entry.fromFrame) / SAMPLE_RATE) * 1000 + 50
+    ((entry.toFrame - entry.fromFrame) / SAMPLE_RATE) * 1000 + 50,
+    entry.rate
   )
   return entry.stream.read(count)
 }

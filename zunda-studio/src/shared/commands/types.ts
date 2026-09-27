@@ -17,6 +17,7 @@ import type {
   PortraitConfig,
   CharacterAuthorRole,
   Effect,
+  Item,
   ShapeItem,
   Transform,
   ZoomMethod,
@@ -438,6 +439,63 @@ export interface ItemRemoveEffect {
   effectIndex: number
 }
 
+/**
+ * アイテムを指定の時刻で2つに分ける。後ろ半分は新しいアイテムになる(tempId で ID を受け取れる)。
+ * 動画・音声は素材の切り出し位置も分け、フェードは前半に入り・後半に出だけを残す。セリフとズームは分けられない。
+ */
+export interface ItemSplit {
+  op: 'item.split'
+  itemId: ItemId
+  atMs: Ms
+  tempId?: string
+}
+
+/**
+ * コピーしたアイテムを貼り付ける。一番早いものが atMs に来るよう、並びを保ったまま置く。
+ * 新しい ID は tempIdPrefix + 番号(0から)で受け取れる。レイヤーが無くなっていたら元の種類の既定のレイヤーに置く。
+ */
+export interface ItemPaste {
+  op: 'item.paste'
+  items: Item[]
+  atMs: Ms
+  tempIdPrefix?: string
+}
+
+/** 動画の再生速度を変える。切り出す区間はそのままで、画面上の長さが変わる。 */
+export interface ItemSetSpeed {
+  op: 'item.setSpeed'
+  itemId: ItemId
+  rate: number
+}
+
+/** アイテムをロックする・解く(ロック中のアイテムはほかのコマンドで変えられない)。 */
+export interface ItemSetLocked {
+  op: 'item.setLocked'
+  itemId: ItemId
+  locked: boolean
+}
+
+// ------------------------------------------------------------------ タイムライン全体
+
+/** アイテムを消し、空いた時間を詰める(後ろのアイテムを前へずらす)。 */
+export interface TimelineRippleDelete {
+  op: 'timeline.rippleDelete'
+  itemIds: ItemId[]
+}
+
+/** atMs の位置にある「何も置かれていない時間」を詰める。 */
+export interface TimelineCloseGap {
+  op: 'timeline.closeGap'
+  atMs: Ms
+}
+
+/** atMs 以降に始まるアイテムを後ろへずらし、空白を作る。 */
+export interface TimelineInsertGap {
+  op: 'timeline.insertGap'
+  atMs: Ms
+  durationMs: Ms
+}
+
 // ------------------------------------------------------------------ ズーム
 
 /**
@@ -536,6 +594,13 @@ export type Command =
   | ItemAddEffect
   | ItemUpdateEffect
   | ItemRemoveEffect
+  | ItemSplit
+  | ItemPaste
+  | ItemSetSpeed
+  | ItemSetLocked
+  | TimelineRippleDelete
+  | TimelineCloseGap
+  | TimelineInsertGap
   | MediaPlaceVideo
   | MediaPlaceImage
   | MediaPlaceAudio

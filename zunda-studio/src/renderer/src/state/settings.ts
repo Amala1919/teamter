@@ -2,6 +2,7 @@ import { create } from 'zustand'
 
 import type { ModelInfo, ProviderId, ProviderStatus } from '@shared/ai/types'
 import type { AppSettings, SettingsPatch } from '@shared/settings/schema'
+import type { SecretName, SecretStatus } from '@shared/settings/secrets'
 
 import { api } from '../api'
 
@@ -10,8 +11,12 @@ interface SettingsState {
   providers: ProviderStatus[]
   models: Partial<Record<ProviderId, ModelInfo[]>>
   modelsLoading: Partial<Record<ProviderId, boolean>>
+  secrets: SecretStatus[]
 
   load: () => Promise<void>
+  loadSecrets: () => Promise<void>
+  /** APIキーなどを入れる(null で消す)。キーが変わるとモデル一覧も変わるので読み直す。 */
+  setSecret: (name: SecretName, value: string | null) => Promise<SecretStatus>
   update: (patch: SettingsPatch) => Promise<void>
   refreshProviders: () => Promise<void>
   loadModels: (providerId: ProviderId, force?: boolean) => Promise<ModelInfo[]>
@@ -22,6 +27,18 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   providers: [],
   models: {},
   modelsLoading: {},
+  secrets: [],
+
+  loadSecrets: async () => {
+    set({ secrets: await api.invoke('secrets:status') })
+  },
+
+  setSecret: async (name, value) => {
+    const status = await api.invoke('secrets:set', name, value)
+    set({ secrets: [...get().secrets.filter((item) => item.name !== name), status], models: {} })
+    await get().refreshProviders()
+    return status
+  },
 
   load: async () => {
     const settings = await api.invoke('settings:get')

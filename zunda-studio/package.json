@@ -12,6 +12,7 @@
     "build:devhost": "vite build -c vite.devhost.config.ts",
     "devhost": "npm run build:app && npm run build:devhost && node out/devhost/main.js",
     "start": "electron-vite preview",
+    "postinstall": "install-electron",
     "typecheck": "tsc --noEmit -p tsconfig.node.json --composite false && tsc --noEmit -p tsconfig.web.json --composite false",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -23,6 +24,7 @@
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.0.9",
+    "7zip-bin": "^5.2.0",
     "ag-psd": "^31.0.2",
     "immer": "^11.1.18",
     "nanoid": "^6.0.1",

@@ -15,6 +15,8 @@ export interface DiscoveryContext {
   home: string
   /** アプリに同梱した資源の置き場所(Electron の process.resourcesPath)。無ければ null。 */
   resourcesPath: string | null
+  /** アプリが自動で入れた VOICEVOX ENGINE の実行ファイル。 */
+  installedEngine?: string | null
 }
 
 export function defaultDiscoveryContext(): DiscoveryContext {
@@ -34,7 +36,10 @@ export function engineCandidates(engine: Pick<VoiceEngineSettings, 'id' | 'label
     candidates.push(join(context.resourcesPath, isAivis ? 'aivisspeech-engine' : 'voicevox-engine', exe))
   }
 
-  // 2. 利用者がインストールしたアプリに入っているエンジン
+  // 2. アプリが自動で入れたエンジン
+  if (!isAivis && context.installedEngine) candidates.push(context.installedEngine)
+
+  // 3. 利用者がインストールしたアプリに入っているエンジン
   const localAppData = context.env['LOCALAPPDATA'] ?? join(context.home, 'AppData', 'Local')
   const programFiles = context.env['ProgramFiles'] ?? 'C:\\Program Files'
   if (isAivis) {

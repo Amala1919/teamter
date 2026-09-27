@@ -11,14 +11,16 @@ import { AppError } from '../../core/errors'
 import { resolveExecutable, runProcess } from '../../core/process'
 import { cliFailure, spawnFailure } from './cli-errors'
 import { extractJson } from './json'
+import { OpenCodeApi, type FetchLike } from './opencode-api'
 import { jsonInstruction, turnsToPrompt, type LlmProvider } from './provider'
+import { markRecommended, OPENCODE_RECOMMENDED } from '@shared/ai/models'
 
 const LABEL = 'OpenCode'
 const AGENT_NAME = 'zunda-studio'
 
 /**
- * CLIからモデル一覧を取れないときに出す候補(OpenCode Go の公式ドキュメント時点の一覧)。
- * 実際の一覧は `opencode models` から取得し、そちらを優先する。
+ * API・CLIからモデル一覧を取れないときに出す候補(OpenCode Go の公式ドキュメント時点の一覧)。
+ * 実際の一覧は API の /models(または `opencode models`)から取得し、そちらを優先する。
  */
 export const OPENCODE_GO_FALLBACK_MODELS: ModelInfo[] = [
   'kimi-k3',
@@ -63,14 +65,30 @@ export class OpenCodeProvider implements LlmProvider {
   readonly id = 'opencode' as const
   readonly label = LABEL
 
+  private readonly api: OpenCodeApi
+
   constructor(
     private readonly getSettings: () => AppSettings,
     private readonly workDirectory: string,
-    private readonly baseEnv: NodeJS.ProcessEnv = process.env
-  ) {}
+    private readonly baseEnv: NodeJS.ProcessEnv = process.env,
+    /** 保存してある API キー。キーで接続するときに使う。 */
+    private readonly getApiKey: () => string | null = () => null,
+    fetchImpl?: FetchLike
+  ) {
+    this.api = new OpenCodeApi(fetchImpl)
+  }
 
   private config(): AppSettings['ai']['providers']['opencode'] {
     return this.getSettings().ai.providers.opencode
+  }
+
+  private usesApi(): boolean {
+    return this.config().connection === 'api-key'
+  }
+
+  private apiOptions(): { baseUrl: string; apiKey: string; timeoutMs: number } {
+    const config = this.config()
+    return { baseUrl: config.baseUrl, apiKey: this.getApiKey() ?? '', timeoutMs: config.timeoutMs }
   }
 
   private async executable(): Promise<string | null> {
@@ -78,6 +96,12 @@ export class OpenCodeProvider implements LlmProvider {
   }
 
   async status(): Promise<ProviderStatus> {
+    if (this.usesApi()) {
+      const key = this.getApiKey()
+      const base = { providerId: this.id, label: this.label, executablePath: null }
+      if (!key) return { ...base, state: { kind: 'needs-key' } }
+      return { ...base, state: { kind: 'ready', version: `APIキー …${key.slice(-4)}` } }
+    }
     const executablePath = await this.executable()
     const base = { providerId: this.id, label: this.label, executablePath }
     if (!executablePath) return { ...base, state: { kind: 'not-installed' } }
@@ -99,8 +123,22 @@ export class OpenCodeProvider implements LlmProvider {
   }
 
   async listModels(): Promise<ModelInfo[]> {
+    return markRecommended(await this.listAllModels(), OPENCODE_RECOMMENDED)
+  }
+
+  private async listAllModels(): Promise<ModelInfo[]> {
     const config = this.config()
     const custom = config.customModels.map<ModelInfo>((id) => ({ id, label: id, source: 'custom' }))
+    if (this.usesApi()) {
+      if (!this.getApiKey()) return [...OPENCODE_GO_FALLBACK_MODELS, ...custom]
+      try {
+        const ids = await this.api.listModels(this.apiOptions())
+        if (ids.length === 0) return [...OPENCODE_GO_FALLBACK_MODELS, ...custom]
+        return [...ids.map<ModelInfo>((id) => ({ id, label: id, source: 'cli' })), ...custom]
+      } catch {
+        return [...OPENCODE_GO_FALLBACK_MODELS, ...custom]
+      }
+    }
     const executablePath = await this.executable()
     if (!executablePath) return [...OPENCODE_GO_FALLBACK_MODELS, ...custom]
 
@@ -125,15 +163,20 @@ export class OpenCodeProvider implements LlmProvider {
     if (!isSafeModelId(model) || !model.includes('/')) {
       throw new AppError('INVALID_ARGUMENT', `OpenCode のモデルは provider/model の形式で指定してください: ${model}`)
     }
-    const executablePath = await this.executable()
-    if (!executablePath) throw new AppError('CLI_NOT_FOUND', 'OpenCode(opencode コマンド)が見つかりません')
-
     // OpenCode にはスキーマを強制する仕組みが無いので、指示で求めてアプリ側で検証する。
     const system = request.jsonSchema
       ? `${request.system}\n\n${jsonInstruction(request.jsonSchema)}`
       : request.system
-
     const started = Date.now()
+
+    if (this.usesApi()) {
+      const text = await this.api.generate(this.apiOptions(), model, { ...request, system }, signal)
+      return this.result(model, text, started, request)
+    }
+
+    const executablePath = await this.executable()
+    if (!executablePath) throw new AppError('CLI_NOT_FOUND', 'OpenCode(opencode コマンド)が見つかりません')
+
     let run
     try {
       run = await runProcess({
@@ -155,8 +198,12 @@ export class OpenCodeProvider implements LlmProvider {
       throw cliFailure(LABEL, run, errors.join('\n') || run.stdout)
     }
 
+    return this.result(model, text, started, request)
+  }
+
+  private result(model: string, text: string, started: number, request: GenerateRequest): GenerateResult {
     const result: GenerateResult = {
-      text,
+      text: text.trim(),
       generatedBy: { providerId: this.id, model, at: new Date().toISOString() },
       durationMs: Date.now() - started
     }

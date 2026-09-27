@@ -2,9 +2,11 @@ import { useEffect } from 'react'
 
 import type { AppSettings, VoiceEngineSettings } from '@shared/settings/schema'
 
+import { useEngineInstallStore } from '../../state/engine-install'
 import { useSettingsStore } from '../../state/settings'
 import { useVoiceStore } from '../../state/voice'
 import { PathField } from '../../ui/PathField'
+import { EngineInstallProgress, useEngineInstallAction } from '../voice/EngineInstall'
 import { UserDictionary } from './UserDictionary'
 
 interface VoiceSettingsProps {
@@ -95,6 +97,7 @@ export function VoiceSettings({ settings, onError }: VoiceSettingsProps): React.
                 onChange={(event) => patchEngine(engine.id, { autoLaunch: event.target.checked })}
               />
             </label>
+            {engine.id === 'voicevox' && <EngineAutoInstall onError={onError} />}
             {engine.id !== 'voicevox' && (
               <button
                 type="button"
@@ -121,6 +124,34 @@ export function VoiceSettings({ settings, onError }: VoiceSettingsProps): React.
         ))}
       </section>
       <UserDictionary engines={settings.voice.engines} />
+    </div>
+  )
+}
+
+/** VOICEVOX ENGINE を自動で入れる(入れ直す)。 */
+function EngineAutoInstall({ onError }: { onError: (error: unknown) => void }): React.JSX.Element | null {
+  const info = useEngineInstallStore((store) => store.info)
+  const refresh = useEngineInstallStore((store) => store.refresh)
+  const { start, busy } = useEngineInstallAction(onError)
+
+  useEffect(() => {
+    refresh().catch(onError)
+  }, [refresh, onError])
+
+  if (!info?.supported) return null
+  return (
+    <div className="field">
+      <span className="field__label">自動インストール</span>
+      <span className="field__row">
+        <span className="status" data-testid="engine-install-status">
+          {info.installed ? `アプリが入れた版: ${info.installed.version}` : 'まだ入れていません'}
+          {info.state.phase === 'error' ? `(前回の失敗: ${info.state.message ?? ''})` : ''}
+        </span>
+        <button type="button" className="button--small" disabled={busy} onClick={start} data-testid="engine-install-settings-start">
+          {info.installed ? '最新版を入れ直す' : 'VOICEVOX を自動で入れる'}
+        </button>
+      </span>
+      <EngineInstallProgress />
     </div>
   )
 }

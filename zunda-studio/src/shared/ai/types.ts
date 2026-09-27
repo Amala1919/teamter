@@ -30,11 +30,15 @@ export interface ModelInfo {
   /** 一覧の取得元。static は内蔵の候補、cli はCLIから取得した実際の一覧。 */
   source: 'static' | 'cli' | 'custom'
   note?: string
+  /** 画面の「おすすめ」に並べるもの。 */
+  recommended?: boolean
 }
 
 export type ProviderState =
   | { kind: 'ready'; version: string }
   | { kind: 'not-installed' }
+  /** APIキーで接続する設定だが、キーがまだ入っていない。 */
+  | { kind: 'needs-key' }
   | { kind: 'error'; message: string }
 
 export interface ProviderStatus {

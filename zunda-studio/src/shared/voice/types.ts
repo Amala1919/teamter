@@ -11,6 +11,29 @@ export interface EngineStatus {
   message?: string
   /** アプリが起動したエンジンか(終了時に止める対象か)。 */
   managed: boolean
+  /** not-found: 起動していないうえ、実行ファイルも見つからない(自動インストールを勧める)。 */
+  reason?: 'not-found'
+}
+
+/** VOICEVOX ENGINE の自動インストールの進み具合。 */
+export type EngineInstallPhase = 'idle' | 'checking' | 'downloading' | 'extracting' | 'starting' | 'done' | 'error' | 'cancelled'
+
+export interface EngineInstallState {
+  phase: EngineInstallPhase
+  version?: string
+  receivedBytes: number
+  /** 分からないときは null。 */
+  totalBytes: number | null
+  message?: string
+}
+
+export interface EngineInstallInfo {
+  /** この OS・CPU 向けの公式配布があるか。 */
+  supported: boolean
+  /** 公式配布の種類(windows-cpu など)。 */
+  target: string | null
+  installed: { version: string; executablePath: string } | null
+  state: EngineInstallState
 }
 
 export interface SpeakerStyle {

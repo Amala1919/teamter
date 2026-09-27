@@ -86,6 +86,12 @@ export const aiCommandSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('item.updateEffect'), itemId: id, effectIndex: z.number().int().min(0), effect }),
   z.object({ op: z.literal('item.removeEffect'), itemId: id, effectIndex: z.number().int().min(0) }),
   z.object({ op: z.literal('item.delete'), itemId: id }),
+  z.object({ op: z.literal('item.split'), itemId: id, atMs: ms, tempId }),
+  z.object({ op: z.literal('item.setSpeed'), itemId: id, rate: z.number().min(0.25).max(4) }),
+  // タイムライン全体の間
+  z.object({ op: z.literal('timeline.rippleDelete'), itemIds: z.array(id).min(1).max(200) }),
+  z.object({ op: z.literal('timeline.closeGap'), atMs: ms }),
+  z.object({ op: z.literal('timeline.insertGap'), atMs: ms, durationMs: ms }),
   // 素材の配置(素材そのものの登録・削除は利用者だけが行う)
   z.object({ op: z.literal('media.placeVideo'), assetId: id, atMs: ms, layerId: id.optional(), inMs: ms.optional(), outMs: ms.optional(), transform: transform.optional(), volume: z.number().min(0).max(4).optional(), tempId }),
   z.object({ op: z.literal('media.placeImage'), assetId: id, atMs: ms, durationMs: ms, layerId: id.optional(), transform: transform.optional(), tempId }),

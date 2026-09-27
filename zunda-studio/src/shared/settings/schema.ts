@@ -12,6 +12,9 @@ const modelRefSchema = z.object({
   model: z.string().min(1)
 })
 
+export const OPENCODE_GO_BASE_URL = 'https://opencode.ai/zen/go/v1'
+export const OPENCODE_ZEN_BASE_URL = 'https://opencode.ai/zen/v1'
+
 const executablePath = z.string().min(1).nullable().default(null)
 
 const aiSchema = z
@@ -34,6 +37,10 @@ const aiSchema = z
           .prefault({}),
         opencode: z
           .object({
+            /** api-key: キーを入れて OpenCode の API に直接つなぐ(既定)。cli: インストール済みの opencode コマンドを使う。 */
+            connection: z.enum(['api-key', 'cli']).default('api-key'),
+            /** API の接続先。OpenCode Go なら …/zen/go/v1、OpenCode Zen なら …/zen/v1。 */
+            baseUrl: z.string().url().default(OPENCODE_GO_BASE_URL),
             executablePath,
             customModels: z.array(z.string()).default([]),
             /** モデル一覧をこのプロバイダに絞る。空文字なら全プロバイダを表示する。 */

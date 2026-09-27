@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 import { expect, test } from '@playwright/test'
 
+import { GOOD_KEY, startMockOpenCodeApi } from '../tests/fixtures/mock-opencode-api.mjs'
 import { FIXTURE_BIN, openFresh, queuePick, updateSettings } from './helpers'
 
 test.describe('AIの選択', () => {
@@ -13,10 +14,11 @@ test.describe('AIの選択', () => {
         roles: { conversation: null, editor: null },
         providers: {
           'claude-code': { executablePath: null },
-          opencode: { executablePath: join(FIXTURE_BIN, 'missing-opencode') }
+          opencode: { connection: 'cli', executablePath: join(FIXTURE_BIN, 'missing-opencode') }
         }
       }
     })
+    await request.post('/ipc/secrets:set', { data: { args: ['opencode.apiKey', null] } })
   })
 
   test('会話AIと編集AIを別々に選び、接続テストできる', async ({ page }) => {
@@ -50,6 +52,48 @@ test.describe('AIの選択', () => {
     // CLIが無いOpenCodeで接続テストすると、原因と対処が表示される
     await page.getByTestId('role-editor-test').click()
     await expect(page.getByTestId('role-editor-status')).toContainText('インストールされているか確認してください')
+  })
+
+  test('OpenCode は APIキーを入れるだけで使え、モデルはおすすめとその他に分かれて全て選べる', async ({ page, request }) => {
+    const mock = await startMockOpenCodeApi()
+    try {
+      await updateSettings(request, { ai: { providers: { opencode: { connection: 'api-key', baseUrl: mock.baseUrl } } } })
+      await openFresh(page)
+      await page.getByTestId('open-settings').click()
+      await expect(page.getByTestId('provider-opencode-status')).toContainText('APIキーが未入力')
+      await expect(page.getByTestId('opencode-path')).toHaveCount(0)
+
+      // 間違ったキーでは接続テストで原因が分かる
+      await page.getByTestId('opencode-key-input').fill('sk-wrong-0000')
+      await page.getByTestId('opencode-key-save').click()
+      await expect(page.getByTestId('opencode-key-status')).toContainText('…0000')
+      await page.getByTestId('role-editor-provider').selectOption('opencode')
+      await page.getByTestId('role-editor-test').click()
+      await expect(page.getByTestId('role-editor-status')).toContainText('API キーを入力してください')
+
+      // 正しいキーに入れ直すと、API のモデル一覧が出る(おすすめが先頭)
+      await page.getByTestId('opencode-key-input').fill(GOOD_KEY)
+      await page.getByTestId('opencode-key-save').click()
+      await expect(page.getByTestId('provider-opencode-status')).toContainText('利用可能')
+      await expect(page.getByTestId('opencode-key-input')).toHaveValue('')
+      await page.getByTestId('role-editor-provider').selectOption('claude-code')
+      await page.getByTestId('role-editor-provider').selectOption('opencode')
+      const model = page.getByTestId('role-editor-model')
+      await expect(model.locator('optgroup[label="おすすめ"] option')).toHaveCount(4)
+      await expect(model.locator('optgroup[label="その他のモデル"] option', { hasText: 'glm-5.2' })).toHaveCount(1)
+      await expect(model).toHaveValue(/^opencode-go\/(kimi|glm|deepseek|qwen)/)
+
+      // その他から選んでも使える(messages 形式のモデル)
+      await model.selectOption('opencode-go/minimax-m3')
+      await page.getByTestId('role-editor-test').click()
+      await expect(page.getByTestId('role-editor-status')).toContainText('接続できたのだ')
+
+      // キーを消すと未入力に戻る
+      await page.getByTestId('opencode-key-clear').click()
+      await expect(page.getByTestId('provider-opencode-status')).toContainText('APIキーが未入力')
+    } finally {
+      await mock.close()
+    }
   })
 
   test('相方の中の人をプロジェクトごとに切り替え、元に戻し、保存できる', async ({ page, request }) => {

@@ -139,6 +139,11 @@ LLM(tool use) → コマンド列
 | `item.updateEffect` | `itemId`, `effectIndex`, `effect` | エフェクトを置き換える |
 | `item.removeEffect` | `itemId`, `effectIndex` | エフェクトを外す |
 | `item.delete` | `itemId` | 削除する |
+| `item.split` | `itemId`, `atMs`, `tempId?` | その時刻で2つに分ける(セリフ・ズームは不可)。後半が新しいアイテムになる |
+| `item.setSpeed` | `itemId`, `rate` | 動画の再生速度(0.25〜4倍)。画面上の長さが変わる |
+| `timeline.rippleDelete` | `itemIds` | 削除して、空いた時間を詰める |
+| `timeline.closeGap` | `atMs` | その位置の何も無い時間を詰める |
+| `timeline.insertGap` | `atMs`, `durationMs` | その位置から後ろをずらして空白を作る |
 | `zoom.insert` | `atMs`, `durationMs`, `region`(`x`,`y`,`width`), `method?`, `inMs?`, `outMs?`, `wholeScreen?`, `layerId?`, `tempId?` | ズーム枠を置く。`wholeScreen` が真なら立ち絵・字幕も含めて拡大する |
 | `zoom.update` | `itemId`, `region?`, `method?`, `inMs?`, `outMs?` | ズーム枠の範囲・寄り方を変える |
 

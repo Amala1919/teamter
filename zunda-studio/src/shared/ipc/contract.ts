@@ -10,7 +10,10 @@ import type { LiveProfile, LiveSessionSummary, LiveState } from '../live/types'
 import type { AiPersona, LiveEntry, LiveSession, Project, PublishInfo } from '../project/types'
 import type { PsdManifest } from '../psd/types'
 import type { AppSettings, SettingsPatch } from '../settings/schema'
+import type { SecretName, SecretStatus } from '../settings/secrets'
 import type {
+  EngineInstallInfo,
+  EngineInstallState,
   EngineStatus,
   SpeakerInfo,
   SynthesisOutcome,
@@ -60,6 +63,11 @@ export interface IpcContract {
   'settings:get': { args: []; result: AppSettings }
   'settings:update': { args: [patch: SettingsPatch]; result: AppSettings }
 
+  /** APIキーなどが入っているか(値そのものは返さない)。 */
+  'secrets:status': { args: []; result: SecretStatus[] }
+  /** APIキーなどを入れる。null か空文字で消す。 */
+  'secrets:set': { args: [name: SecretName, value: string | null]; result: SecretStatus }
+
   'dialog:pick': { args: [request: PickRequest]; result: string[] | null }
 
   'project:read': { args: [path: string]; result: Project }
@@ -79,6 +87,11 @@ export interface IpcContract {
 
   'voice:engines': { args: []; result: EngineStatus[] }
   'voice:ensure': { args: [engineId: string]; result: EngineStatus }
+  /** VOICEVOX ENGINE の自動インストールの状況。 */
+  'voice:install:info': { args: []; result: EngineInstallInfo }
+  /** 公式の VOICEVOX ENGINE をダウンロード・展開し、起動する。進み具合は voice:install-progress で届く。 */
+  'voice:install:start': { args: []; result: EngineStatus }
+  'voice:install:cancel': { args: []; result: void }
   'voice:speakers': { args: [engineId: string]; result: SpeakerInfo[] }
   'voice:synthesize': { args: [request: SynthesisRequest]; result: SynthesisOutcome }
   /** キャッシュ済みの音声ファイルの場所。無ければ null(保存済みのアクセント句から再合成する)。 */
@@ -145,6 +158,7 @@ export type IpcResult<T> = { ok: true; value: T } | { ok: false; error: AppError
 export interface AppEvents {
   'settings:changed': AppSettings
   'voice:engine-status': EngineStatus
+  'voice:install-progress': EngineInstallState
   /** プロキシ作成の進み具合(0〜1)。 */
   'media:proxy-progress': { path: string; ratio: number }
   'export:progress': ExportProgress

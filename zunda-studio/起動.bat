@@ -24,7 +24,7 @@ set "SAVED_HASH="
 if exist "node_modules\.zunda-lock-hash" set /p SAVED_HASH=<"node_modules\.zunda-lock-hash"
 if not exist "node_modules" goto install
 if not "%LOCK_HASH%"=="%SAVED_HASH%" goto install
-goto run
+goto check_electron
 
 :install
 echo.
@@ -32,6 +32,16 @@ echo 必要な部品を入れています。初回は数分かかります…
 call npm ci
 if errorlevel 1 goto install_failed
 > "node_modules\.zunda-lock-hash" echo %LOCK_HASH%
+
+:check_electron
+rem ---- Electron 本体 ----
+rem Electron は npm ci だけでは本体をダウンロードしないことがあるので、無ければ取ってくる。
+if exist "node_modules\electron\path.txt" goto run
+echo.
+echo Electron 本体をダウンロードしています。初回は少し時間がかかります…
+call node "node_modules\electron\install.js"
+if errorlevel 1 goto electron_failed
+if not exist "node_modules\electron\path.txt" goto electron_failed
 
 :run
 echo.
@@ -61,6 +71,11 @@ goto failed
 :install_failed
 echo.
 echo 部品を入れられませんでした。ネットにつながっているか確かめて、もう一度開いてください。
+goto failed
+
+:electron_failed
+echo.
+echo Electron 本体をダウンロードできませんでした。ネットにつながっているか確かめて、もう一度開いてください。
 goto failed
 
 :run_failed

@@ -75,22 +75,68 @@ input[type='text'] {
 
 .app {
   display: grid;
-  /* ヘッダー(ツールバー + エラー表示)/ 作業領域 / タイムライン の3行で固定する */
-  grid-template-rows: auto minmax(0, 1fr) 260px;
+  /*
+   * ヘッダー(ツールバー + エラー表示)/ 作業領域 / 境界 / タイムライン。
+   * 各欄の大きさは境界のドラッグで変わる比率(--layout-*)で決める(state/layout.ts)。
+   */
+  grid-template-rows: auto minmax(0, 1fr) 5px minmax(120px, calc(var(--layout-timeline, 0.36) * 100%));
   height: 100%;
 }
 
 .workspace {
   display: grid;
-  grid-template-columns: 320px 1fr 320px;
+  grid-template-columns:
+    minmax(200px, calc(var(--layout-left, 0.22) * 100%)) 5px minmax(0, 1fr) 5px
+    minmax(200px, calc(var(--layout-right, 0.22) * 100%));
   min-height: 0;
 }
 
 .workspace__center {
   display: grid;
-  grid-template-rows: 1fr auto;
+  grid-template-rows: minmax(120px, 1fr) 5px minmax(60px, calc(var(--layout-inspector, 0.34) * 100%));
   min-height: 0;
   min-width: 0;
+}
+
+.splitter {
+  background: var(--border);
+  position: relative;
+  z-index: 5;
+  touch-action: none;
+  outline: none;
+  transition: background 0.1s;
+}
+
+.splitter:hover,
+.splitter:focus-visible {
+  background: var(--accent-dim);
+}
+
+/* 掴みやすいよう、見た目より広い範囲で反応させる。 */
+.splitter::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+}
+
+.splitter--vertical {
+  cursor: col-resize;
+}
+
+.splitter--horizontal {
+  cursor: row-resize;
+}
+
+body.resizing-x,
+body.resizing-x * {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
+body.resizing-y,
+body.resizing-y * {
+  cursor: row-resize !important;
+  user-select: none;
 }
 
 .pane {
@@ -348,8 +394,6 @@ input[type='text'] {
 
 .pane--inspector {
   border-left: none;
-  border-top: 1px solid var(--border);
-  max-height: 260px;
   overflow-y: auto;
 }
 
@@ -412,7 +456,6 @@ input[type='text'] {
 
 .pane--timeline {
   border-left: none;
-  border-top: 1px solid var(--border);
 }
 
 .timeline__zoom {
@@ -1343,6 +1386,7 @@ input[type='color'] {
 /* ---------------------------------------------------------------- 右の欄(チャット・ライブの記録) */
 
 .pane--side {
+  border-left: none;
   padding-top: 0;
 }
 
@@ -1630,4 +1674,184 @@ input[type='color'] {
   display: flex;
   gap: 6px;
   justify-content: space-between;
+}
+
+/* ------------------------------------------------------------ APIキー・選択肢 */
+
+input[type='password'],
+input[type='url'] {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 6px;
+}
+
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.segmented label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.key-field {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.key-field input {
+  flex: 1;
+  min-width: 0;
+}
+
+.field > .status {
+  grid-column: 2;
+}
+
+.settings-advanced {
+  margin: 6px 0;
+}
+
+.settings-advanced summary {
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+/* ------------------------------------------------------ 音声エンジンの自動インストール */
+
+.banner--info {
+  background: #1d2a3a;
+  border-bottom: 1px solid #4a88e0;
+}
+
+.banner--ok {
+  background: #1f3a1d;
+  border-bottom: 1px solid var(--accent);
+}
+
+.banner .banner__actions {
+  flex: none;
+  display: flex;
+  gap: 6px;
+}
+
+.install-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.install-progress__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+}
+
+.banner .install-progress__text span {
+  flex: none;
+}
+
+.install-progress__bytes {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.progress {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-input);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress__bar {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s;
+}
+
+.progress--busy .progress__bar {
+  opacity: 0.5;
+  animation: progress-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes progress-pulse {
+  50% {
+    opacity: 0.15;
+  }
+}
+
+/* ------------------------------------------------------------ 右クリックメニュー */
+
+.context-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 200px;
+  max-width: 360px;
+  padding: 4px 0;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  user-select: none;
+}
+
+.context-menu .context-menu {
+  position: fixed;
+}
+
+.context-menu__item {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  gap: 6px;
+  align-items: center;
+  padding: 5px 12px 5px 6px;
+  cursor: default;
+  outline: none;
+  white-space: nowrap;
+}
+
+.context-menu__item:focus,
+.context-menu__item--open {
+  background: var(--accent-dim);
+}
+
+.context-menu__item--danger .context-menu__label {
+  color: #f08a87;
+}
+
+.context-menu__item--disabled {
+  opacity: 0.4;
+}
+
+.context-menu__check {
+  color: var(--accent);
+  text-align: center;
+}
+
+.context-menu__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.context-menu__shortcut {
+  color: var(--text-dim);
+  font-size: 11px;
+  padding-left: 16px;
+}
+
+.context-menu__separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border);
 }

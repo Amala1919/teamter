@@ -1,0 +1,168 @@
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { z } from 'zod'
+
+import { PLAIN_CIPHER, SecretStore } from '@main/core/secret-store'
+import { AiService } from '@main/services/ai/ai-service'
+import { CLAUDE_MODELS } from '@main/services/ai/claude-code-provider'
+import { apiModelName, formatsFor, modelPrefix } from '@main/services/ai/opencode-api'
+import { OpenCodeProvider } from '@main/services/ai/opencode-provider'
+import { groupModels, markRecommended, OPENCODE_RECOMMENDED } from '@shared/ai/models'
+import type { ModelInfo } from '@shared/ai/types'
+import type { AppSettings } from '@shared/settings/schema'
+
+import { GOOD_KEY, startMockOpenCodeApi, type MockOpenCodeApi } from './fixtures/mock-opencode-api.mjs'
+import { settingsWith, tempDir } from './helpers/env'
+
+let mock: MockOpenCodeApi
+let work: string
+
+beforeAll(async () => {
+  mock = await startMockOpenCodeApi()
+  work = await tempDir('zs-opencode-api-')
+})
+afterAll(async () => {
+  await mock.close()
+})
+
+const settingsFor = (baseUrl = mock.baseUrl): AppSettings =>
+  settingsWith({ ai: { providers: { opencode: { connection: 'api-key', baseUrl, timeoutMs: 10_000 } } } })
+
+const provider = (key: string | null, settings = settingsFor()): OpenCodeProvider =>
+  new OpenCodeProvider(() => settings, work, {}, () => key)
+
+describe('OpenCode の API(キーで接続)', () => {
+  it('キーが無ければ「未入力」、あれば末尾だけ見せて利用可能にする', async () => {
+    expect((await provider(null).status()).state).toEqual({ kind: 'needs-key' })
+    expect((await provider(GOOD_KEY).status()).state).toEqual({ kind: 'ready', version: 'APIキー …1234' })
+  })
+
+  it('モデル一覧を API から取り、opencode コマンドと同じ ID にそろえる', async () => {
+    const models = await provider(GOOD_KEY).listModels()
+    const ids = models.map((model) => model.id)
+    expect(ids).toContain('opencode-go/kimi-k3')
+    expect(ids).toContain('opencode-go/gpt-6-luna')
+    // 系列ごとに最新の1つだけを勧める
+    const recommended = models.filter((model) => model.recommended).map((model) => model.id)
+    expect(recommended).toEqual(
+      expect.arrayContaining(['opencode-go/kimi-k3', 'opencode-go/glm-5.3', 'opencode-go/deepseek-v4-pro', 'opencode-go/qwen3.8-max'])
+    )
+    expect(recommended).not.toContain('opencode-go/glm-5.2')
+    expect(recommended).not.toContain('opencode-go/kimi-k2.7-code')
+  })
+
+  it('キーが無い・間違っているときも、内蔵の候補は選べる', async () => {
+    expect((await provider(null).listModels()).length).toBeGreaterThan(5)
+    expect((await provider('sk-wrong').listModels()).some((model) => model.source === 'static')).toBe(true)
+  })
+
+  it('モデルごとに合った形式(chat / messages / responses)で呼ぶ', async () => {
+    const ai = provider(GOOD_KEY)
+    const request = { system: 'あなたは四国めたんです。', turns: [{ role: 'user' as const, content: 'やあ' }] }
+    mock.calls.length = 0
+    expect((await ai.generate('opencode-go/kimi-k3', request)).text).toBe('(kimi-k3 が chat で答えました)')
+    expect((await ai.generate('opencode-go/minimax-m3', request)).text).toBe('(minimax-m3 が messages で答えました)')
+    expect((await ai.generate('opencode-go/gpt-6-luna', request)).text).toBe('(gpt-6-luna が responses で答えました)')
+    expect(mock.calls.map((call) => call.path)).toEqual(['/chat/completions', '/messages', '/responses'])
+    // system は形式ごとの置き場所に入る
+    expect(mock.calls[0]!.body['messages']).toEqual([
+      { role: 'system', content: 'あなたは四国めたんです。' },
+      { role: 'user', content: 'やあ' }
+    ])
+    expect(mock.calls[1]!.body['system']).toBe('あなたは四国めたんです。')
+    expect(mock.calls[2]!.body['instructions']).toBe('あなたは四国めたんです。')
+  })
+
+  it('形式の見当が外れたら別の形式で試し、通った形式を覚える', async () => {
+    const ai = provider(GOOD_KEY)
+    const request = { system: 's', turns: [{ role: 'user' as const, content: 'やあ' }] }
+    mock.calls.length = 0
+    expect((await ai.generate('opencode-go/odd-model', request)).text).toContain('responses')
+    expect(mock.calls.map((call) => call.path)).toEqual(['/chat/completions', '/messages', '/responses'])
+    mock.calls.length = 0
+    await ai.generate('opencode-go/odd-model', request)
+    expect(mock.calls.map((call) => call.path)).toEqual(['/responses'])
+  })
+
+  it('キーの誤り・上限・キー未入力を、対処の分かるエラーにする', async () => {
+    const request = { system: 's', turns: [{ role: 'user' as const, content: 'やあ' }] }
+    await expect(provider('sk-wrong').generate('opencode-go/kimi-k3', request)).rejects.toMatchObject({ code: 'AI_KEY_REQUIRED' })
+    await expect(provider(null).generate('opencode-go/kimi-k3', request)).rejects.toMatchObject({ code: 'AI_KEY_REQUIRED' })
+    await expect(provider(GOOD_KEY).generate('opencode-go/limited-model', request)).rejects.toMatchObject({ code: 'AI_RATE_LIMITED' })
+  })
+
+  it('構造化出力も、アプリ側の検証とやり直しの仕組みにそのまま乗る', async () => {
+    process.env['FAKE_OPENCODE_JSON'] = '```json\n{"lines":["はいはい"]}\n```'
+    try {
+      const settings = settingsWith({
+        ai: {
+          roles: { editor: { providerId: 'opencode', model: 'opencode-go/glm-5.3' } },
+          providers: { opencode: { connection: 'api-key', baseUrl: mock.baseUrl } }
+        }
+      })
+      const ai = new AiService(() => settings)
+      ai.register(new OpenCodeProvider(() => settings, work, {}, () => GOOD_KEY))
+      const { value } = await ai.generateStructured('editor', { system: 's', turns: [{ role: 'user', content: 'x' }] }, z.object({ lines: z.array(z.string()) }))
+      expect(value).toEqual({ lines: ['はいはい'] })
+    } finally {
+      delete process.env['FAKE_OPENCODE_JSON']
+    }
+  })
+
+  it('接続先の URL から ID の前置きを決め、API には前置きを外して渡す', () => {
+    expect(modelPrefix('https://opencode.ai/zen/go/v1')).toBe('opencode-go')
+    expect(modelPrefix('https://opencode.ai/zen/v1')).toBe('opencode')
+    expect(apiModelName('opencode-go/kimi-k3')).toBe('kimi-k3')
+    expect(formatsFor('qwen3.8-max')[0]).toBe('messages')
+    expect(formatsFor('grok-4.7')[0]).toBe('responses')
+    expect(formatsFor('kimi-k3')).toEqual(['chat', 'messages', 'responses'])
+  })
+})
+
+describe('APIキーの保管', () => {
+  it('暗号化して書き、値は返さず末尾だけ見せる。消すこともできる', async () => {
+    const dir = await tempDir('zs-secrets-')
+    const file = join(dir, 'secrets.json')
+    const cipher = { secure: true, encrypt: (text: string) => `enc:${Buffer.from(text).toString('hex')}`, decrypt: (text: string) => Buffer.from(text.slice(4), 'hex').toString() }
+    const store = new SecretStore(file, cipher)
+    await store.load()
+    expect(store.status('opencode.apiKey')).toEqual({ name: 'opencode.apiKey', set: false, hint: null, secure: true })
+    await store.set('opencode.apiKey', '  sk-abcdef9876  ')
+    expect(store.status('opencode.apiKey')).toMatchObject({ set: true, hint: '…9876' })
+    const onDisk = await readFile(file, 'utf8')
+    expect(onDisk).not.toContain('sk-abcdef9876')
+
+    const reopened = new SecretStore(file, cipher)
+    await reopened.load()
+    expect(reopened.get('opencode.apiKey')).toBe('sk-abcdef9876')
+    // 別の PC などで復号できないときは、無いものとして扱う
+    const other = new SecretStore(file, { ...PLAIN_CIPHER, decrypt: () => { throw new Error('bad') } })
+    await other.load()
+    expect(other.get('opencode.apiKey')).toBeNull()
+
+    await reopened.set('opencode.apiKey', null)
+    expect(reopened.status('opencode.apiKey').set).toBe(false)
+    await expect(reopened.set('opencode.apiKey', 'a\nb')).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' })
+  })
+})
+
+describe('モデルのおすすめ', () => {
+  it('Claude はエイリアスを勧め、それ以外の版も全て選べる', () => {
+    const { recommended, others } = groupModels(CLAUDE_MODELS)
+    expect(recommended.map((model) => model.id)).toEqual(['sonnet', 'opus', 'haiku'])
+    expect(others.map((model) => model.id)).toEqual(expect.arrayContaining(['fable', 'claude-opus-4-8', 'claude-sonnet-4-5', 'claude-haiku-4-5']))
+  })
+
+  it('手入力のモデルは勧めず、一覧の最後に置く', () => {
+    const models: ModelInfo[] = [
+      { id: 'opencode-go/kimi-k9', label: 'x', source: 'custom' },
+      { id: 'opencode-go/kimi-k3', label: 'x', source: 'cli' },
+      { id: 'opencode-go/aaa', label: 'x', source: 'cli' }
+    ]
+    const { recommended, others } = groupModels(markRecommended(models, OPENCODE_RECOMMENDED))
+    expect(recommended.map((model) => model.id)).toEqual(['opencode-go/kimi-k3'])
+    expect(others.map((model) => model.id)).toEqual(['opencode-go/aaa', 'opencode-go/kimi-k9'])
+  })
+})

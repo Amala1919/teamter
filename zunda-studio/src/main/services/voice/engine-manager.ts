@@ -110,7 +110,8 @@ export class EngineManager {
         state: 'unavailable',
         message: !engine.autoLaunch
           ? `${engine.label} が起動していません(自動起動は無効)`
-          : `${engine.label} が起動していません。${engine.label} をインストールするか、エンジンの場所を設定してください`
+          : `${engine.label} が見つかりません。自動で入れるか、エンジンの場所を設定してください`,
+        ...(engine.autoLaunch ? { reason: 'not-found' as const } : {})
       })
     }
 
@@ -171,7 +172,7 @@ export class EngineManager {
 
   private update(
     engine: VoiceEngineSettings,
-    change: Pick<EngineStatus, 'state'> & Partial<Pick<EngineStatus, 'version' | 'message'>>
+    change: Pick<EngineStatus, 'state'> & Partial<Pick<EngineStatus, 'version' | 'message' | 'reason'>>
   ): EngineStatus {
     const status: EngineStatus = {
       id: engine.id,
@@ -180,11 +181,12 @@ export class EngineManager {
       state: change.state,
       managed: this.processes.has(engine.id),
       ...(change.version ? { version: change.version } : {}),
-      ...(change.message && change.state !== 'ready' ? { message: change.message } : {})
+      ...(change.message && change.state !== 'ready' ? { message: change.message } : {}),
+      ...(change.reason && change.state !== 'ready' ? { reason: change.reason } : {})
     }
     const previous = this.statuses.get(engine.id)
     this.statuses.set(engine.id, status)
-    if (previous?.state !== status.state || previous.message !== status.message) {
+    if (previous?.state !== status.state || previous.message !== status.message || previous.reason !== status.reason) {
       this.events.emit('voice:engine-status', status)
     }
     return status
