@@ -33,7 +33,8 @@
   "items":      [ /* 6章 */ ],
   "credits":    { /* 8章 */ },
   "liveSessions": { /* 9章 */ },
-  "chat":       { /* 10章 */ }
+  "chat":       { /* 10章 */ },
+  "ai":         { /* 11章 */ }
 }
 ```
 
@@ -218,6 +219,11 @@ PSDのレイヤーツリーに対する「役割の割り当て」を保存す�
   "voiceOverride": { "speedScale": 1.2 },   // キャラクター既定値の部分上書き
   "subtitleOverride": { "color": "#ff4444", "sizeScale": 1.2 },
   "expressionId": "exp_happy",              // この発話中の表情
+  "generatedBy": {                          // AIが書いたセリフのみ。人間が書いたら null
+    "providerId": "claude-code",
+    "model": "claude-opus-5",
+    "at": "2026-09-27T12:00:00Z"
+  },
   "synthesis": {
     "cacheKey": "sha256:...",               // 合成結果wavのキャッシュキー
     "audioDurationMs": 2480,
@@ -322,7 +328,8 @@ PSDのレイヤーツリーに対する「役割の割り当て」を保存す�
         "text": "このボス初見なんだけど、パターンある？", "bookmarked": false, "adoptedItemId": null },
       { "id": "ent_002", "atMs": 1800,   "role": "ai",   "kind": "question",
         "text": "3段階に分かれているかしら。まずは足元を見ることね",
-        "bookmarked": false, "adoptedItemId": null },
+        "bookmarked": false, "adoptedItemId": null,
+        "generatedBy": { "providerId": "opencode", "model": "opencode-go/kimi-k3", "at": "..." } },
       { "id": "ent_003", "atMs": 421000, "role": "user", "kind": "marker",
         "text": "いまのは奇跡", "bookmarked": true, "adoptedItemId": "itm_0042" }
     ]
@@ -350,6 +357,20 @@ PSDのレイヤーツリーに対する「役割の割り当て」を保存す�
 
 チャット履歴をプロジェクトに含めるのは、次のセッションでAIが過去の指示(口調の方針など)を踏まえられるようにするためである。
 
-## 11. バージョニング
+## 11. AI設定
+
+プロジェクトごとの会話AI(相方を演じるAI)の指定。`null` ならアプリ全体の既定値を使う。
+
+```jsonc
+"ai": {
+  "conversation": { "providerId": "opencode", "model": "opencode-go/kimi-k3" }
+}
+```
+
+編集AIはプロジェクトに持たせない。動画ごとに変える理由が薄く、アプリ設定で固定するのが自然なためである。
+
+どのAIが実際にどのセリフを書いたかは、ここではなく各アイテムの `generatedBy` に記録する。プロジェクトの設定は「これから書くセリフ」の既定値にすぎず、途中で変えれば過去のセリフとは異なるためである。
+
+## 12. バージョニング
 
 `formatVersion` を単調増加させ、読み込み時に現在のバージョンへの移行関数を順に適用する。移行関数は一度書いたら変更しない。プロジェクトを開いて保存したら古いバージョンでは開けなくなるため、移行前のファイルを `*.zsproj.bak` として残す。
