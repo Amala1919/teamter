@@ -134,6 +134,9 @@ LLM(tool use) → コマンド列
 | `item.removeEffect` | `itemId`, `effectIndex` | エフェクトを外す |
 | `item.delete` | `itemId` | 削除する |
 
+| `zoom.insert` | `atMs`, `durationMs`, `region`(`x`,`y`,`width`), `method?`, `inMs?`, `outMs?`, `wholeScreen?`, `tempId?` | ズーム枠を置く。`wholeScreen` が真なら立ち絵・字幕も含めて拡大する |
+| `zoom.update` | `itemId`, `region?`, `method?`, `inMs?`, `outMs?` | ズーム枠の範囲・寄り方を変える |
+
 ### 5.4 設定
 
 | op | 引数 | 意味 |
