@@ -10,7 +10,7 @@ import type { AudioItem, Project, VideoItem, ZoomItem } from '@shared/project/ty
 import { renderFrame } from '@shared/render/compositor'
 import { effectStateAt } from '@shared/render/effects'
 import type { Ctx2D } from '@shared/render/types'
-import { clampRegion, regionHeight, zoomProgress, zoomViewport } from '@shared/render/zoom'
+import { clampRegion, regionHeight, resizeRegion, zoomProgress, zoomViewport } from '@shared/render/zoom'
 
 function testContext(): CommandContext {
   let counter = 0
@@ -390,5 +390,39 @@ describe('Compositor(動画・変形・ズーム)', () => {
     const context = canvas.getContext('2d')
     renderFrame(context as unknown as Ctx2D, project, 1500, resources, { applyZoom: false })
     expect(Array.from(context.getImageData(960 + 150, 540, 1, 1).data.slice(0, 3))).toEqual([0, 0, 0])
+  })
+})
+
+describe('ズーム枠の操作(resizeRegion)', () => {
+  const canvas = { width: 1920, height: 1080 }
+  const region = { x: 480, y: 270, width: 960 }
+
+  it('右下の角は左上を固定して、大きく動かした方向に合わせて縦横比を保って変わる', () => {
+    expect(resizeRegion(canvas, region, 'se', -240, 0)).toEqual({ x: 480, y: 270, width: 720 })
+    expect(resizeRegion(canvas, region, 'se', 0, 135)).toEqual({ x: 480, y: 270, width: 1200 })
+    // 画面の外へは広げない(右端と下端のうち先に当たるほうで止まる)
+    expect(resizeRegion(canvas, region, 'se', 2000, 0)).toEqual({ x: 480, y: 270, width: 1440 })
+  })
+
+  it('左上の角は右下を固定する', () => {
+    const next = resizeRegion(canvas, region, 'nw', 240, 0)
+    expect(next.width).toBe(720)
+    expect(next.x + next.width).toBe(1440)
+    expect(next.y + regionHeight(canvas, next.width)).toBe(810)
+  })
+
+  it('辺は向かいの辺の中央を固定する', () => {
+    const east = resizeRegion(canvas, region, 'e', 192, 0)
+    expect(east.x).toBe(480)
+    expect(east.width).toBe(1152)
+    expect(east.y + regionHeight(canvas, east.width) / 2).toBe(540)
+    const north = resizeRegion(canvas, region, 'n', 0, 54)
+    expect(north.y + regionHeight(canvas, north.width)).toBe(810)
+    expect(north.x + north.width / 2).toBe(960)
+  })
+
+  it('最小の大きさより小さくはならず、移動は画面の内側に収まる', () => {
+    expect(resizeRegion(canvas, region, 'se', -5000, -5000).width).toBe(192)
+    expect(resizeRegion(canvas, region, 'move', -1000, 5000)).toEqual({ x: 0, y: 540, width: 960 })
   })
 })

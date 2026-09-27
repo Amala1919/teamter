@@ -28,15 +28,12 @@ export function regionRect(canvas: CanvasSize, region: ZoomRegion): Rect {
 
 /** 縦横比を保ったまま、最小の大きさ以上・画面の内側に収める。 */
 export function clampRegion(canvas: CanvasSize, region: ZoomRegion): ZoomRegion {
-  const width = Math.min(canvas.width, Math.max(canvas.width * MIN_ZOOM_WIDTH_RATIO, region.width))
+  // 画素単位で十分なので整数に丸める(数値欄にも読みやすい値が出る)。
+  const width = Math.round(Math.min(canvas.width, Math.max(canvas.width * MIN_ZOOM_WIDTH_RATIO, region.width)))
   const height = regionHeight(canvas, width)
-  const x = Math.min(canvas.width - width, Math.max(0, region.x))
-  const y = Math.min(canvas.height - height, Math.max(0, region.y))
-  return { x: round2(x), y: round2(y), width: round2(width) }
-}
-
-function round2(value: number): number {
-  return Math.round(value * 100) / 100
+  const x = Math.round(Math.min(canvas.width - width, Math.max(0, region.x)))
+  const y = Math.round(Math.min(canvas.height - height, Math.max(0, region.y)))
+  return { x, y, width }
 }
 
 /** 既定の枠: 画面中央の半分の大きさ。 */
@@ -127,4 +124,70 @@ export const ZOOM_METHOD_LABELS: Record<ZoomMethod, string> = {
   linear: '等速',
   punch: 'パンチイン',
   slowPush: 'ゆっくり寄り続ける'
+}
+
+/** 枠のつまみ。move は内側(位置だけ動かす)。 */
+export type ZoomHandle = 'move' | 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
+
+/**
+ * つまみを dx, dy(キャンバス座標)動かしたときの枠。
+ * 角は対角を、辺は向かいの辺の中央を固定し、縦横比を保ったまま大きさを変える。
+ */
+export function resizeRegion(
+  canvas: CanvasSize,
+  region: ZoomRegion,
+  handle: ZoomHandle,
+  dx: number,
+  dy: number
+): ZoomRegion {
+  const aspect = canvas.width / canvas.height
+  const minWidth = canvas.width * MIN_ZOOM_WIDTH_RATIO
+  const x0 = region.x
+  const y0 = region.y
+  const w0 = region.width
+  const h0 = regionHeight(canvas, w0)
+  const right = x0 + w0
+  const bottom = y0 + h0
+  const centerX = x0 + w0 / 2
+  const centerY = y0 + h0 / 2
+  const fit = (width: number, maxWidth: number): number => Math.max(minWidth, Math.min(width, maxWidth))
+  // 角は、横と縦のうち大きく動かしたほうに合わせる(ウインドウの角を斜めに引いたときの感覚)。
+  const dominant = (byX: number, byY: number): number => (Math.abs(byX - w0) >= Math.abs(byY - w0) ? byX : byY)
+
+  switch (handle) {
+    case 'move':
+      return clampRegion(canvas, { x: x0 + dx, y: y0 + dy, width: w0 })
+    case 'se': {
+      const width = fit(dominant(w0 + dx, (h0 + dy) * aspect), Math.min(canvas.width - x0, (canvas.height - y0) * aspect))
+      return clampRegion(canvas, { x: x0, y: y0, width })
+    }
+    case 'nw': {
+      const width = fit(dominant(w0 - dx, (h0 - dy) * aspect), Math.min(right, bottom * aspect))
+      return clampRegion(canvas, { x: right - width, y: bottom - width / aspect, width })
+    }
+    case 'ne': {
+      const width = fit(dominant(w0 + dx, (h0 - dy) * aspect), Math.min(canvas.width - x0, bottom * aspect))
+      return clampRegion(canvas, { x: x0, y: bottom - width / aspect, width })
+    }
+    case 'sw': {
+      const width = fit(dominant(w0 - dx, (h0 + dy) * aspect), Math.min(right, (canvas.height - y0) * aspect))
+      return clampRegion(canvas, { x: right - width, y: y0, width })
+    }
+    case 'e': {
+      const width = fit(w0 + dx, canvas.width - x0)
+      return clampRegion(canvas, { x: x0, y: centerY - width / aspect / 2, width })
+    }
+    case 'w': {
+      const width = fit(w0 - dx, right)
+      return clampRegion(canvas, { x: right - width, y: centerY - width / aspect / 2, width })
+    }
+    case 's': {
+      const width = fit((h0 + dy) * aspect, (canvas.height - y0) * aspect)
+      return clampRegion(canvas, { x: centerX - width / 2, y: y0, width })
+    }
+    case 'n': {
+      const width = fit((h0 - dy) * aspect, bottom * aspect)
+      return clampRegion(canvas, { x: centerX - width / 2, y: bottom - width / aspect, width })
+    }
+  }
 }

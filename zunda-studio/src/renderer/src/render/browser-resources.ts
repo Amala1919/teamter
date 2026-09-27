@@ -1,10 +1,11 @@
 import { create } from 'zustand'
 
-import type { AssetId, Project } from '@shared/project/types'
+import type { AssetId, Ms, Project, VideoItem } from '@shared/project/types'
 import type { PsdManifest } from '@shared/psd/types'
 import type { CanvasLike, RenderResources } from '@shared/render/types'
 
 import { api } from '../api'
+import { videoPool } from '../playback/video-pool'
 
 /**
  * プレビュー用の素材供給。画像や PSD は非同期に読み込み、読み込めたら version を上げて再描画を促す。
@@ -21,6 +22,8 @@ function bump(): void {
   useResourceStore.setState((state) => ({ version: state.version + 1 }))
 }
 
+videoPool.setFrameListener(bump)
+
 class BrowserResources implements RenderResources {
   private readonly manifests = new Map<AssetId, PsdManifest>()
   private readonly manifestRequests = new Map<string, Promise<PsdManifest>>()
@@ -29,6 +32,7 @@ class BrowserResources implements RenderResources {
 
   /** 描画のたびに今のプロジェクトを渡す(素材IDからファイルの場所を引くため)。 */
   bind(project: Project): this {
+    if (this.project !== project) videoPool.prune(project)
     this.project = project
     return this
   }
@@ -80,8 +84,8 @@ class BrowserResources implements RenderResources {
     return null
   }
 
-  video(): unknown {
-    return null
+  video(item: VideoItem, sourceMs: Ms): unknown {
+    return this.project ? videoPool.frame(this.project, item, sourceMs) : null
   }
 
   createCanvas(width: number, height: number): CanvasLike {

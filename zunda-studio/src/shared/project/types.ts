@@ -40,8 +40,16 @@ interface AssetBase {
   license: AssetLicense
 }
 
+/** 素材の符号化方式。プレビューでそのまま再生できるか(プロキシが要るか)の判断に使う。 */
+export interface MediaCodecs {
+  video: string | null
+  audio: string | null
+  container: string
+}
+
 export interface VideoAsset extends AssetBase {
   type: 'video'
+  codecs?: MediaCodecs
   durationMs: Ms
   width: number
   height: number
@@ -51,6 +59,7 @@ export interface VideoAsset extends AssetBase {
 
 export interface AudioAsset extends AssetBase {
   type: 'audio'
+  codecs?: MediaCodecs
   durationMs: Ms
 }
 

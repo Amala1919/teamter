@@ -9,7 +9,7 @@ import { TimelinePane } from './features/timeline/TimelinePane'
 import { Toolbar } from './features/toolbar/Toolbar'
 import { togglePlayback } from './playback/player'
 import { useSettingsStore } from './state/settings'
-import { useEditorStore } from './state/store'
+import { deleteSelection, useEditorStore } from './state/store'
 
 export function App(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null)
@@ -30,6 +30,12 @@ export function App(): React.JSX.Element {
       if (event.key === ' ' && !typing) {
         event.preventDefault()
         togglePlayback()
+        return
+      }
+      if ((event.key === 'Delete' || event.key === 'Backspace') && !typing && !document.querySelector('[role="dialog"]')) {
+        event.preventDefault()
+        const message = deleteSelection()
+        if (message) setError(message)
         return
       }
       const modifier = event.ctrlKey || event.metaKey
@@ -67,12 +73,12 @@ export function App(): React.JSX.Element {
       <div className="workspace">
         <ScriptPane onError={setError} />
         <div className="workspace__center">
-          <PreviewPane />
-          <InspectorPane />
+          <PreviewPane onError={setError} />
+          <InspectorPane onError={setError} />
         </div>
         <ChatPane />
       </div>
-      <TimelinePane />
+      <TimelinePane onError={setError} />
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
     </div>
   )

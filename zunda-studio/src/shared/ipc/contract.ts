@@ -30,6 +30,8 @@ export type PickKind =
   | 'saveProject'
   | 'video'
   | 'audio'
+  /** 動画・音声・画像のどれでも。 */
+  | 'media'
   | 'image'
   | 'psd'
   | 'exportVideo'

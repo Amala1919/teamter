@@ -169,3 +169,19 @@ function sanitizeFileName(name: string): string {
   const cleaned = name.replace(/[\\/:*?"<>|]/g, '_').trim()
   return cleaned === '' ? 'project' : cleaned
 }
+
+/** 選んでいるアイテムを消す。セリフは後ろを詰める(voice.delete)。失敗したらその理由を返す。 */
+export function deleteSelection(): string | null {
+  const { project, selectedItemIds, dispatch, setSelection } = useEditorStore.getState()
+  const commands: Command[] = []
+  for (const itemId of selectedItemIds) {
+    const item = project.items.find((candidate) => candidate.id === itemId)
+    if (!item) continue
+    commands.push(item.type === 'voice' ? { op: 'voice.delete', itemId } : { op: 'item.delete', itemId })
+  }
+  if (commands.length === 0) return null
+  const result = dispatch(commands, 'アイテムの削除')
+  if (!result.ok) return result.message
+  setSelection([])
+  return null
+}

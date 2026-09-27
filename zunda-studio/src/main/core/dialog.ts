@@ -13,6 +13,12 @@ export const PICK_FILTERS: Record<PickRequest['kind'], { name: string; extension
   video: [{ name: '動画', extensions: ['mp4', 'mkv', 'mov', 'webm', 'm4v', 'avi'] }],
   audio: [{ name: '音声', extensions: ['wav', 'mp3', 'm4a', 'aac', 'ogg', 'flac', 'opus'] }],
   image: [{ name: '画像', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }],
+  media: [
+    {
+      name: '動画・音声・画像',
+      extensions: ['mp4', 'mkv', 'mov', 'webm', 'm4v', 'avi', 'wav', 'mp3', 'm4a', 'aac', 'ogg', 'flac', 'opus', 'png', 'jpg', 'jpeg', 'webp', 'gif']
+    }
+  ],
   psd: [{ name: 'PSD', extensions: ['psd'] }],
   exportVideo: [{ name: 'MP4 動画', extensions: ['mp4'] }],
   exportText: [{ name: 'テキスト', extensions: ['txt', 'srt'] }],

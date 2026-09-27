@@ -1,11 +1,24 @@
 import { create } from 'zustand'
 
+import { gainAt, gainEnvelope, sourceSpanMs } from '@shared/audio/envelope'
 import { isVoiceItem, itemEndMs, projectDurationMs } from '@shared/project/queries'
-import type { Ms, Project } from '@shared/project/types'
+import type { AudioItem, Item, Ms, Project } from '@shared/project/types'
 
 import { api } from '../api'
 import { useEditorStore } from '../state/store'
 import { resolveWavPath } from '../state/voice'
+import { videoPool } from './video-pool'
+
+/** 予約する音の1件。gain は音量の折れ線(BGM のフェードやダッキング)。 */
+interface ScheduleEntry {
+  startMs: Ms
+  buffer: AudioBuffer
+  /** 素材の切り出し(秒)。ループならこの区間を繰り返す。 */
+  offsetSeconds?: number
+  loop?: { start: number; end: number }
+  durationMs?: Ms
+  item?: AudioItem
+}
 
 interface PlaybackState {
   playing: boolean
@@ -43,17 +56,7 @@ class Player {
       if (session !== this.session) return
 
       const startAt = context.currentTime + 0.05
-      for (const entry of schedule) {
-        const source = context.createBufferSource()
-        source.buffer = entry.buffer
-        source.connect(context.destination)
-        const delay = Math.max(0, (entry.startMs - fromMs) / 1000)
-        const offset = Math.max(0, (fromMs - entry.startMs) / 1000)
-        const length = Math.min(entry.buffer.duration - offset, (endMs - Math.max(fromMs, entry.startMs)) / 1000)
-        if (length <= 0) continue
-        source.start(startAt + delay, offset, length)
-        this.sources.push(source)
-      }
+      for (const entry of schedule) this.schedule(context, project, entry, fromMs, endMs, startAt)
 
       usePlaybackStore.setState({ playing: true, loading: false })
       const tick = (): void => {
@@ -65,6 +68,7 @@ class Player {
           return
         }
         useEditorStore.getState().setPlayhead(position)
+        videoPool.sync(useEditorStore.getState().project, position)
         this.frame = requestAnimationFrame(tick)
       }
       this.frame = requestAnimationFrame(tick)
@@ -85,6 +89,7 @@ class Player {
       }
     }
     this.sources = []
+    videoPool.stop()
     usePlaybackStore.setState({ playing: false, loading: false })
   }
 
@@ -93,28 +98,78 @@ class Player {
     return this.context
   }
 
-  private async prepare(
-    project: Project,
-    fromMs: Ms,
-    endMs: Ms
-  ): Promise<{ startMs: Ms; buffer: AudioBuffer }[]> {
+  /** 1件の音を AudioContext に予約する。途中から再生するときは、その位置から鳴らす。 */
+  private schedule(context: AudioContext, project: Project, entry: ScheduleEntry, fromMs: Ms, endMs: Ms, startAt: number): void {
+    const itemStart = entry.startMs
+    const itemEnd = itemStart + (entry.durationMs ?? entry.buffer.duration * 1000)
+    const playFrom = Math.max(fromMs, itemStart)
+    const playUntil = Math.min(endMs, itemEnd)
+    if (playUntil <= playFrom) return
+
+    const source = context.createBufferSource()
+    source.buffer = entry.buffer
+    let output: AudioNode = source
+    if (entry.item) {
+      const gain = context.createGain()
+      const points = gainEnvelope(project, entry.item)
+      const toContextTime = (relMs: Ms): number => startAt + (itemStart + relMs - fromMs) / 1000
+      const fromRel = playFrom - itemStart
+      gain.gain.setValueAtTime(gainAt(points, fromRel), toContextTime(fromRel))
+      for (const point of points) {
+        if (point.atMs > fromRel) gain.gain.linearRampToValueAtTime(point.gain, toContextTime(point.atMs))
+      }
+      source.connect(gain)
+      output = gain
+    }
+    output.connect(context.destination)
+
+    const delay = (playFrom - fromMs) / 1000
+    const relSeconds = (playFrom - itemStart) / 1000
+    const length = (playUntil - playFrom) / 1000
+    if (entry.loop) {
+      const span = entry.loop.end - entry.loop.start
+      source.loop = true
+      source.loopStart = entry.loop.start
+      source.loopEnd = entry.loop.end
+      source.start(startAt + delay, entry.loop.start + (span > 0 ? relSeconds % span : 0), length)
+    } else {
+      source.start(startAt + delay, (entry.offsetSeconds ?? 0) + relSeconds, length)
+    }
+    this.sources.push(source)
+  }
+
+  private async prepare(project: Project, fromMs: Ms, endMs: Ms): Promise<ScheduleEntry[]> {
     const muted = new Set(project.layers.filter((layer) => layer.muted).map((layer) => layer.id))
-    const entries = project.items.filter(
-      (item) =>
-        isVoiceItem(item) &&
-        item.synthesis !== null &&
-        !muted.has(item.layerId) &&
-        itemEndMs(item) > fromMs &&
-        item.startMs < endMs
-    )
+    const inRange = (item: Item): boolean => !muted.has(item.layerId) && itemEndMs(item) > fromMs && item.startMs < endMs
     const loaded = await Promise.all(
-      entries.map(async (item) => {
-        if (!isVoiceItem(item) || !item.synthesis) return null
-        const buffer = await this.load(project, item)
-        return buffer ? { startMs: item.startMs, buffer } : null
+      project.items.map(async (item): Promise<ScheduleEntry | null> => {
+        if (!inRange(item)) return null
+        if (isVoiceItem(item) && item.synthesis) {
+          const buffer = await this.load(project, item)
+          return buffer ? { startMs: item.startMs, buffer } : null
+        }
+        if (item.type === 'audio') {
+          const asset = project.assets[item.assetId]
+          if (!asset) return null
+          const buffer = await this.loadFile(asset.path.absolute)
+          const loop = item.loop && sourceSpanMs(item) > 0 ? { start: item.inMs / 1000, end: item.outMs / 1000 } : undefined
+          return { startMs: item.startMs, buffer, offsetSeconds: item.inMs / 1000, durationMs: item.durationMs, item, ...(loop ? { loop } : {}) }
+        }
+        return null
       })
     )
-    return loaded.filter((entry): entry is { startMs: Ms; buffer: AudioBuffer } => entry !== null)
+    return loaded.filter((entry): entry is ScheduleEntry => entry !== null)
+  }
+
+  /** 素材ファイルを丸ごとデコードする(BGM・効果音)。 */
+  private async loadFile(path: string): Promise<AudioBuffer> {
+    const cached = this.buffers.get(`file:${path}`)
+    if (cached) return cached
+    const response = await fetch(api.mediaUrl(path))
+    if (!response.ok) throw new Error(`音声ファイルを読み込めません: ${path}`)
+    const buffer = await this.ensureContext().decodeAudioData(await response.arrayBuffer())
+    this.buffers.set(`file:${path}`, buffer)
+    return buffer
   }
 
   private async load(project: Project, item: Parameters<typeof resolveWavPath>[1]): Promise<AudioBuffer | null> {

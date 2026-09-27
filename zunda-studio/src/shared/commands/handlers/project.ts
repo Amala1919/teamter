@@ -1,10 +1,15 @@
 import { isSafeModelId } from '../../ai/types'
 import type { Layer } from '../../project/types'
-import { fail, insertLayer, refreshSubtitleLines, type HandlerTable } from '../env'
+import { fail, insertLayer, requireLayer, refreshSubtitleLines, type HandlerTable } from '../env'
 
 type ProjectHandlers = Pick<
   HandlerTable,
-  'project.setMeta' | 'project.setConversationAi' | 'project.setEditing' | 'layer.insert' | 'style.upsertSubtitle'
+  | 'project.setMeta'
+  | 'project.setConversationAi'
+  | 'project.setEditing'
+  | 'layer.insert'
+  | 'layer.update'
+  | 'style.upsertSubtitle'
 >
 
 const COLOR_PATTERN = /^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/
@@ -38,6 +43,17 @@ export const projectHandlers: ProjectHandlers = {
       if (command.duckFadeMs < 0) fail(command.op, '音量を下げる時間は0以上にしてください')
       draft.editing.duckFadeMs = Math.round(command.duckFadeMs)
     }
+  },
+
+  'layer.update': (draft, command, env) => {
+    const layer = requireLayer(draft, env.resolve(command.layerId), command.op)
+    if (command.name !== undefined) {
+      if (command.name.trim() === '') fail(command.op, 'レイヤー名が空です')
+      layer.name = command.name
+    }
+    if (command.visible !== undefined) layer.visible = command.visible
+    if (command.locked !== undefined) layer.locked = command.locked
+    if (command.muted !== undefined) layer.muted = command.muted
   },
 
   'layer.insert': (draft, command, env) => {

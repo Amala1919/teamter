@@ -3,36 +3,81 @@ import { effectiveVoice, findItem, itemEndMs, voiceItemsInOrder } from '@shared/
 import type { VoiceItem, VoiceParams } from '@shared/project/types'
 
 import { formatMs } from '../../lib/time'
-import { useEditorStore } from '../../state/store'
+import { deleteSelection, useEditorStore } from '../../state/store'
 import { VoiceParamsEditor } from '../characters/VoiceParamsEditor'
+import {
+  AudioInspector,
+  EffectsInspector,
+  LicenseInspector,
+  ShapeInspector,
+  TextInspector,
+  TimingInspector,
+  TransformInspector,
+  VolumeField,
+  ZoomInspector,
+  type Run
+} from './ItemInspectors'
 
-export function InspectorPane(): React.JSX.Element {
+export function InspectorPane({ onError }: { onError: (message: string) => void }): React.JSX.Element {
   const project = useEditorStore((state) => state.project)
   const selectedItemIds = useEditorStore((state) => state.selectedItemIds)
+  const dispatch = useEditorStore((state) => state.dispatch)
+  const setSelection = useEditorStore((state) => state.setSelection)
   const firstId = selectedItemIds[0]
   const item = firstId === undefined ? undefined : findItem(project, firstId)
+
+  const run: Run = (commands, label) => {
+    const result = dispatch(commands, label)
+    if (!result.ok) onError(result.message)
+  }
 
   return (
     <section className="pane pane--inspector" data-testid="inspector">
       <header className="pane__header">
         <h2>インスペクタ</h2>
+        {item && (
+          <button
+            type="button"
+            className="button--small button--danger"
+            onClick={() => {
+              const message = deleteSelection()
+              if (message) onError(message)
+              else setSelection([])
+            }}
+            data-testid="inspector-delete"
+          >
+            削除
+          </button>
+        )}
       </header>
       {!item ? (
         <p className="pane__empty">アイテムを選択すると設定が表示される。</p>
       ) : (
-        <>
+        <div className="settings-section" key={item.id}>
           <dl className="inspector__list">
             <dt>種類</dt>
-            <dd>{ITEM_LABELS[item.type] ?? item.type}</dd>
+            <dd data-testid="inspector-type">{ITEM_LABELS[item.type] ?? item.type}</dd>
             <dt>区間</dt>
             <dd>
               {formatMs(item.startMs)} – {formatMs(itemEndMs(item))}({(item.durationMs / 1000).toFixed(2)}秒)
             </dd>
-            <dt>レイヤー</dt>
-            <dd>{project.layers.find((layer) => layer.id === item.layerId)?.name ?? item.layerId}</dd>
           </dl>
+          <TimingInspector project={project} item={item} run={run} />
           {item.type === 'voice' && <VoiceInspector item={item} />}
-        </>
+          {item.type === 'zoom' && <ZoomInspector project={project} item={item} run={run} />}
+          {item.type === 'text' && <TextInspector project={project} item={item} run={run} />}
+          {item.type === 'shape' && <ShapeInspector item={item} run={run} />}
+          {item.type === 'audio' && <AudioInspector item={item} run={run} />}
+          {item.type === 'video' && (
+            <section>
+              <h3>音</h3>
+              <VolumeField item={item} run={run} />
+            </section>
+          )}
+          {'transform' in item && <TransformInspector item={item} run={run} />}
+          {item.type !== 'zoom' && item.type !== 'audio' && <EffectsInspector item={item} run={run} />}
+          {'assetId' in item && <LicenseInspector project={project} assetId={item.assetId} run={run} />}
+        </div>
       )}
     </section>
   )
@@ -45,7 +90,8 @@ const ITEM_LABELS: Record<string, string> = {
   text: 'テロップ',
   audio: '音声',
   shape: '図形',
-  portrait: '立ち絵'
+  portrait: '立ち絵',
+  zoom: 'ズーム'
 }
 
 function VoiceInspector({ item }: { item: VoiceItem }): React.JSX.Element {

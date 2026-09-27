@@ -62,6 +62,7 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
         'openProject',
         'saveProject',
         'video',
+        'media',
         'audio',
         'image',
         'psd',
@@ -117,7 +118,7 @@ export function createHandlers(services: Services): HandlerTable {
     'dialog:pick': async (request) => {
       const picked = await services.picker.pick(request)
       // 素材として選ばれたファイルは、プレビューで読めるよう配信を許可する。
-      if (picked && ['video', 'audio', 'image', 'psd'].includes(request.kind)) {
+      if (picked && ['video', 'audio', 'image', 'media', 'psd'].includes(request.kind)) {
         services.media.allowFiles(picked)
       }
       return picked

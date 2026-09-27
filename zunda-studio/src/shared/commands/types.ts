@@ -62,6 +62,16 @@ export interface LayerInsert {
   tempId?: string
 }
 
+/** レイヤーの名前・表示・ロック・ミュートを変える。 */
+export interface LayerUpdate {
+  op: 'layer.update'
+  layerId: LayerId
+  name?: string
+  visible?: boolean
+  locked?: boolean
+  muted?: boolean
+}
+
 // ------------------------------------------------------------------ 素材
 
 /** 素材を登録する。ライセンス情報は必須(書き出し時のクレジット集約に使う。L-4)。 */
@@ -411,6 +421,7 @@ export type Command =
   | ProjectSetConversationAi
   | ProjectSetEditing
   | LayerInsert
+  | LayerUpdate
   | AssetAdd
   | AssetUpdateLicense
   | AssetRemove
