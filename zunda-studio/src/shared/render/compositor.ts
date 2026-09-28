@@ -8,13 +8,12 @@
 
 import { sourceTimeMs } from '../audio/envelope'
 import { portraitSelections } from '../portrait/animation'
+import { portraitScenes, type PortraitScene } from '../portrait/scene'
 import { itemsAt } from '../project/queries'
 import type {
-  Character,
   Item,
   LayerId,
   Ms,
-  PortraitItem,
   Project,
   SubtitleStyle,
   Transform,
@@ -36,7 +35,7 @@ export interface RenderOptions {
 /** 描画順を決めるための1要素。アイテムに加え、常時表示の立ち絵もここに並ぶ。 */
 type Drawable =
   | { kind: 'item'; layerId: LayerId; item: Item }
-  | { kind: 'portrait'; layerId: LayerId; character: Character; item: PortraitItem | null }
+  | { kind: 'portrait'; layerId: LayerId; scene: PortraitScene; item: null }
   | { kind: 'zoom'; layerId: LayerId; item: ZoomItem }
 
 export function renderFrame(
@@ -60,17 +59,16 @@ export function renderFrame(
 
   const drawables: Drawable[] = []
   for (const item of itemsAt(project, timeMs)) {
-    if (item.type === 'portrait') {
-      const character = project.characters[item.characterId]
-      if (character) drawables.push({ kind: 'portrait', layerId: item.layerId, character, item })
-    } else if (item.type === 'zoom') {
+    // 立ち絵は、場面ごとの立ち絵をまとめて portraitScenes で決める。
+    if (item.type === 'portrait') continue
+    if (item.type === 'zoom') {
       if (options.applyZoom !== false) drawables.push({ kind: 'zoom', layerId: item.layerId, item })
     } else {
       drawables.push({ kind: 'item', layerId: item.layerId, item })
     }
   }
-  for (const character of alwaysVisiblePortraits(project)) {
-    drawables.push({ kind: 'portrait', layerId: portraitLayerId(project), character, item: null })
+  for (const scene of portraitScenes(project, timeMs)) {
+    drawables.push({ kind: 'portrait', layerId: scene.layerId, scene, item: null })
   }
   // レイヤーの下から順に描く。ズームは「それより下」だけを拡大するので、同じレイヤーの中では最初に処理する。
   // 同じレイヤーの他の要素は元の並び(アイテム → 立ち絵)を保つため、安定ソートを使う。
@@ -83,33 +81,12 @@ export function renderFrame(
     if (drawable.kind === 'zoom') {
       applyZoom(context, project, drawable.item, relMs, resources)
     } else if (drawable.kind === 'portrait') {
-      const effect = drawable.item ? effectStateAt(drawable.item, relMs, project.meta.renderSeed) : IDENTITY_EFFECT
-      drawCharacter(context, project, drawable.character, drawable.item, timeMs, resources, effect)
+      drawCharacter(context, project, drawable.scene, timeMs, resources)
     } else {
       drawItem(context, project, drawable.item, relMs, resources)
     }
   }
   context.restore()
-}
-
-/**
- * 立ち絵の表示の既定: そのキャラクターの立ち絵アイテムが1つも無ければ、動画全体を通して表示する。
- * 登場・退場を制御したいときだけ立ち絵アイテムを置けばよい(PROJECT_FORMAT.md 6.2)。
- */
-function alwaysVisiblePortraits(project: Project): Character[] {
-  const controlled = new Set(
-    project.items.filter((item): item is PortraitItem => item.type === 'portrait').map((item) => item.characterId)
-  )
-  return Object.values(project.characters).filter((character) => character.portrait && !controlled.has(character.id))
-}
-
-function portraitLayerId(project: Project): LayerId {
-  return (
-    project.layers.find((layer) => layer.id === 'lyr_portrait')?.id ??
-    project.layers.find((layer) => layer.name === '立ち絵')?.id ??
-    project.layers[project.layers.length - 1]?.id ??
-    ''
-  )
 }
 
 // ---------------------------------------------------------------- ズーム
@@ -151,31 +128,39 @@ function applyZoom(context: Ctx2D, project: Project, item: ZoomItem, relMs: Ms, 
 
 // ---------------------------------------------------------------- 立ち絵
 
-function drawCharacter(
-  context: Ctx2D,
-  project: Project,
-  character: Character,
-  item: PortraitItem | null,
-  timeMs: Ms,
-  resources: RenderResources,
-  effect: EffectState
-): void {
+function drawCharacter(context: Ctx2D, project: Project, scene: PortraitScene, timeMs: Ms, resources: RenderResources): void {
+  const { character, transform } = scene
   const portrait = character.portrait
   if (!portrait) return
   const manifest = resources.psd(portrait.assetId)
   if (!manifest) return
-  const selections = portraitSelections(project, character, portrait, timeMs)
-  const transform = item?.transformOverride ?? portrait.transform
-  if (effect === IDENTITY_EFFECT) {
+  const selections = portraitSelections(project, character, portrait, timeMs, scene.expressionId)
+
+  // 登場・退場などのエフェクト(show と adjust の両方に付いていれば重ねる)。
+  let effect: EffectState = IDENTITY_EFFECT
+  for (const item of scene.effectItems) {
+    const next = effectStateAt(item, timeMs - item.startMs, project.meta.renderSeed)
+    effect = { alpha: effect.alpha * next.alpha, scale: effect.scale * next.scale, dx: effect.dx + next.dx, dy: effect.dy + next.dy }
+  }
+  if (effect.alpha <= 0) return
+  const placement = portraitPlacement(transform, manifest)
+  if (scene.hop > 0) effect = { ...effect, dy: effect.dy - scene.hop * placement.height }
+  const plain = effect === IDENTITY_EFFECT && scene.dim === 0
+
+  if (plain) {
     drawPortrait(context, character, manifest, selections, resources, transform)
     return
   }
   // エフェクトは立ち絵の中心を基準に掛ける。
-  const placement = portraitPlacement(transform, manifest)
   const centerX = placement.x + placement.width / 2
   const centerY = placement.y + placement.height / 2
   context.save()
   context.globalAlpha *= effect.alpha
+  // 話していないキャラクターを暗くする(フィルタに対応していない環境では、少し透かして代わりにする)。
+  if (scene.dim > 0) {
+    if ('filter' in context) context.filter = `brightness(${Math.round((1 - scene.dim) * 100)}%)`
+    else context.globalAlpha *= 1 - scene.dim / 2
+  }
   context.translate(centerX + effect.dx, centerY + effect.dy)
   context.scale(effect.scale, effect.scale)
   context.translate(-centerX, -centerY)

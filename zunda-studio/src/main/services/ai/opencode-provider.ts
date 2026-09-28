@@ -178,6 +178,8 @@ export class OpenCodeProvider implements LlmProvider {
 
     const executablePath = await this.executable()
     if (!executablePath) throw new AppError('CLI_NOT_FOUND', 'OpenCode(opencode コマンド)が見つかりません')
+    // opencode コマンド経由では画像を送らない(文字だけで生成する)。
+    const imagesDropped = (request.images?.length ?? 0) > 0
 
     let run
     try {
@@ -200,7 +202,8 @@ export class OpenCodeProvider implements LlmProvider {
       throw cliFailure(LABEL, run, errors.join('\n') || run.stdout)
     }
 
-    return this.result(model, text, started, request)
+    const result = this.result(model, text, started, request)
+    return imagesDropped ? { ...result, imagesDropped } : result
   }
 
   private result(model: string, text: string, started: number, request: GenerateRequest): GenerateResult {

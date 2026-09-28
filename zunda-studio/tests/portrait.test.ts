@@ -280,6 +280,101 @@ describe('立ち絵の描画', () => {
     expect(pixel(POINTS.glasses)).toEqual([...COLORS.glasses])
   })
 
+  describe('場面ごとの立ち絵', () => {
+    const background = (project: Project): number[] => {
+      const hex = project.canvas.backgroundColor.replace('#', '')
+      return [0, 2, 4].map((index) => parseInt(hex.slice(index, index + 2), 16))
+    }
+
+    it('show の区間を置くと、その区間でだけ出る(置かなければ今まで通りずっと出る)', async () => {
+      const { project, characterId, config } = projectWithPortrait()
+      const t = openEyeTime(project, config, characterId, 6000)
+      expect((await render(project, 2000))(POINTS.body)).toEqual([...COLORS.body])
+      const shown = apply(project, [{ op: 'portrait.insert', characterId, atMs: 5000, durationMs: 5000 }])
+      expect((await render(shown, 2000))(POINTS.body)).toEqual(background(shown))
+      expect((await render(shown, t))(POINTS.body)).toEqual([...COLORS.body])
+    })
+
+    it('hide の区間では隠れ、adjust の区間では位置と表情だけが変わる', async () => {
+      const { project, characterId, config } = projectWithPortrait()
+      const brow = Object.values(config.partGroups).find((group) => group.role === 'eyebrow')!
+      const angryId = brow.items.find((item) => item.name === '怒り')!.id
+      const withAngry: PortraitConfig = {
+        ...config,
+        expressions: {
+          ...config.expressions,
+          exp_angry: { id: 'exp_angry', name: '怒り', selections: { ...config.expressions['exp_normal']!.selections, [brow.id]: angryId } }
+        }
+      }
+      let next = apply(project, [{ op: 'character.setPortrait', characterId, portrait: withAngry }])
+      next = apply(next, [
+        { op: 'portrait.insert', characterId, atMs: 3000, durationMs: 1000, kind: 'hide' },
+        {
+          op: 'portrait.insert',
+          characterId,
+          atMs: 5000,
+          durationMs: 3000,
+          kind: 'adjust',
+          transform: { x: 50, y: 0, scale: 1, flipX: false, anchor: 'top-left' },
+          expressionId: 'exp_angry'
+        }
+      ])
+      expect((await render(next, 3500))(POINTS.body)).toEqual(background(next))
+      const t = openEyeTime(next, withAngry, characterId, 5500)
+      const moved = await render(next, t)
+      expect(moved([POINTS.body[0], POINTS.body[1]])).toEqual(background(next))
+      expect(moved([POINTS.body[0] + 50, POINTS.body[1]])).toEqual([...COLORS.body])
+      expect(moved([POINTS.brow[0] + 50, POINTS.brow[1]])).toEqual([...COLORS.browAngry])
+      // 区間の外は元の位置・表情
+      const after = await render(next, openEyeTime(next, withAngry, characterId, 9000))
+      expect(after(POINTS.body)).toEqual([...COLORS.body])
+      expect(after(POINTS.brow)).toEqual([...COLORS.browNormal])
+    })
+
+    it('登場の動き(ふわっと)を付けると、区間の頭は透けていて、途中からはっきり出る', async () => {
+      const { project, characterId, config } = projectWithPortrait()
+      const next = apply(project, [{ op: 'portrait.insert', characterId, atMs: 5000, durationMs: 3000, transition: 'fade' }])
+      expect(next.items.find((item) => item.type === 'portrait')!.effects).toEqual([{ type: 'fade', inMs: 300, outMs: 300 }])
+      expect((await render(next, 5000))(POINTS.body)).toEqual(background(next))
+      expect((await render(next, openEyeTime(next, config, characterId, 6000)))(POINTS.body)).toEqual([...COLORS.body])
+    })
+
+    it('話し手の強調: ほかの人が話している間は暗く、自分が話し始めると跳ねる', async () => {
+      const { project, characterId, config } = projectWithPortrait()
+      const base = apply(project, [
+        { op: 'character.create', name: '四国めたん', engineId: 'voicevox', speakerId: 2, speakerName: '四国めたん', tempId: 'other' },
+        { op: 'project.setEditing', portraitDim: 0.5, portraitHop: true }
+      ])
+      const otherId = Object.keys(base.characters).find((id) => id !== characterId)!
+      const next = apply(base, [{ op: 'voice.insert', characterId: otherId, text: 'やあ', atMs: 20_000 }])
+      const t = openEyeTime(next, config, characterId, 20_100)
+      const dimmed = (await render(next, t))(POINTS.body)
+      expect(dimmed[0]).toBeGreaterThan(40)
+      expect(dimmed[0]).toBeLessThan(60)
+      // 誰も話していなければ暗くしない
+      expect((await render(next, openEyeTime(next, config, characterId, 30_000)))(POINTS.body)).toEqual([...COLORS.body])
+
+      const talking = speaking(base, characterId)
+      const { portraitScenes } = await import('@shared/portrait/scene')
+      const own = (time: number) => portraitScenes(talking, time).find((scene) => scene.character.id === characterId)!
+      expect(own(10_110).hop).toBeGreaterThan(0.02)
+      expect(own(10_110).dim).toBe(0)
+      expect(own(10_500).hop).toBe(0)
+    })
+
+    it('キャラクターや表情が無いと断り、既定の強調はオフ', () => {
+      const { project, characterId } = projectWithPortrait()
+      expect(() => apply(project, [{ op: 'portrait.insert', characterId: 'chr_none', atMs: 0, durationMs: 100 }])).toThrow('キャラクターが見つかりません')
+      expect(() => apply(project, [{ op: 'portrait.insert', characterId, atMs: 0, durationMs: 100, expressionId: 'exp_none' }])).toThrow('表情が見つかりません')
+      expect(() => apply(project, [{ op: 'project.setEditing', portraitDim: 0.95 }])).toThrow('0〜0.8')
+      expect(project.editing.portraitDim).toBeUndefined()
+      const placed = applyCommands(project, [{ op: 'portrait.insert', characterId, atMs: 0, durationMs: 100, kind: 'adjust', tempId: 'p' }], ctx)
+      const id = placed.resolvedIds['p']!
+      const updated = apply(placed.project, [{ op: 'portrait.update', itemId: id, kind: 'hide', expressionId: null, transform: null }])
+      expect(updated.items.find((item) => item.id === id)).toMatchObject({ kind: 'hide', transformOverride: null, expressionId: null })
+    })
+  })
+
   it('使われている PSD の素材は外せない', () => {
     const { project } = projectWithPortrait()
     expect(() => apply(project, [{ op: 'asset.remove', assetId: Object.keys(project.assets)[0]! }])).toThrow(/使われている/)

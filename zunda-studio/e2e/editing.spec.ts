@@ -221,4 +221,45 @@ test.describe('右クリックとショートカットでの編集', () => {
     await page.getByTestId('play-toggle').click()
     expect(isRed(during)).toBe(true)
   })
+
+  test('目盛りの上でマウスホイールを回すと、マウスの位置を中心に拡大・縮小する', async ({ page, request }) => {
+    await openFresh(page)
+    await queuePick(request, [image])
+    await page.getByTestId('add-media').click()
+    const item = page.locator('[data-item-type="image"]')
+    await expect(item).toHaveCount(1)
+    const zoom = page.getByTestId('timeline-zoom')
+    await expect(zoom).toHaveValue('60')
+    // 横にスクロールできる長さにする(画像を 5 秒 → 60 秒に)
+    await page.getByTestId('inspector-duration').fill('60')
+    await page.getByTestId('inspector-duration').press('Enter')
+
+    // 5 秒の位置にマウスを置いて上へ回すと拡大し、5 秒の位置はマウスの下に残る
+    const ruler = (await page.getByTestId('timeline-ruler').boundingBox())!
+    const x = ruler.x + 5 * 60
+    await page.mouse.move(x, ruler.y + ruler.height / 2)
+    await page.mouse.wheel(0, -100)
+    await expect(zoom).toHaveValue('72')
+    await page.mouse.wheel(0, -100)
+    await expect(zoom).toHaveValue('86')
+    const tick = page.locator('.timeline__tick', { hasText: /^0:05$/ })
+    const tickBox = (await tick.boundingBox())!
+    expect(Math.abs(tickBox.x - x)).toBeLessThan(3)
+
+    // 下へ回すと縮小する
+    await page.mouse.wheel(0, 100)
+    await page.mouse.wheel(0, 100)
+    await page.mouse.wheel(0, 100)
+    await expect(zoom).toHaveValue('50')
+
+    // レーンの上では普通のスクロール(拡大しない)、Ctrl を押しながらなら拡大する
+    const lane = (await page.getByTestId('lane-lyr_bg').boundingBox())!
+    await page.mouse.move(lane.x + 400, lane.y + lane.height / 2)
+    await page.mouse.wheel(0, -100)
+    await expect(zoom).toHaveValue('50')
+    await page.keyboard.down('Control')
+    await page.mouse.wheel(0, -100)
+    await page.keyboard.up('Control')
+    await expect(zoom).toHaveValue('60')
+  })
 })

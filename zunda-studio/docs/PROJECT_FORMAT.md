@@ -277,15 +277,22 @@ PSDのレイヤーツリーに対する「役割の割り当て」を保存す�
 // 図形・単色背景
 { "type": "shape", "shape": "rect", "fill": "#101820", "transform": { /* 同上 */ } }
 
-// 立ち絵の明示的な配置(常時表示ではなく区間を制御したい場合)
-{ "type": "portrait", "characterId": "chr_zundamon", "transformOverride": null }
+// 場面ごとの立ち絵。kind は show(この区間だけ出す。無ければ show)/ hide(この区間だけ隠す)/ adjust(位置・表情だけ変える)
+{ "type": "portrait", "characterId": "chr_zundamon", "kind": "adjust",
+  "transformOverride": { "x": 1500, "y": 1080, "scale": 0.8, "flipX": false, "anchor": "bottom-center" },
+  "expressionId": "exp_angry", "effects": [] }
 ```
 
 `transform` の `x`, `y` はアイテムの中心の位置。等倍の大きさは、動画は画面に収まる最大の大きさ、画像は素材の画素数、図形は画面全体とする。ゲーム録画は置いただけで画面いっぱいになり、画像は素材の大きさのまま置かれる。
 
 音量の時間変化(音量 × フェード × ダッキング)は折れ線として求め、プレビューと書き出しで同じ折れ線を使う(`src/shared/audio/envelope.ts`)。
 
-立ち絵は既定ではキャラクター設定に基づいて発話中に自動表示されるが、登場・退場を明示的に制御したい場合に `portrait` アイテムを置ける。
+立ち絵は既定ではキャラクター設定に基づいて動画全体で表示される。場面ごとに変えたいときは `portrait` アイテムを置く(`src/shared/portrait/scene.ts`)。
+- そのキャラクターに `show` を1つでも置くと、`show` の区間でだけ表示する(登場・退場。`effects` のフェードなどで動きを付ける)。
+- `hide` の区間では表示しない。
+- 位置・大きさ(`transformOverride`)と表情(`expressionId`)は、`adjust` > `show` > キャラクターの設定 の順に決まる。区間の表情は、セリフごとの表情より優先する。
+
+話し手の強調は `editing.portraitDim`(話していない人を暗くする度合い 0〜0.8。無ければ0)と `editing.portraitHop`(話し始めに跳ねる)で決める。
 
 `duckable: true` の音声アイテムは、ボイスアイテムの再生区間で自動的に音量が下がる(M-4)。
 

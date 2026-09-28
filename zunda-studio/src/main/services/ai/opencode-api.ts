@@ -1,4 +1,4 @@
-import type { ChatTurn, GenerateRequest } from '@shared/ai/types'
+import type { AiImage, ChatTurn, GenerateRequest } from '@shared/ai/types'
 import { catalogEntry, opencodePlan, type OpenCodeApiFormat } from '@shared/ai/opencode-catalog'
 import { OPENCODE_GO_BASE_URL, OPENCODE_ZEN_BASE_URL } from '@shared/settings/schema'
 
@@ -109,7 +109,7 @@ export class OpenCodeApi {
     for (const format of formats) {
       const response = await this.request(target, formatPath(format, name), {
         method: 'POST',
-        body: JSON.stringify(buildBody(format, name, request.system, request.turns)),
+        body: JSON.stringify(buildBody(format, name, request.system, request.turns, request.images ?? [])),
         ...(signal ? { signal } : {})
       }, true)
       if (response.ok) {
@@ -161,19 +161,86 @@ export class OpenCodeApi {
   }
 }
 
-function buildBody(format: ApiFormat, model: string, system: string, turns: readonly ChatTurn[]): Record<string, unknown> {
-  const messages = turns.map((turn) => ({ role: turn.role, content: turn.content }))
+/**
+ * 形式ごとの本文。画像は最後の発話(利用者)に、説明の文と一緒に添える。
+ */
+export function buildBody(format: ApiFormat, model: string, system: string, turns: readonly ChatTurn[], images: readonly AiImage[] = []): Record<string, unknown> {
+  const last = turns.length - 1
+  const dataUrl = (image: AiImage): string => `data:${image.mediaType};base64,${image.data}`
   switch (format) {
     case 'chat':
-      return { model, messages: [{ role: 'system', content: system }, ...messages], stream: false }
+      return {
+        model,
+        messages: [
+          { role: 'system', content: system },
+          ...turns.map((turn, index) =>
+            index === last && images.length > 0
+              ? {
+                  role: turn.role,
+                  content: [
+                    ...images.flatMap((image) => [
+                      { type: 'text', text: image.caption },
+                      { type: 'image_url', image_url: { url: dataUrl(image) } }
+                    ]),
+                    { type: 'text', text: turn.content }
+                  ]
+                }
+              : { role: turn.role, content: turn.content }
+          )
+        ],
+        stream: false
+      }
     case 'messages':
-      return { model, system, messages, max_tokens: 8192, stream: false }
+      return {
+        model,
+        system,
+        messages: turns.map((turn, index) =>
+          index === last && images.length > 0
+            ? {
+                role: turn.role,
+                content: [
+                  ...images.flatMap((image) => [
+                    { type: 'text', text: image.caption },
+                    { type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.data } }
+                  ]),
+                  { type: 'text', text: turn.content }
+                ]
+              }
+            : { role: turn.role, content: turn.content }
+        ),
+        max_tokens: 8192,
+        stream: false
+      }
     case 'responses':
-      return { model, instructions: system, input: messages, stream: false }
+      return {
+        model,
+        instructions: system,
+        input: turns.map((turn, index) =>
+          index === last && images.length > 0
+            ? {
+                role: turn.role,
+                content: [
+                  ...images.flatMap((image) => [
+                    { type: 'input_text', text: image.caption },
+                    { type: 'input_image', image_url: dataUrl(image) }
+                  ]),
+                  { type: 'input_text', text: turn.content }
+                ]
+              }
+            : { role: turn.role, content: turn.content }
+        ),
+        stream: false
+      }
     case 'gemini':
       return {
         systemInstruction: { parts: [{ text: system }] },
-        contents: turns.map((turn) => ({ role: turn.role === 'assistant' ? 'model' : 'user', parts: [{ text: turn.content }] }))
+        contents: turns.map((turn, index) => ({
+          role: turn.role === 'assistant' ? 'model' : 'user',
+          parts:
+            index === last && images.length > 0
+              ? [...images.flatMap((image) => [{ text: image.caption }, { inline_data: { mime_type: image.mediaType, data: image.data } }]), { text: turn.content }]
+              : [{ text: turn.content }]
+        }))
       }
   }
 }

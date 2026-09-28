@@ -33,6 +33,10 @@ export interface AssetLicense {
   creditRequired: boolean
   creditText?: string
   note?: string
+  /** 入手元がフリー素材の一覧(shared/media/free-sources.ts)のどれか。 */
+  sourceId?: string
+  /** クレジットが任意の素材でも、概要欄に表記を載せる。 */
+  creditOptIn?: boolean
 }
 
 interface AssetBase {
@@ -448,11 +452,22 @@ export interface ZoomItem extends ItemBase {
   outMs: Ms
 }
 
-/** 立ち絵の登場・退場を明示的に制御したい場合に置く。 */
+/**
+ * 場面ごとの立ち絵(PROJECT_FORMAT.md 6.2)。
+ * show: この区間に出す。そのキャラクターの show を1つでも置くと、show の区間の外では出ない(登場・退場)。
+ * hide: この区間だけ隠す。
+ * adjust: 出し入れは変えずに、この区間の位置・大きさ・表情だけを変える。
+ */
+export type PortraitItemKind = 'show' | 'hide' | 'adjust'
+
 export interface PortraitItem extends ItemBase {
   type: 'portrait'
   characterId: CharacterId
   transformOverride: PortraitTransform | null
+  /** 無ければ show(以前のプロジェクトの意味のまま)。 */
+  kind?: PortraitItemKind
+  /** この区間の表情。null か無ければ、セリフごとの表情に従う。 */
+  expressionId?: ExpressionId | null
 }
 
 export type Item =
@@ -587,6 +602,10 @@ export interface EditingSettings {
   duckVolume: number
   /** 音量を下げる・戻すのにかける時間。 */
   duckFadeMs: Ms
+  /** 誰かが話しているとき、話していないキャラクターの立ち絵を暗くする度合い(0〜0.8)。無いか0なら暗くしない。 */
+  portraitDim?: number
+  /** 話し始めに立ち絵を小さく跳ねさせる。 */
+  portraitHop?: boolean
 }
 
 export interface ProjectAiSettings {

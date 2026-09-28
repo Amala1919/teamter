@@ -36,6 +36,8 @@ function itemSummary(project: Project, item: Item): string {
       return `${base} 「${item.text}」`
     case 'zoom':
       return `${base} 範囲 x=${item.region.x} y=${item.region.y} 幅=${item.region.width} 寄り方=${item.method}`
+    case 'portrait':
+      return `${base} 立ち絵 ${project.characters[item.characterId]?.name ?? item.characterId} ${item.kind ?? 'show'}${item.expressionId ? ` 表情=${item.expressionId}` : ''}`
     default:
       return base
   }

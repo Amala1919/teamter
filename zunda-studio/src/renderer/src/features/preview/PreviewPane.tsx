@@ -2,8 +2,12 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { findItem, isVoiceItem, itemsAt, projectDurationMs } from '@shared/project/queries'
 import { renderFrame } from '@shared/render/compositor'
+import type { PsdManifest } from '@shared/psd/types'
 import type { Ctx2D } from '@shared/render/types'
 import { defaultRegion, zoomProgress } from '@shared/render/zoom'
+import { portraitScenes, type PortraitScene } from '@shared/portrait/scene'
+import type { Ms, PortraitTransform, Project, VoiceItem } from '@shared/project/types'
+import { portraitPlacement } from '@shared/render/portrait'
 
 import { formatMs } from '../../lib/time'
 import { player, togglePlayback, usePlaybackStore } from '../../playback/player'
@@ -13,6 +17,7 @@ import { hasClipboard, pasteAt, splitAtPlayhead } from '../../state/edit-actions
 import { deleteSelection, useEditorStore } from '../../state/store'
 import { openContextMenu, type MenuEntry } from '../../ui/ContextMenu'
 import { insertZoom } from '../timeline/timeline-menus'
+import { PortraitFrameEditor } from './PortraitFrameEditor'
 import { ZoomFrameEditor } from './ZoomFrameEditor'
 
 /** ズーム枠を置いたときの既定の尺。 */
@@ -38,9 +43,51 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
   const mediaSources = useMediaStore((state) => state.sources)
   const [checkZoom, setCheckZoom] = useState(false)
   const [overlayBox, setOverlayBox] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
+  /** プレビューで動かしている立ち絵のキャラクター。 */
+  const [portraitTarget, setPortraitTarget] = useState<string | null>(null)
 
   const selected = selectedItemIds[0] === undefined ? undefined : findItem(project, selectedItemIds[0])
   const zoomItem = selected?.type === 'zoom' ? selected : null
+
+  // タイムラインで場面ごとの立ち絵を選んだら、そのキャラクターの立ち絵を動かせるようにする。
+  const selectedPortraitCharacter = selected?.type === 'portrait' ? selected.characterId : null
+  useEffect(() => {
+    if (selectedPortraitCharacter) setPortraitTarget(selectedPortraitCharacter)
+  }, [selectedPortraitCharacter])
+
+  const bound = browserResources.bind(project)
+  const layerIndex = new Map(project.layers.map((layer) => [layer.id, layer.index]))
+  /** 画面に出ている立ち絵と、その範囲。描く順(上にあるものが後)に並べる。 */
+  const placedPortraits: PlacedPortrait[] = []
+  for (const scene of portraitScenes(project, playheadMs)) {
+    const manifest = scene.character.portrait ? bound.psd(scene.character.portrait.assetId) : null
+    if (manifest) placedPortraits.push({ scene, manifest, rect: portraitPlacement(scene.transform, manifest) })
+  }
+  placedPortraits.sort((a, b) => (layerIndex.get(a.scene.layerId) ?? 0) - (layerIndex.get(b.scene.layerId) ?? 0))
+  const editingPortrait = zoomItem ? undefined : placedPortraits.find((entry) => entry.scene.character.id === portraitTarget)
+
+  /** 画面上の位置を、キャンバスの座標に直す(canvas の上でも、重ねた枠の上でも同じ)。 */
+  const toCanvasPoint = (event: React.MouseEvent): { x: number; y: number } => {
+    const rect = canvasRef.current?.getBoundingClientRect() ?? { left: 0, top: 0, width: 1, height: 1 }
+    return {
+      x: ((event.clientX - rect.left) / Math.max(1, rect.width)) * project.canvas.width,
+      y: ((event.clientY - rect.top) / Math.max(1, rect.height)) * project.canvas.height
+    }
+  }
+  const portraitAt = (point: { x: number; y: number }): PlacedPortrait | undefined =>
+    [...placedPortraits]
+      .reverse()
+      .find(({ rect }) => point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height)
+
+  /** 立ち絵の配置を変える。場面ごとの立ち絵があればその区間だけ、無ければ全体の配置を変える。 */
+  const commitPortrait = (scene: PortraitScene, transform: PortraitTransform): void => {
+    const portrait = scene.character.portrait
+    if (!portrait) return
+    const result = scene.controllingItem
+      ? dispatch([{ op: 'portrait.update', itemId: scene.controllingItem.id, transform }], 'この区間の立ち絵の配置')
+      : dispatch([{ op: 'character.setPortrait', characterId: scene.character.id, portrait: { ...portrait, transform } }], '立ち絵の配置')
+    if (!result.ok) onError(result.message)
+  }
   // 枠の編集中は拡大前の画面を見せる。「拡大して確認」か再生中は拡大した結果を見せる(Z-6)。
   const applyZoom = zoomItem === null || checkZoom || playing
 
@@ -85,13 +132,79 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
   }
 
   /** プレビューの右クリック。クリックした所を中心にズーム枠を置けるようにする。 */
-  const onCanvasContextMenu = (event: React.MouseEvent<HTMLCanvasElement>): void => {
-    const rect = event.currentTarget.getBoundingClientRect()
-    const point = {
-      x: ((event.clientX - rect.left) / Math.max(1, rect.width)) * project.canvas.width,
-      y: ((event.clientY - rect.top) / Math.max(1, rect.height)) * project.canvas.height
+  /** 立ち絵の上での右クリックの項目。「この場面」は、再生位置のセリフの間(セリフが無ければ再生位置から3秒)。 */
+  const portraitMenu = (point: { x: number; y: number }): MenuEntry[] => {
+    const hit = portraitAt(point)
+    if (!hit) return []
+    const { scene } = hit
+    const name = scene.character.name
+    const range = sceneRange(project, scene.character.id, playheadMs)
+    const insert = (kind: 'adjust' | 'hide', extra: { transform?: PortraitTransform; expressionId?: string | null }, label: string): void => {
+      const result = dispatch([{ op: 'portrait.insert', characterId: scene.character.id, atMs: range.startMs, durationMs: range.durationMs, kind, ...extra, tempId: 'scene' }], label)
+      if (!result.ok) {
+        onError(result.message)
+        return
+      }
+      if (result.resolvedIds['scene']) setSelection([result.resolvedIds['scene']])
+      if (kind === 'adjust') setPortraitTarget(scene.character.id)
+    }
+    const expressions = Object.values(scene.character.portrait?.expressions ?? {})
+    const adjusting = scene.controllingItem?.kind === 'adjust' ? scene.controllingItem : null
+    const setExpression = (expressionId: string | null): void => {
+      if (adjusting) {
+        const result = dispatch([{ op: 'portrait.update', itemId: adjusting.id, expressionId }], 'この場面の表情')
+        if (!result.ok) onError(result.message)
+      } else {
+        insert('adjust', { expressionId }, 'この場面の表情')
+      }
     }
     const entries: MenuEntry[] = [
+      { label: `「${name}」の立ち絵を動かす(枠を出す)`, onSelect: () => setPortraitTarget(scene.character.id), testId: 'menu-portrait-edit' },
+      {
+        label: `この場面だけ「${name}」を動かせるようにする`,
+        onSelect: () => insert('adjust', { transform: scene.transform }, 'この場面の立ち絵'),
+        testId: 'menu-portrait-scene'
+      },
+      { label: `この場面で「${name}」を隠す`, onSelect: () => insert('hide', {}, '立ち絵を隠す'), testId: 'menu-portrait-hide' }
+    ]
+    if (expressions.length > 0) {
+      entries.push({
+        label: 'この場面の表情',
+        testId: 'menu-portrait-expression',
+        submenu: [
+          { label: 'セリフに合わせる', checked: scene.expressionId === undefined, onSelect: () => setExpression(null) },
+          ...expressions.map((expression) => ({
+            label: expression.name,
+            checked: scene.expressionId === expression.id,
+            onSelect: () => setExpression(expression.id)
+          }))
+        ]
+      })
+    }
+    if (scene.controllingItem?.transformOverride) {
+      const item = scene.controllingItem
+      entries.push({
+        label: 'この区間の配置をやめる(全体の配置に戻す)',
+        onSelect: () => {
+          const result = dispatch([{ op: 'portrait.update', itemId: item.id, transform: null }], '立ち絵の配置を戻す')
+          if (!result.ok) onError(result.message)
+        }
+      })
+    }
+    entries.push('separator')
+    return entries
+  }
+
+  const onCanvasPointerDown = (event: React.PointerEvent<HTMLCanvasElement>): void => {
+    if (event.button !== 0) return
+    const hit = portraitAt(toCanvasPoint(event))
+    setPortraitTarget(hit ? hit.scene.character.id : null)
+  }
+
+  const onCanvasContextMenu = (event: React.MouseEvent): void => {
+    const point = toCanvasPoint(event)
+    const entries: MenuEntry[] = [
+      ...portraitMenu(point),
       { label: playing ? '停止' : '再生', shortcut: 'Space', onSelect: togglePlayback },
       'separator',
       {
@@ -165,6 +278,7 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
           height={project.canvas.height}
           className="preview__canvas"
           onContextMenu={onCanvasContextMenu}
+          onPointerDown={onCanvasPointerDown}
           data-testid="preview-canvas"
         />
         {zoomItem && !applyZoom && overlayBox && (
@@ -177,6 +291,19 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
                 const result = dispatch([{ op: 'zoom.update', itemId: zoomItem.id, region }], 'ズーム枠の変更')
                 if (!result.ok) onError(result.message)
               }}
+            />
+          </div>
+        )}
+        {editingPortrait && overlayBox && (
+          <div className="preview__overlay preview__overlay--passthrough" style={overlayBox}>
+            <PortraitFrameEditor
+              canvas={project.canvas}
+              manifest={editingPortrait.manifest}
+              transform={editingPortrait.scene.transform}
+              scale={project.canvas.width / Math.max(1, overlayBox.width)}
+              label={`${editingPortrait.scene.character.name}: ${editingPortrait.scene.controllingItem ? 'この区間の配置' : '全体の配置'}`}
+              onCommit={(transform) => commitPortrait(editingPortrait.scene, transform)}
+              onContextMenu={onCanvasContextMenu}
             />
           </div>
         )}
@@ -214,4 +341,19 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
       </div>
     </section>
   )
+}
+
+interface PlacedPortrait {
+  scene: PortraitScene
+  manifest: PsdManifest
+  rect: { x: number; y: number; width: number; height: number }
+}
+
+/** 「この場面」の範囲: 再生位置でそのキャラクターが話しているセリフ、無ければ誰かのセリフ、それも無ければ再生位置から3秒。 */
+export function sceneRange(project: Project, characterId: string, playheadMs: Ms): { startMs: Ms; durationMs: Ms } {
+  const lines = project.items.filter(
+    (item): item is VoiceItem => item.type === 'voice' && item.startMs <= playheadMs && playheadMs < item.startMs + item.durationMs
+  )
+  const line = lines.find((item) => item.characterId === characterId) ?? lines[0]
+  return line ? { startMs: line.startMs, durationMs: line.durationMs } : { startMs: Math.round(playheadMs), durationMs: 3000 }
 }

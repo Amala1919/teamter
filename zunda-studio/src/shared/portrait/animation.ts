@@ -128,10 +128,12 @@ export function portraitSelections(
   project: Project,
   character: Character,
   portrait: PortraitConfig,
-  timeMs: Ms
+  timeMs: Ms,
+  /** 場面ごとの立ち絵で決めた表情。あればセリフの表情より優先する。 */
+  expressionOverride?: string
 ): Record<PartGroupId, PartId> {
   const line = speakingLine(project, character.id, timeMs)
-  const expressionId = line?.expressionId ?? portrait.defaultExpressionId
+  const expressionId = expressionOverride ?? line?.expressionId ?? portrait.defaultExpressionId
   const expression = expressionId ? portrait.expressions[expressionId] : undefined
   const selections: Record<PartGroupId, PartId> = { ...(expression?.selections ?? {}) }
 

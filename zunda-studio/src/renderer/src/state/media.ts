@@ -2,7 +2,8 @@ import { create } from 'zustand'
 
 import type { Command } from '@shared/commands/types'
 import type { MediaProbe, ProxyFormat } from '@shared/media/types'
-import type { Asset, AssetId, MediaCodecs, Ms, Project } from '@shared/project/types'
+import { detectFreeSource, licenseFromSource } from '@shared/media/free-sources'
+import type { Asset, AssetId, AssetLicense, MediaCodecs, Ms, Project } from '@shared/project/types'
 
 import { api, toAppError } from '../api'
 import { useEditorStore } from './store'
@@ -126,7 +127,10 @@ function codecsOf(probe: MediaProbe): MediaCodecs {
 
 /** 調べた結果から、素材の登録と配置のコマンドを作る。 */
 export function importCommands(project: Project, path: string, probe: MediaProbe, atMs: Ms, tempId: string): Command[] {
-  const license = { source: '', creditRequired: probe.kind !== 'video', creditText: '' }
+  // フリー素材サイトの素材だとファイル名から分かれば、入手元とクレジットを埋めておく。
+  const fileName = path.split(/[\\/]/).at(-1) ?? path
+  const known = probe.kind === 'video' ? undefined : detectFreeSource(fileName)
+  const license: AssetLicense = known ? licenseFromSource(known, fileName) : { source: '', creditRequired: probe.kind !== 'video', creditText: '' }
   switch (probe.kind) {
     case 'video':
       return [

@@ -1861,3 +1861,120 @@ input[type='url'] {
   margin: 4px 0;
   background: var(--border);
 }
+
+/* ------------------------------------------------------------ フリー素材サイト */
+
+.free-sources {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.free-sources__item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.free-sources__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.free-sources__header a:first-child {
+  font-weight: bold;
+}
+
+.free-sources a {
+  color: var(--accent);
+}
+
+.free-sources__kinds,
+.free-sources__genres,
+.free-sources__credit {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.free-sources__terms {
+  margin-left: auto;
+  font-size: 11px;
+}
+
+.free-sources__notes {
+  margin: 4px 0;
+  padding-left: 18px;
+  font-size: 12px;
+}
+
+.badge {
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+}
+
+.badge--required {
+  border-color: #e0b04a;
+  color: #e0b04a;
+}
+
+.badge--optional {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+.license-site {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin: 0 0 6px;
+}
+
+.license-site ul {
+  margin: 0 0 4px;
+  padding-left: 16px;
+}
+
+.license-site a {
+  color: var(--accent);
+}
+
+/* ------------------------------------------------------------ 立ち絵の枠 */
+
+/* 立ち絵の枠の外をクリックしたら、下のプレビューに届くようにする(別の立ち絵を選べるように)。 */
+.preview__overlay--passthrough,
+.preview__overlay--passthrough .zoom-frame__layer {
+  pointer-events: none;
+}
+
+.portrait-frame {
+  border-color: #f0b43a;
+  border-style: dashed;
+  box-shadow: none;
+  pointer-events: auto;
+}
+
+.portrait-frame .zoom-frame__label {
+  background: rgba(240, 180, 58, 0.85);
+  color: #14181d;
+}
+
+.preview__canvas--portrait-hover {
+  cursor: pointer;
+}
+
+.timeline__item--portrait-hide {
+  background: repeating-linear-gradient(135deg, #3a2a2a 0 6px, #2a1f1f 6px 12px);
+  border-style: dashed;
+}
+
+.timeline__item--portrait-adjust {
+  background: #4a3f1f;
+  border-color: #a8872f;
+}

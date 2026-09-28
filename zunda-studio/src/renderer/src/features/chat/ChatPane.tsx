@@ -9,6 +9,7 @@ import { dryRun, useChatStore } from '../../state/ai'
 import { useSettingsStore } from '../../state/settings'
 import { useEditorStore } from '../../state/store'
 import { DraftDialog } from './DraftDialog'
+import { PortraitAiDialog } from './PortraitAiDialog'
 
 /** 差分に並べるセリフの上限。多いときは「他N件」にまとめる。 */
 const SCRIPT_PREVIEW = 8
@@ -24,6 +25,7 @@ export function ChatPane(): React.JSX.Element {
   const send = useChatStore((state) => state.send)
   const [draft, setDraft] = useState('')
   const [draftOpen, setDraftOpen] = useState(false)
+  const [portraitOpen, setPortraitOpen] = useState(false)
   const logRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -45,8 +47,12 @@ export function ChatPane(): React.JSX.Element {
         <button type="button" className="button--small" disabled={!editorModel || sending} onClick={() => setDraftOpen(true)} data-testid="open-draft">
           録画から下書き
         </button>
+        <button type="button" className="button--small" disabled={!editorModel || sending} onClick={() => setPortraitOpen(true)} data-testid="open-portrait-ai">
+          立ち絵をAIで調整
+        </button>
       </div>
       {draftOpen && <DraftDialog onClose={() => setDraftOpen(false)} />}
+      {portraitOpen && <PortraitAiDialog onClose={() => setPortraitOpen(false)} />}
 
       <div className="chat__log" ref={logRef}>
         {messages.length === 0 ? (

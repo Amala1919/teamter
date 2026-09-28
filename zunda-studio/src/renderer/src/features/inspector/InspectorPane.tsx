@@ -8,6 +8,7 @@ import { accentPhrasesToKana } from '@shared/voice/kana'
 import { formatMs } from '../../lib/time'
 import { deleteSelection, useEditorStore } from '../../state/store'
 import { NumberField } from '../../ui/NumberField'
+import { PortraitSceneInspector, SpeakerEmphasisSettings } from './PortraitInspectors'
 import { VoiceParamsEditor } from '../characters/VoiceParamsEditor'
 import {
   AudioInspector,
@@ -55,7 +56,10 @@ export function InspectorPane({ onError }: { onError: (message: string) => void 
         )}
       </header>
       {!item ? (
-        <p className="pane__empty">アイテムを選択すると設定が表示される。</p>
+        <div className="settings-section">
+          <p className="pane__empty">アイテムを選択すると設定が表示される。</p>
+          {Object.values(project.characters).some((character) => character.portrait) && <SpeakerEmphasisSettings project={project} run={run} />}
+        </div>
       ) : (
         <div className="settings-section" key={item.id}>
           <dl className="inspector__list">
@@ -68,6 +72,8 @@ export function InspectorPane({ onError }: { onError: (message: string) => void 
           </dl>
           <TimingInspector project={project} item={item} run={run} />
           {item.type === 'voice' && <VoiceInspector item={item} />}
+          {item.type === 'portrait' && <PortraitSceneInspector project={project} item={item} run={run} />}
+          {item.type === 'portrait' && <SpeakerEmphasisSettings project={project} run={run} />}
           {item.type === 'zoom' && <ZoomInspector project={project} item={item} run={run} />}
           {item.type === 'text' && <TextInspector project={project} item={item} run={run} />}
           {item.type === 'shape' && <ShapeInspector item={item} run={run} />}

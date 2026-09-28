@@ -15,6 +15,8 @@ import type {
   ChatMessage,
   PublishInfo,
   PortraitConfig,
+  PortraitItemKind,
+  PortraitTransform,
   CharacterAuthorRole,
   Effect,
   Item,
@@ -57,6 +59,8 @@ export interface ProjectSetEditing {
   defaultGapMs?: Ms
   duckVolume?: number
   duckFadeMs?: Ms
+  portraitDim?: number
+  portraitHop?: boolean
 }
 
 /**
@@ -511,6 +515,37 @@ export interface TimelineInsertGap {
   durationMs: Ms
 }
 
+// ------------------------------------------------------------------ 立ち絵(場面ごと)
+
+/** 登場・退場の動き。fade: ふわっと / pop: ぽんっと / none: 動き無し。 */
+export type PortraitTransition = 'none' | 'fade' | 'pop'
+
+/**
+ * 場面ごとの立ち絵を置く(kind の意味は PortraitItem を参照)。
+ * transition は show のときの登場・退場の動き(エフェクトとして付く。あとから変えられる)。
+ */
+export interface PortraitInsert {
+  op: 'portrait.insert'
+  characterId: CharacterId
+  atMs: Ms
+  durationMs: Ms
+  kind?: PortraitItemKind
+  transform?: PortraitTransform | null
+  expressionId?: ExpressionId | null
+  transition?: PortraitTransition
+  layerId?: LayerId
+  tempId?: string
+}
+
+/** 場面ごとの立ち絵の、種類・位置・表情を変える。null は「上書きしない(全体の設定に従う)」。 */
+export interface PortraitUpdate {
+  op: 'portrait.update'
+  itemId: ItemId
+  kind?: PortraitItemKind
+  transform?: PortraitTransform | null
+  expressionId?: ExpressionId | null
+}
+
 // ------------------------------------------------------------------ ズーム
 
 /**
@@ -622,6 +657,8 @@ export type Command =
   | MediaPlaceAudio
   | MediaPlaceText
   | MediaPlaceShape
+  | PortraitInsert
+  | PortraitUpdate
   | ZoomInsert
   | ZoomUpdate
   | LiveImportSession

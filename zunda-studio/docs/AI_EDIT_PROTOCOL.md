@@ -145,6 +145,8 @@ LLM(tool use) → コマンド列
 | `timeline.rippleDelete` | `itemIds` | 削除して、空いた時間を詰める |
 | `timeline.closeGap` | `atMs` | その位置の何も無い時間を詰める |
 | `timeline.insertGap` | `atMs`, `durationMs` | その位置から後ろをずらして空白を作る |
+| `portrait.insert` | `characterId`, `atMs`, `durationMs`, `kind?`(`show`/`hide`/`adjust`), `transform?`, `expressionId?`, `transition?`(`none`/`fade`/`pop`), `tempId?` | 場面ごとの立ち絵を置く(出す・隠す・位置や表情を変える) |
+| `portrait.update` | `itemId`, `kind?`, `transform?`, `expressionId?` | 場面ごとの立ち絵を直す(`null` は全体の設定・セリフの表情に従う) |
 | `zoom.insert` | `atMs`, `durationMs`, `region`(`x`,`y`,`width`), `method?`, `inMs?`, `outMs?`, `wholeScreen?`, `layerId?`, `tempId?` | ズーム枠を置く。`wholeScreen` が真なら立ち絵・字幕も含めて拡大する |
 | `zoom.update` | `itemId`, `region?`, `method?`, `inMs?`, `outMs?` | ズーム枠の範囲・寄り方を変える |
 
@@ -235,3 +237,16 @@ AIは役割ごとに選ぶ(REQUIREMENTS.md 3.9)。
 生成結果には必ず生成元(プロバイダとモデル)を添え、ボイスアイテムとライブの発言に `generatedBy` として記録する。相方の中の人を回ごとに変える企画では、これが「誰が喋ったか」の唯一の記録になる。
 
 AIの呼び出しはローカルのCLI(Claude Code / OpenCode)を経由し、アプリはAPIキーを持たない。CLIが使えない状態でもアプリは完全に動作し、AIを使う機能だけが無効になる(A-9)。接続方式の詳細は ARCHITECTURE.md の 2.8 を参照。
+
+## 立ち絵のまとめ調整
+
+チャットの「立ち絵をAIで調整」は、台本(話者・時刻・セリフ・今の表情)・場面(録画とズームの区間)・各キャラクターの表情の一覧と今の配置・今ある場面ごとの立ち絵を編集AIに渡し、立ち絵に関わるコマンドだけを出させる(`src/shared/ai/portraits.ts`)。出してよいのは `voice.setExpression`・`portrait.insert`・`portrait.update`・`project.setEditing`(`portraitDim`・`portraitHop` のみ)と、場面ごとの立ち絵に対する `item.setTimeRange`・`item.delete`。立ち絵以外のアイテムを対象にしたものは取り除き、除いた数を返事に書き添える。提案は編集チャットと同じく差分を確かめてから1回で適用する。
+
+## 画面を見せる(相方の返答)
+
+相方の返答を作るとき、`vision` を付けるとゲーム画面を画像として添える(`src/shared/ai/cohost.ts`、`src/main/services/media/frame-grabber.ts`)。
+- `frame`: その時刻の1コマ。`clip`: 区間を両端を含めて等間隔に分けたコマ(2秒ごとに1枚増え、最大8枚・最長60秒)。
+- コマは、その時刻に映っている一番前面の録画から ffmpeg で取り出した JPEG(横768px まで)。立ち絵・字幕は重ねない。映像の無い時刻は飛ばす。
+- 各画像の前に「動画の 0:12.000 の画面」という説明を置き、依頼文の最後に画像の説明を足す。
+- 送り方: Claude(Claude Code)は `--input-format stream-json` で画像ブロックとして、OpenCode の API は形式ごとの画像の書き方(`image_url`・`image`・`input_image`・`inline_data`)で送る。opencode コマンド経由では画像を送らない。
+- 画像を受け付けないモデルでエラーになったら、画像を外して文字だけでやり直し、そのことを画面に出す(`imagesDropped`)。

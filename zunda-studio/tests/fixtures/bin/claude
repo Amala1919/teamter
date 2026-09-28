@@ -11,10 +11,30 @@ if (argv.includes('--version')) {
   process.exit(0)
 }
 
-const input = readFileSync(0, 'utf8')
+const rawInput = readFileSync(0, 'utf8')
 const option = (name) => {
   const index = argv.indexOf(name)
   return index >= 0 ? argv[index + 1] : undefined
+}
+// 画像つきの依頼は stream-json(1行1メッセージ)で届く。本文は最後の文字ブロック、画像は数と説明を記録する。
+const streaming = option('--input-format') === 'stream-json'
+const images = []
+let input = rawInput
+if (streaming) {
+  const texts = []
+  for (const line of rawInput.split('\n')) {
+    if (!line.trim()) continue
+    const content = JSON.parse(line).message?.content ?? []
+    let caption = null
+    for (const block of content) {
+      if (block.type === 'text') {
+        texts.push(block.text)
+        caption = block.text
+      }
+      if (block.type === 'image') images.push({ mediaType: block.source.media_type, bytes: Buffer.from(block.source.data, 'base64').length, caption })
+    }
+  }
+  input = texts.at(-1) ?? ''
 }
 const systemFile = option('--system-prompt-file')
 
@@ -26,7 +46,8 @@ if (process.env.FAKE_LOG) {
       stdin: input,
       cwd: process.cwd(),
       system: systemFile && existsSync(systemFile) ? readFileSync(systemFile, 'utf8') : null,
-      hasApiKey: 'ANTHROPIC_API_KEY' in process.env
+      hasApiKey: 'ANTHROPIC_API_KEY' in process.env,
+      images
     }) + '\n'
   )
 }
@@ -60,10 +81,13 @@ function nextSequenceItem() {
 }
 
 function result(fields) {
+  // stream-json の出力は1行1イベント。結果の前後にほかのイベントが並ぶ(本物と同じく)。
+  if (option('--output-format') === 'stream-json') process.stdout.write(JSON.stringify({ type: 'system', subtype: 'init' }) + '\n')
   process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', is_error: false, ...fields }) + '\n')
+  if (option('--output-format') === 'stream-json') process.stdout.write(JSON.stringify({ type: 'system', subtype: 'post_turn_summary' }) + '\n')
 }
 
-const queued = takeQueued({ system: systemFile && existsSync(systemFile) ? readFileSync(systemFile, 'utf8') : null, stdin: input, model: option('--model') })
+const queued = takeQueued({ system: systemFile && existsSync(systemFile) ? readFileSync(systemFile, 'utf8') : null, stdin: input, model: option('--model'), images })
 if (queued !== undefined) {
   if (typeof queued === 'string') result({ result: queued })
   else result({ result: JSON.stringify(queued), structured_output: queued })

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 import {
   isSafeModelId,
+  type AiImage,
   type GenerateRequest,
   type GenerateResult,
   type ModelInfo,
@@ -123,10 +124,12 @@ export class ClaudeCodeProvider implements LlmProvider {
     const systemFile = join(this.workDirectory, `system-${randomBytes(6).toString('hex')}.txt`)
     await writeFile(systemFile, system, 'utf8')
 
+    // 画像を添えるときは、画像を送れる stream-json で入出力する(文字だけのときは今まで通り)。
+    const images = request.images ?? []
+    const streaming = images.length > 0
     const args = [
       '-p',
-      '--output-format',
-      'json',
+      ...(streaming ? ['--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose'] : ['--output-format', 'json']),
       '--model',
       model,
       '--system-prompt-file',
@@ -153,7 +156,7 @@ export class ClaudeCodeProvider implements LlmProvider {
         args,
         cwd: this.workDirectory,
         env: this.childEnv(),
-        input: turnsToPrompt(request.turns),
+        input: streaming ? streamJsonInput(turnsToPrompt(request.turns), images) : turnsToPrompt(request.turns),
         timeoutMs: this.config().timeoutMs,
         ...(signal ? { signal } : {})
       })
@@ -189,19 +192,40 @@ export class ClaudeCodeProvider implements LlmProvider {
   }
 }
 
-/** --output-format json の出力は通常1つのJSONだが、前後に警告行が混ざる場合に備えて最後の行から探す。 */
+/**
+ * 画像つきの依頼を、stream-json の入力(利用者の発話1つ)にする。
+ * 画像ごとに説明の文を前に置き、最後に依頼の本文を置く。
+ */
+export function streamJsonInput(prompt: string, images: readonly AiImage[]): string {
+  const content: unknown[] = []
+  for (const image of images) {
+    content.push({ type: 'text', text: image.caption })
+    content.push({ type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.data } })
+  }
+  content.push({ type: 'text', text: prompt })
+  return JSON.stringify({ type: 'user', message: { role: 'user', content } }) + '\n'
+}
+
+/**
+ * 出力から結果を取り出す。--output-format json は通常1つの JSON、stream-json は1行1イベントで、
+ * 結果は type が result の行。前後に警告行や別のイベントが混ざる場合に備えて、最後の行から探す。
+ */
 export function parseClaudeOutput(stdout: string): ClaudeJsonResult | null {
   const lines = stdout.trim().split(/\r?\n/).reverse()
+  let fallback: ClaudeJsonResult | null = null
   for (const line of lines) {
     const trimmed = line.trim()
     if (!trimmed.startsWith('{')) continue
     try {
       const value = JSON.parse(trimmed) as unknown
-      if (typeof value === 'object' && value !== null) return value as ClaudeJsonResult
+      if (typeof value !== 'object' || value === null) continue
+      if ((value as ClaudeJsonResult).type === 'result') return value as ClaudeJsonResult
+      fallback ??= value as ClaudeJsonResult
     } catch {
       continue
     }
   }
+  if (fallback) return fallback
   try {
     return JSON.parse(stdout) as ClaudeJsonResult
   } catch {
