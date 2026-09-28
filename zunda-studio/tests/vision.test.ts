@@ -39,6 +39,16 @@ describe('見せる時刻', () => {
     expect(long.at(-1)).toBe(60_000)
     expect(visionNote({ kind: 'clip', startMs: 0, endMs: 4000 }, [0, 2000, 4000])).toContain('3 枚')
   })
+
+  it('選んだ複数の時刻は、重なりを除いて時間順に並べ、上限までにする', () => {
+    expect(visionTimes({ kind: 'frames', times: [9000, 3000, 3000.4, -5, 6000] })).toEqual([0, 3000, 6000, 9000])
+    expect(visionTimes({ kind: 'frames', times: Array.from({ length: 12 }, (_, index) => index * 1000) })).toHaveLength(8)
+    const note = visionNote({ kind: 'frames', times: [3000, 9000] }, [3000, 9000])
+    expect(note).toContain('2 枚の画像は、動画の 0:03.000、0:09.000 のゲーム画面')
+    expect(note).toContain('間は飛んでいます')
+    // 1枚だけなら、1コマのときと同じ説明
+    expect(visionNote({ kind: 'frames', times: [3000] }, [3000])).toContain('添付の画像は、動画の 0:03.000 のゲーム画面です')
+  })
 })
 
 describe('録画からコマを取り出す(本物の ffmpeg)', () => {

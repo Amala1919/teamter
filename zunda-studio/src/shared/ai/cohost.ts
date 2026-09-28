@@ -22,11 +22,14 @@ export interface CohostRequest {
   characterId?: CharacterId
   /** その場の指示(「もっと辛口で」など)。 */
   instruction?: string
-  /** ゲーム画面を見せる。frame: その時刻の1コマ / clip: 区間を数コマに分けて見せる。 */
+  /** ゲーム画面を見せる。frame: その時刻の1コマ / frames: 選んだ複数の時刻のコマ / clip: 区間を数コマに分けて見せる。 */
   vision?: CohostVision
 }
 
-export type CohostVision = { kind: 'frame'; atMs: number } | { kind: 'clip'; startMs: number; endMs: number }
+export type CohostVision =
+  | { kind: 'frame'; atMs: number }
+  | { kind: 'frames'; times: number[] }
+  | { kind: 'clip'; startMs: number; endMs: number }
 
 /** 区間の映像は、何コマに分けて見せるか(長いほど多く、上限あり)。 */
 export const MAX_CLIP_FRAMES = 8
@@ -35,6 +38,8 @@ export const MAX_CLIP_MS = 60_000
 /** 見せる時刻の一覧。区間は両端を含めて等間隔に分ける。 */
 export function visionTimes(vision: CohostVision): number[] {
   if (vision.kind === 'frame') return [Math.max(0, Math.round(vision.atMs))]
+  // 選んだ時刻は、重なりを除いて時間順に並べ、上限までにする。
+  if (vision.kind === 'frames') return frameList(vision.times)
   const start = Math.max(0, Math.min(vision.startMs, vision.endMs))
   const end = Math.max(start, Math.min(Math.max(vision.startMs, vision.endMs), start + MAX_CLIP_MS))
   const count = Math.min(MAX_CLIP_FRAMES, Math.max(2, 2 + Math.floor((end - start) / 2000)))
@@ -42,12 +47,21 @@ export function visionTimes(vision: CohostVision): number[] {
   return Array.from({ length: count }, (_, index) => Math.round(start + ((end - start) * index) / (count - 1)))
 }
 
+/** 選んだ時刻の一覧を整える(負の値・重なりを除き、時間順、上限 MAX_CLIP_FRAMES)。 */
+export function frameList(times: readonly number[]): number[] {
+  return [...new Set(times.map((time) => Math.max(0, Math.round(time))))].sort((a, b) => a - b).slice(0, MAX_CLIP_FRAMES)
+}
+
 /** 画像に添える説明(依頼文の最後に足す)。 */
 export function visionNote(vision: CohostVision, shownTimes: number[]): string {
   if (shownTimes.length === 0) return ''
-  if (vision.kind === 'frame') {
+  if (vision.kind === 'frame' || (vision.kind === 'frames' && shownTimes.length === 1)) {
     return `## 画面
 添付の画像は、動画の ${formatMs(shownTimes[0]!)} のゲーム画面です。画面で起きていることも踏まえて返答してください(画面の説明をそのまま読み上げるのではなく、実況の会話として自然に触れる)。`
+  }
+  if (vision.kind === 'frames') {
+    return `## 画面(選んだ場面)
+添付の ${shownTimes.length} 枚の画像は、動画の ${shownTimes.map((time) => formatMs(time)).join('、')} のゲーム画面です(時間順。間は飛んでいます)。それぞれの場面で起きていることも踏まえて返答してください(画面の説明をそのまま読み上げるのではなく、実況の会話として自然に触れる)。`
   }
   return `## 画面(区間の映像)
 添付の ${shownTimes.length} 枚の画像は、動画の ${formatMs(shownTimes[0]!)}〜${formatMs(shownTimes.at(-1)!)} の映像を時間順にコマで分けたものです。この間に画面で起きた出来事(動き・変化)も踏まえて返答してください。`
