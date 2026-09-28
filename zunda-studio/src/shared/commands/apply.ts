@@ -8,6 +8,7 @@ import { editHandlers } from './handlers/edit'
 import { itemHandlers } from './handlers/item'
 import { liveHandlers } from './handlers/live'
 import { mediaHandlers } from './handlers/media'
+import { portraitHandlers } from './handlers/portrait'
 import { projectHandlers } from './handlers/project'
 import { voiceHandlers } from './handlers/voice'
 import { zoomHandlers } from './handlers/zoom'
@@ -30,6 +31,7 @@ const HANDLERS: HandlerTable = {
   ...editHandlers,
   ...liveHandlers,
   ...mediaHandlers,
+  ...portraitHandlers,
   ...voiceHandlers,
   ...zoomHandlers
 }

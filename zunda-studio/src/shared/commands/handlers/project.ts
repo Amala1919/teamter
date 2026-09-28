@@ -51,6 +51,11 @@ export const projectHandlers: ProjectHandlers = {
       if (command.duckFadeMs < 0) fail(command.op, '音量を下げる時間は0以上にしてください')
       draft.editing.duckFadeMs = Math.round(command.duckFadeMs)
     }
+    if (command.portraitDim !== undefined) {
+      if (!(command.portraitDim >= 0 && command.portraitDim <= 0.8)) fail(command.op, '立ち絵を暗くする度合いは0〜0.8で指定してください')
+      draft.editing.portraitDim = command.portraitDim
+    }
+    if (command.portraitHop !== undefined) draft.editing.portraitHop = command.portraitHop
   },
 
   'credits.set': (draft, command) => {

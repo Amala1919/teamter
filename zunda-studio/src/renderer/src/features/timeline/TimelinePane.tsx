@@ -453,8 +453,13 @@ function itemLabel(project: Project, item: Item): string {
       return item.shape === 'ellipse' ? '図形(楕円)' : '図形'
     case 'zoom':
       return `ズーム(${ZOOM_METHOD_LABELS[item.method]})`
-    case 'portrait':
-      return `立ち絵: ${project.characters[item.characterId]?.name ?? ''}`
+    case 'portrait': {
+      const name = project.characters[item.characterId]?.name ?? ''
+      const kind = item.kind ?? 'show'
+      const expression = item.expressionId ? project.characters[item.characterId]?.portrait?.expressions[item.expressionId]?.name : undefined
+      const label = kind === 'hide' ? `隠す: ${name}` : kind === 'adjust' ? `調整: ${name}` : `登場: ${name}`
+      return expression ? `${label}(${expression})` : label
+    }
   }
 }
 
@@ -479,6 +484,7 @@ function TimelineItem(props: TimelineItemProps): React.JSX.Element {
   if (props.dragging) classes.push('timeline__item--dragging')
   if (props.locked) classes.push('timeline__item--locked')
   if (item.type === 'video' && item.freeze) classes.push('timeline__item--freeze')
+  if (item.type === 'portrait') classes.push(`timeline__item--portrait-${item.kind ?? 'show'}`)
   const asset = 'assetId' in item ? project.assets[item.assetId] : undefined
   const waveform = (item.type === 'audio' || (item.type === 'video' && !item.freeze && asset?.type === 'video' && asset.hasAudio)) && asset
 

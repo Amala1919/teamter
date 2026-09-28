@@ -1944,3 +1944,37 @@ input[type='url'] {
 .license-site a {
   color: var(--accent);
 }
+
+/* ------------------------------------------------------------ 立ち絵の枠 */
+
+/* 立ち絵の枠の外をクリックしたら、下のプレビューに届くようにする(別の立ち絵を選べるように)。 */
+.preview__overlay--passthrough,
+.preview__overlay--passthrough .zoom-frame__layer {
+  pointer-events: none;
+}
+
+.portrait-frame {
+  border-color: #f0b43a;
+  border-style: dashed;
+  box-shadow: none;
+  pointer-events: auto;
+}
+
+.portrait-frame .zoom-frame__label {
+  background: rgba(240, 180, 58, 0.85);
+  color: #14181d;
+}
+
+.preview__canvas--portrait-hover {
+  cursor: pointer;
+}
+
+.timeline__item--portrait-hide {
+  background: repeating-linear-gradient(135deg, #3a2a2a 0 6px, #2a1f1f 6px 12px);
+  border-style: dashed;
+}
+
+.timeline__item--portrait-adjust {
+  background: #4a3f1f;
+  border-color: #a8872f;
+}

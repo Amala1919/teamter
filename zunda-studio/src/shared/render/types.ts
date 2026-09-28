@@ -43,6 +43,8 @@ export interface Ctx2D {
   lineJoin: string
   globalAlpha: number
   globalCompositeOperation: string
+  /** CSS のフィルタ(立ち絵を暗くするのに使う)。対応していない環境もある。 */
+  filter?: string
   font: string
   textAlign: string
   textBaseline: string

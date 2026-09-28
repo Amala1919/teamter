@@ -253,6 +253,7 @@ export function laneMenu(project: Project, layer: Layer, atMs: Ms, context: Menu
     { label: '素材を追加…', onSelect: context.onAddMedia },
     place('ここにテロップを置く', () => placeText(at, layer)),
     { ...place('ここにズーム枠を置く', () => insertZoom(project, at, 3000)), testId: 'menu-zoom-at' },
+    ...portraitSceneMenu(project, at, context),
     'separator',
     { label: 'ここの空白を詰める', onSelect: report(context, () => closeGapAt(at)), testId: 'menu-close-gap' },
     {
@@ -328,4 +329,36 @@ export function insertZoom(project: Project, atMs: Ms, durationMs: Ms, center?: 
     state().setPlayhead(atMs)
   }
   return null
+}
+
+/** 場面ごとの立ち絵を置く項目(立ち絵のあるキャラクターごと)。 */
+function portraitSceneMenu(project: Project, atMs: Ms, context: MenuContext): MenuEntry[] {
+  const characters = Object.values(project.characters).filter((character) => character.portrait)
+  if (characters.length === 0) return []
+  const insert = (characterId: string, kind: 'show' | 'hide' | 'adjust', transition: 'none' | 'fade' | 'pop') =>
+    report(context, () => {
+      const result = state().dispatch(
+        [{ op: 'portrait.insert', characterId, atMs, durationMs: 3000, kind, ...(kind === 'show' ? { transition } : {}), tempId: 'scene' }],
+        '立ち絵の区間'
+      )
+      if (!result.ok) return result.message
+      if (result.resolvedIds['scene']) state().setSelection([result.resolvedIds['scene']])
+      return null
+    })
+  return [
+    {
+      label: 'ここに立ち絵の区間を置く',
+      testId: 'menu-portrait-scene-at',
+      submenu: characters.map((character) => ({
+        label: character.name,
+        testId: `menu-portrait-scene-${character.id}`,
+        submenu: [
+          { label: 'この区間だけ出す(ふわっと)', onSelect: insert(character.id, 'show', 'fade'), testId: 'menu-portrait-show-fade' },
+          { label: 'この区間だけ出す(ぽんっと)', onSelect: insert(character.id, 'show', 'pop') },
+          { label: 'この区間だけ隠す', onSelect: insert(character.id, 'hide', 'none'), testId: 'menu-portrait-hide-at' },
+          { label: 'この区間だけ位置・表情を変える', onSelect: insert(character.id, 'adjust', 'none'), testId: 'menu-portrait-adjust-at' }
+        ]
+      }))
+    }
+  ]
 }
