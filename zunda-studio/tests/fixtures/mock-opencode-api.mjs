@@ -24,7 +24,9 @@ const MODELS = {
   // データ利用への同意が要るモデル(本物は 403)
   'consent-model': 'chat',
   // 形式違いを 401 の ModelError で断るモデル
-  'strict-model': 'responses'
+  'strict-model': 'responses',
+  // 無料枠のアカウントを API から使ったふり(本物の文そのまま)
+  'free-tier-model': 'chat'
 }
 
 /** 本物の OpenCode と同じ形のエラー。 */
@@ -91,6 +93,10 @@ export async function startMockOpenCodeApi({ port = 0, basePath = '/zen/go/v1' }
       const gemini = geminiModel(path)
       const format = gemini ? 'gemini' : PATHS[path]
       if (request.method !== 'POST' || !format) return send(404, { error: 'not found' })
+      // 本物の OpenCode Go と同じく、会話の ID が無い生成は断る。
+      if (!request.headers['x-opencode-session']) {
+        return send(400, gatewayError('error', 'Request is missing x-opencode-session and cannot be routed efficiently. Please see https://opencode.ai/docs/go/#where-can-i-use-it'))
+      }
       const body = JSON.parse(raw || '{}')
       if (gemini) body.model = gemini
       calls.push({ path, model: body.model, body, headers: request.headers })
@@ -102,6 +108,9 @@ export async function startMockOpenCodeApi({ port = 0, basePath = '/zen/go/v1' }
       }
       if (body.model === 'consent-model') {
         return send(403, gatewayError('DataPolicyError', 'このモデルは品質向上のためのデータを収集します。利用するには明示的な同意が必要です'))
+      }
+      if (body.model === 'free-tier-model') {
+        return send(401, gatewayError('FreeTierError', "OpenCode's free tier can only be used from within OpenCode"))
       }
       if (body.model === 'strict-model' && accepts !== format) {
         return send(401, gatewayError('ModelError', `フォーマット ${format} ではモデル strict-model はサポートされていません`))

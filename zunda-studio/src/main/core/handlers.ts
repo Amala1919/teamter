@@ -10,7 +10,7 @@ import { buildEditorPrompt } from '@shared/ai/editor'
 import { buildPortraitPrompt, filterPortraitCommands, portraitResponseSchema } from '@shared/ai/portraits'
 import { candidateSegments } from '@shared/media/analysis'
 import { buildPublishPrompt, interpretPublishResponse, publishResponseSchema } from '@shared/ai/publish'
-import { PROVIDER_IDS } from '@shared/ai/types'
+import { PROVIDER_IDS, projectSession } from '@shared/ai/types'
 import type { Channel, ChannelArgs, ChannelResult, IpcResult } from '@shared/ipc/contract'
 import type { Project } from '@shared/project/types'
 import type { SettingsPatch } from '@shared/settings/schema'
@@ -254,7 +254,8 @@ export function createHandlers(services: Services): HandlerTable {
         .provider(providerId)
         .generate(model, {
           system: '接続確認です。指示に従って短く答えてください。',
-          turns: [{ role: 'user', content: '「接続できたのだ」とだけ返してください。' }]
+          turns: [{ role: 'user', content: '「接続できたのだ」とだけ返してください。' }],
+          session: 'connection-test'
         })
       return { text: result.text, durationMs: result.durationMs }
     },
@@ -275,6 +276,7 @@ export function createHandlers(services: Services): HandlerTable {
         }
         vision = { shownFrames: images.length, imagesDropped: false }
       }
+      Object.assign(prompt, { session: projectSession(project.meta, 'cohost') })
       const { value, result } = await services.ai.generateStructured('conversation', prompt, cohostResponseSchema, {
         projectConversation: project.ai.conversation
       })
@@ -291,7 +293,11 @@ export function createHandlers(services: Services): HandlerTable {
         markers: moments.filter((moment) => moment.kind === 'marker' || moment.kind === 'note').map((moment) => moment.atMs),
         talks: moments.filter((moment) => moment.kind !== 'marker').map((moment) => moment.atMs)
       })
-      const { value, result } = await services.ai.generateStructured('editor', buildDraftPrompt(project, request, candidates), editorResponseSchema)
+      const { value, result } = await services.ai.generateStructured(
+        'editor',
+        { ...buildDraftPrompt(project, request, candidates), session: projectSession(project.meta, 'draft') },
+        editorResponseSchema
+      )
       return {
         reply: value.reply,
         commands: wrapDraftCommands(project, toCommands(value.commands)),
@@ -303,17 +309,29 @@ export function createHandlers(services: Services): HandlerTable {
       if (!Object.values(project.characters).some((character) => character.portrait)) {
         throw new AppError('INVALID_ARGUMENT', '立ち絵のあるキャラクターがいません。キャラクター画面で立ち絵(PSD)を設定してください')
       }
-      const { value, result } = await services.ai.generateStructured('editor', buildPortraitPrompt(project, request), portraitResponseSchema)
+      const { value, result } = await services.ai.generateStructured(
+        'editor',
+        { ...buildPortraitPrompt(project, request), session: projectSession(project.meta, 'portraits') },
+        portraitResponseSchema
+      )
       const { commands, dropped } = filterPortraitCommands(project, value.commands)
       const note = dropped > 0 ? `(立ち絵以外に触れる操作 ${dropped} 件は除きました)` : ''
       return { reply: `${value.reply}${note}`, commands, generatedBy: result.generatedBy }
     },
     'ai:publish': async (project) => {
-      const { value, result } = await services.ai.generateStructured('editor', buildPublishPrompt(project), publishResponseSchema)
+      const { value, result } = await services.ai.generateStructured(
+        'editor',
+        { ...buildPublishPrompt(project), session: projectSession(project.meta, 'publish') },
+        publishResponseSchema
+      )
       return { ...interpretPublishResponse(project, value), generatedBy: result.generatedBy }
     },
     'ai:edit': async (project, request) => {
-      const { value, result } = await services.ai.generateStructured('editor', buildEditorPrompt(project, request), editorResponseSchema)
+      const { value, result } = await services.ai.generateStructured(
+        'editor',
+        { ...buildEditorPrompt(project, request), session: projectSession(project.meta, 'editor-chat') },
+        editorResponseSchema
+      )
       return { reply: value.reply, commands: toCommands(value.commands), generatedBy: result.generatedBy }
     },
 

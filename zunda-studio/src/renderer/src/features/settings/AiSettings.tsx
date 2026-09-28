@@ -178,12 +178,18 @@ export function AiSettings({ settings, onError }: AiSettingsProps): React.JSX.El
               入れたキーはこの PC の中だけに暗号化して保存し、OpenCode 以外には送りません。
               モデルの一覧には OpenCode Go と OpenCode Zen(Claude・GPT・Gemini なども使える従量課金)の両方が出ます。
               おすすめは契約しているプランから選びます。Zen のモデルは使った分だけ料金がかかります。
+              契約も残高も無い(無料枠の)アカウントのキーは、OpenCode の決まりで API から使えません。無料で使うなら「opencode コマンドを使う」にしてください。
             </p>
           </>
         ) : (
           <>
             <p className="note">
-              インストール済みの OpenCode(opencode コマンド)を経由して生成します。OpenCode で /connect から OpenCode Go を接続しておいてください。
+              インストール済みの OpenCode(opencode コマンド)を経由して生成します。
+              無料のモデル(Big Pickle など)はログインしなくても使えます。OpenCode Go を使うなら、OpenCode で /connect から接続しておいてください。
+            </p>
+            <p className="note" data-testid="opencode-install-hint">
+              インストール: コマンドプロンプトで <code>npm i -g opencode-ai@latest</code>(Node.js が必要)。
+              Windows なら <code>scoop install opencode</code> や <code>choco install opencode</code> でも入れられます。入れたら、アプリを開き直すか上の「opencode の場所」で指定してください。
             </p>
             <PathField
               label="opencode の場所"
@@ -249,7 +255,7 @@ async function modelForTest(settings: AppSettings): Promise<string | null> {
   return chosen?.model ?? (await recommendedOpenCodeModel())
 }
 
-type TestState = { kind: 'idle' | 'running' | 'ok' | 'error'; text: string }
+type TestState = { kind: 'idle' | 'running' | 'ok' | 'error'; text: string; freeTierOnly?: boolean }
 
 /** OpenCode の API キー。入れたキーは画面に戻さず、末尾の数文字だけ見せる。保存したらそのまま接続を確かめる。 */
 function OpenCodeKeyField({ settings, onError }: { settings: AppSettings; onError: (error: unknown) => void }): React.JSX.Element {
@@ -277,7 +283,11 @@ function OpenCodeKeyField({ settings, onError }: { settings: AppSettings; onErro
       setTest({ kind: 'ok', text: `つながりました(${model}: ${result.text})` })
     } catch (error) {
       const appError = toAppError(error)
-      setTest({ kind: 'error', text: `${appError.message}。${appError.guidance}` })
+      setTest({
+        kind: 'error',
+        text: `${appError.message}。${appError.guidance}`,
+        freeTierOnly: appError.code === 'AI_SUBSCRIPTION_REQUIRED'
+      })
     }
   }
 
@@ -346,6 +356,23 @@ function OpenCodeKeyField({ settings, onError }: { settings: AppSettings; onErro
         >
           {test.text}
         </span>
+      )}
+      {test.kind === 'error' && test.freeTierOnly && (
+        <div className="note" data-testid="opencode-free-tier-notice">
+          無料枠のまま使うなら、OpenCode(opencode コマンド)をインストールして、そちら経由で生成します。{' '}
+          <button
+            type="button"
+            onClick={() => {
+              useSettingsStore
+                .getState()
+                .update({ ai: { providers: { opencode: { connection: 'cli' } } } })
+                .catch(onError)
+            }}
+            data-testid="opencode-switch-to-cli"
+          >
+            opencode コマンドで使う
+          </button>
+        </div>
       )}
       {status?.set && otherRoles.length > 0 && (
         <div className="note" data-testid="opencode-role-notice">

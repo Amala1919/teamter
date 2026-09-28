@@ -142,6 +142,32 @@ test.describe('AIの選択', () => {
     }
   })
 
+  test('無料枠のアカウントのキーなら、理由を説明して opencode コマンドへの切り替えを勧める', async ({ page, request }) => {
+    const mock = await startMockOpenCodeApi()
+    try {
+      await updateSettings(request, {
+        ai: {
+          roles: { conversation: { providerId: 'opencode', model: 'opencode-go/free-tier-model' } },
+          providers: { opencode: { connection: 'api-key', baseUrl: mock.baseUrl } }
+        }
+      })
+      await openFresh(page)
+      await page.getByTestId('open-settings').click()
+      await page.getByTestId('opencode-key-input').fill(GOOD_KEY)
+      await page.getByTestId('opencode-key-save').click()
+      const result = page.getByTestId('opencode-key-test-result')
+      await expect(result).toContainText('無料枠として扱われました')
+      await expect(result).toContainText('OpenCode Go を契約')
+      await expect(result).not.toContainText('API キーを入力してください')
+
+      await page.getByTestId('opencode-switch-to-cli').click()
+      await expect(page.getByTestId('opencode-connection-cli')).toBeChecked()
+      await expect(page.getByTestId('opencode-install-hint')).toContainText('npm i -g opencode-ai')
+    } finally {
+      await mock.close()
+    }
+  })
+
   test('相方の中の人をプロジェクトごとに切り替え、元に戻し、保存できる', async ({ page, request }) => {
     await updateSettings(request, {
       ai: {

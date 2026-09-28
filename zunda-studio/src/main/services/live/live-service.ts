@@ -91,7 +91,8 @@ export class LiveService {
     this.emit()
     try {
       const maxChars = this.getSettings().ai.liveMaxChars
-      const result = await this.ai.generate('conversation', buildLivePrompt(this.profile!, session.entries, maxChars), {
+      const prompt = { ...buildLivePrompt(this.profile!, session.entries, maxChars), session: `live:${session.id}` }
+      const result = await this.ai.generate('conversation', prompt, {
         projectConversation: this.profile!.model
       })
       const reply = tidyLiveReply(result.text, this.profile!.aiName, maxChars)

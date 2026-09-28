@@ -72,6 +72,16 @@ export interface GenerateRequest {
   images?: AiImage[]
   /** 指定すると構造化出力を求める。検証は呼び出し側で必ず行う。 */
   jsonSchema?: Record<string, unknown>
+  /**
+   * どの会話の続きかを見分ける名前。同じ会話の生成には同じ値を渡す。
+   * OpenCode Go はこれを元にした x-opencode-session で振り分けとキャッシュを行う(無いと断られる)。
+   */
+  session?: string
+}
+
+/** プロジェクトの中の会話を見分ける名前。プロジェクトは ID を持たないので、作った時刻と乱数の種で見分ける。 */
+export function projectSession(meta: { createdAt: string; renderSeed: number }, purpose: string): string {
+  return `project:${meta.createdAt}:${meta.renderSeed}:${purpose}`
 }
 
 export interface GenerateResult {
