@@ -38,6 +38,57 @@ test.describe('右クリックとショートカットでの編集', () => {
     })
   })
 
+  test('同じ時間に重ねた素材は、空いている同じ種類のレイヤーへ自動で移り、整理と片付けもできる', async ({ page, request }) => {
+    await openFresh(page)
+    await queuePick(request, [image])
+    await page.getByTestId('add-media').click()
+    const images = page.locator('[data-item-type="image"]')
+    await expect(images).toHaveCount(1)
+    const background = page.getByTestId('layer-lyr_bg')
+    const secondRow = page.locator('.timeline__row', { has: page.locator('.timeline__layerName', { hasText: /^背景 2$/ }) })
+
+    // 同じ時間に貼ると、背景のレイヤーには重ねず「背景 2」を作ってそこへ置く
+    await images.first().click({ button: 'right' })
+    await choose(page, 'menu-copy')
+    const pasteAtOneSecond = async (): Promise<void> => {
+      await rightClickAt(page, 'timeline-ruler', 1)
+      await page.getByTestId('context-menu').getByText('再生位置をここへ').click()
+      await page.keyboard.press('Control+v')
+    }
+    await pasteAtOneSecond()
+    await expect(images).toHaveCount(2)
+    await expect(background.getByTestId('timeline-item')).toHaveCount(1)
+    await expect(secondRow.getByTestId('timeline-item')).toHaveCount(1)
+
+    // 取り消すとレイヤーごと元に戻る
+    await page.keyboard.press('Control+z')
+    await expect(images).toHaveCount(1)
+    await expect(secondRow).toHaveCount(0)
+
+    // 自動の振り分けを切ると、これまでどおり重ねて置ける
+    await rightClickAt(page, 'lane-lyr_bg', 12)
+    await expect(page.getByTestId('context-menu').getByTestId('menu-avoid-overlap')).toContainText('✓')
+    await choose(page, 'menu-avoid-overlap')
+    await pasteAtOneSecond()
+    await expect(background.getByTestId('timeline-item')).toHaveCount(2)
+
+    // 「重なりを整理」で、重なっている後ろの方を空いているレイヤーへ移す
+    await rightClickAt(page, 'lane-lyr_bg', 12)
+    await choose(page, 'menu-arrange-overlaps')
+    await expect(background.getByTestId('timeline-item')).toHaveCount(1)
+    await expect(secondRow.getByTestId('timeline-item')).toHaveCount(1)
+
+    // 移した方を消すと空のレイヤーが残るので、片付ける(既定のレイヤーは消えない)
+    await secondRow.getByTestId('timeline-item').click()
+    await page.keyboard.press('Delete')
+    await expect(secondRow.getByTestId('timeline-item')).toHaveCount(0)
+    // レイヤーが増えて背景のレーンは画面の下に隠れているので、見えている「背景 2」のレーンから開く
+    await secondRow.locator('.timeline__lane').click({ button: 'right', position: { x: 700, y: 10 } })
+    await choose(page, 'menu-remove-empty-layers')
+    await expect(secondRow).toHaveCount(0)
+    await expect(page.getByTestId('layer-lyr_bgm')).toHaveCount(1)
+  })
+
   test('分割・コピー・貼り付け・空白を詰める・削除して詰める・複製', async ({ page, request }) => {
     await openFresh(page)
     await queuePick(request, [image])

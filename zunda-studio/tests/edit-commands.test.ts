@@ -93,7 +93,9 @@ describe('貼り付け', () => {
   it('無くなったレイヤーは既定のレイヤーに置き、無い素材は断る', () => {
     const project = base()
     const bgm = byType<AudioItem>(project, 'audio')[0]!
-    const pasted = apply(project, [{ op: 'item.paste', items: [{ ...bgm, layerId: 'lyr_gone' }], atMs: 0 }])
+    // 元の BGM と重ならない時間に貼る(重なると空いているレイヤーへ振り分けられるため)
+    const free = bgm.startMs + bgm.durationMs + 1000
+    const pasted = apply(project, [{ op: 'item.paste', items: [{ ...bgm, layerId: 'lyr_gone' }], atMs: free }])
     expect(byType<AudioItem>(pasted, 'audio').at(-1)!.layerId).toBe(DEFAULT_LAYER_IDS.bgm)
     expect(() => apply(project, [{ op: 'item.paste', items: [{ ...bgm, assetId: 'ast_other' }], atMs: 0 }])).toThrow('素材がこのプロジェクトにありません')
   })

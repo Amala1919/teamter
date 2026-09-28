@@ -1,6 +1,7 @@
 import { produce } from 'immer'
 
-import type { Project } from '../project/types'
+import type { Item, ItemId, Project } from '../project/types'
+import { changedItems, resolveOverlaps } from './arrange'
 import type { ApplyEnv, CommandContext, HandlerTable } from './env'
 import { assetHandlers } from './handlers/asset'
 import { characterHandlers } from './handlers/character'
@@ -53,6 +54,11 @@ export function applyCommands(
       const handler = HANDLERS[command.op] as (draft: Project, command: Command, env: ApplyEnv) => void
       if (!handler) throw new Error(`未対応のコマンド: ${JSON.stringify(command)}`)
       handler(draft, command, env)
+    }
+    // 足した・動かした素材が同じレイヤーの素材と重なったら、空いている同じ種類のレイヤーへ移す。
+    if (draft.editing.avoidOverlap !== false) {
+      const before = new Map<ItemId, Item>(project.items.map((item) => [item.id, item]))
+      resolveOverlaps(draft, changedItems(before, draft.items), env, before)
     }
     draft.meta.updatedAt = ctx.now().toISOString()
   })
