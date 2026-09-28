@@ -120,6 +120,31 @@ const exportSchema = z
   })
   .prefault({})
 
+const subtitleLookSchema = z.object({
+  fontFamily: z.string().min(1).max(200),
+  fontWeight: z.number().int().min(100).max(900),
+  fontSizePx: z.number().min(8).max(400),
+  color: z.string(),
+  outline: z.object({ color: z.string(), widthPx: z.number().min(0).max(100) }).nullable(),
+  shadow: z.object({ color: z.string(), offsetX: z.number(), offsetY: z.number(), blurPx: z.number().min(0) }).nullable(),
+  position: z.object({
+    anchor: z.enum(['top-left', 'top-center', 'top-right', 'center', 'bottom-left', 'bottom-center', 'bottom-right']),
+    x: z.number(),
+    y: z.number()
+  }),
+  maxCharsPerLine: z.number().int().min(1).max(200),
+  lineHeight: z.number().min(0.5).max(4)
+})
+
+const subtitleSchema = z
+  .object({
+    /** 字幕の見た目のアプリの既定。新しいキャラクターとプロジェクトに使う。null なら組み込みの既定。 */
+    defaults: subtitleLookSchema.nullable().default(null),
+    /** 既定を使うときも、縁取りの色はキャラクターごとに変える(誰のセリフか見分けやすいように)。 */
+    characterOutlineColors: z.boolean().default(true)
+  })
+  .prefault({})
+
 export const settingsSchema = z.object({
   version: z.literal(1).default(1),
   ai: aiSchema,
@@ -129,6 +154,7 @@ export const settingsSchema = z.object({
   obs: obsSchema,
   live: liveSchema,
   export: exportSchema,
+  subtitle: subtitleSchema,
   recentProjects: z.array(z.string()).default([])
 })
 

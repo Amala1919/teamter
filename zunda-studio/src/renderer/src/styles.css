@@ -1978,3 +1978,39 @@ input[type='url'] {
   background: #4a3f1f;
   border-color: #a8872f;
 }
+
+/* 字幕(ボイステロップ)の設定 */
+.subtitle-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.subtitle-editor__sample {
+  width: 100%;
+  max-width: 560px;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid var(--border, #444);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.input--narrow {
+  width: 6em;
+}
+
+.subtitle-editor input.input--narrow {
+  width: 6em;
+  flex: none;
+}
+
+.subtitle-editor input[type='color'] {
+  width: 3em;
+  flex: none;
+}
+
+.subtitle-editor .field__row {
+  align-items: center;
+  gap: 6px;
+}

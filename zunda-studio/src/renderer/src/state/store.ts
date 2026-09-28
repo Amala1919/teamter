@@ -3,10 +3,11 @@ import { create } from 'zustand'
 
 import { applyCommands, type CommandContext } from '@shared/commands/apply'
 import { CommandError, type Command } from '@shared/commands/types'
-import { createEmptyProject } from '@shared/project/factory'
+import { createEmptyProject, DEFAULT_SUBTITLE_STYLE_ID } from '@shared/project/factory'
 import type { ItemId, Ms, Project } from '@shared/project/types'
 
 import { api } from '../api'
+import { projectLook } from './subtitle-defaults'
 
 /**
  * undo はコマンドの逆操作ではなく、適用前のプロジェクトのスナップショットで実現する。
@@ -128,7 +129,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   newProject: () => {
     discardAutosave(get().sessionKey)
     set({
-      project: createEmptyProject(),
+      project: withSubtitleDefaults(createEmptyProject()),
       filePath: null,
       dirty: false,
       sessionKey: newSessionKey(),
@@ -190,6 +191,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       redoStack: []
     })
 }))
+
+/** 新しいプロジェクトの「標準」の字幕を、アプリの既定の見た目にする。 */
+function withSubtitleDefaults(project: Project): Project {
+  const look = projectLook()
+  const standard = project.subtitleStyles[DEFAULT_SUBTITLE_STYLE_ID]
+  if (!look || !standard) return project
+  return { ...project, subtitleStyles: { ...project.subtitleStyles, [DEFAULT_SUBTITLE_STYLE_ID]: { ...standard, ...structuredClone(look) } } }
+}
 
 function newSessionKey(): string {
   return `edit_${nanoid(12)}`

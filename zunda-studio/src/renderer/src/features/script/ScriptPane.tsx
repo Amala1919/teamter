@@ -7,6 +7,7 @@ import type { CharacterId, ItemId } from '@shared/project/types'
 import { player } from '../../playback/player'
 import { copySelection } from '../../state/edit-actions'
 import { useEditorStore } from '../../state/store'
+import { characterLook } from '../../state/subtitle-defaults'
 import { useVoiceStore } from '../../state/voice'
 import { openContextMenu } from '../../ui/ContextMenu'
 import { CharacterDialog } from '../characters/CharacterDialog'
@@ -96,12 +97,12 @@ export function ScriptPane({ onError }: ScriptPaneProps): React.JSX.Element {
       [
         {
           op: 'style.upsertSubtitle',
-          props: { name: 'ずんだもん', outline: { color: '#2b7a0b', widthPx: 8 } },
+          props: { ...characterLook('#2b7a0b'), name: 'ずんだもん' },
           tempId: 'zundaStyle'
         },
         {
           op: 'style.upsertSubtitle',
-          props: { name: '四国めたん', outline: { color: '#a0306a', widthPx: 8 } },
+          props: { ...characterLook('#a0306a'), name: '四国めたん' },
           tempId: 'metanStyle'
         },
         {
