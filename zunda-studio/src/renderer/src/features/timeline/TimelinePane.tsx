@@ -12,6 +12,7 @@ import { assetName, importMediaFiles } from '../../state/media'
 import { useEditorStore } from '../../state/store'
 import { openContextMenu } from '../../ui/ContextMenu'
 import { itemMenu, laneMenu, layerMenu, rulerMenu, type MenuContext } from './timeline-menus'
+import { FreeSourcesDialog } from '../media/FreeSourcesDialog'
 import { Waveform } from './Waveform'
 
 const MIN_VISIBLE_MS = 10_000
@@ -49,6 +50,7 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
   const playing = usePlaybackStore((state) => state.playing)
   const [pxPerSecond, setPxPerSecond] = useState(60)
   const [drag, setDrag] = useState<DragState | null>(null)
+  const [sourcesOpen, setSourcesOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const rulerRef = useRef<HTMLDivElement>(null)
   const zoomRef = useRef(pxPerSecond)
@@ -247,6 +249,9 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
         <button type="button" className="button--small" onClick={addCaption} data-testid="add-caption">
           テロップ
         </button>
+        <button type="button" className="button--small" onClick={() => setSourcesOpen(true)} data-testid="open-free-sources" title="フリー BGM・効果音のサイト一覧">
+          フリー素材サイト
+        </button>
         <label className="timeline__zoom">
           拡大
           <input
@@ -343,6 +348,7 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
           />
         </div>
       </div>
+      {sourcesOpen && <FreeSourcesDialog onClose={() => setSourcesOpen(false)} />}
     </section>
   )
 }

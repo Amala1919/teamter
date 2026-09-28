@@ -1,4 +1,5 @@
 import type { Command } from '@shared/commands/types'
+import { FREE_SOURCES, freeSource, licenseFromSource } from '@shared/media/free-sources'
 import { DEFAULT_LAYER_IDS } from '@shared/project/factory'
 import { ZOOM_METHODS, type AssetLicense, type AudioItem, type Effect, type Item, type Project, type ShapeItem, type TextItem, type Transform, type VideoItem, type ZoomItem } from '@shared/project/types'
 import { defaultEffect, EFFECT_LABELS } from '@shared/render/effects'
@@ -6,6 +7,7 @@ import { defaultZoomTiming, ZOOM_METHOD_LABELS } from '@shared/render/zoom'
 
 import { assetName } from '../../state/media'
 import { NumberField } from '../../ui/NumberField'
+import { CREDIT_LABELS } from '../media/FreeSourcesDialog'
 
 export type Run = (commands: Command[], label: string) => void
 
@@ -378,12 +380,51 @@ export function LicenseInspector({ project, assetId, run }: { project: Project; 
   if (!asset) return null
   const update = (patch: Partial<AssetLicense>): void =>
     run([{ op: 'asset.updateLicense', assetId, license: { ...asset.license, ...patch } }], '素材の権利表記の変更')
+  const site = freeSource(asset.license.sourceId)
+  const fileName = asset.path.absolute.split(/[\\/]/).at(-1) ?? asset.path.absolute
   return (
     <section data-testid="license-inspector">
       <h3>素材</h3>
       <p className="inspector__mono" title={asset.path.absolute}>
         {assetName(asset)}
       </p>
+      {asset.type !== 'video' && (
+        <label className="field">
+          <span className="field__label">入手元サイト</span>
+          <select
+            value={asset.license.sourceId ?? ''}
+            onChange={(event) => {
+              const chosen = freeSource(event.target.value)
+              if (chosen) {
+                run([{ op: 'asset.updateLicense', assetId, license: licenseFromSource(chosen, fileName) }], '入手元サイトの設定')
+              } else {
+                const { sourceId: _sourceId, ...rest } = asset.license
+                run([{ op: 'asset.updateLicense', assetId, license: rest }], '入手元サイトの設定')
+              }
+            }}
+            data-testid="license-site"
+          >
+            <option value="">その他・自分で用意したもの</option>
+            {FREE_SOURCES.map((source) => (
+              <option key={source.id} value={source.id}>
+                {source.name}({CREDIT_LABELS[source.credit]})
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {site && (
+        <div className="license-site" data-testid="license-site-notes">
+          <ul>
+            {site.notes.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+          </ul>
+          <a href={site.termsUrl} target="_blank" rel="noreferrer">
+            {site.name} の利用規約を開く
+          </a>
+        </div>
+      )}
       <label className="field">
         <span className="field__label">入手元</span>
         <input
@@ -401,7 +442,18 @@ export function LicenseInspector({ project, assetId, run }: { project: Project; 
         <input type="checkbox" checked={asset.license.creditRequired} onChange={(event) => update({ creditRequired: event.target.checked })} data-testid="license-credit-required" />
         クレジットが必要
       </label>
-      {asset.license.creditRequired && (
+      {!asset.license.creditRequired && (
+        <label className="field__row">
+          <input
+            type="checkbox"
+            checked={asset.license.creditOptIn === true}
+            onChange={(event) => update({ creditOptIn: event.target.checked })}
+            data-testid="license-credit-optin"
+          />
+          必要ではないが、概要欄にクレジットを載せる
+        </label>
+      )}
+      {(asset.license.creditRequired || asset.license.creditOptIn) && (
         <label className="field">
           <span className="field__label">クレジット表記</span>
           <input

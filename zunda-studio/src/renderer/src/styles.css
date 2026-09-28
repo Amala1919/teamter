@@ -1861,3 +1861,86 @@ input[type='url'] {
   margin: 4px 0;
   background: var(--border);
 }
+
+/* ------------------------------------------------------------ フリー素材サイト */
+
+.free-sources {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.free-sources__item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.free-sources__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.free-sources__header a:first-child {
+  font-weight: bold;
+}
+
+.free-sources a {
+  color: var(--accent);
+}
+
+.free-sources__kinds,
+.free-sources__genres,
+.free-sources__credit {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.free-sources__terms {
+  margin-left: auto;
+  font-size: 11px;
+}
+
+.free-sources__notes {
+  margin: 4px 0;
+  padding-left: 18px;
+  font-size: 12px;
+}
+
+.badge {
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+}
+
+.badge--required {
+  border-color: #e0b04a;
+  color: #e0b04a;
+}
+
+.badge--optional {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+.license-site {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin: 0 0 6px;
+}
+
+.license-site ul {
+  margin: 0 0 4px;
+  padding-left: 16px;
+}
+
+.license-site a {
+  color: var(--accent);
+}

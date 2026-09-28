@@ -65,7 +65,13 @@ export function generateCredits(project: Project): CreditsDraft {
     if (!asset) continue
     const { license } = asset
     if (license.source.trim() === '') issues.push({ assetId, message: `${fileName(asset)} の入手元が未記入です` })
-    if (!license.creditRequired) continue
+    // 任意の表記も、載せると決めたもの(フリー素材の一覧から選んだときの既定)は載せる。
+    if (!license.creditRequired) {
+      if (license.creditOptIn && license.creditText?.trim()) {
+        add(asset.type === 'psd' ? 'portrait' : asset.type === 'audio' ? 'sound' : 'visual', license.creditText.trim())
+      }
+      continue
+    }
     const text = license.creditText?.trim() ?? ''
     if (text === '') {
       issues.push({ assetId, message: `${fileName(asset)} はクレジットが必要ですが、表記が未記入です` })

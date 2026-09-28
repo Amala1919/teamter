@@ -33,6 +33,10 @@ export interface AssetLicense {
   creditRequired: boolean
   creditText?: string
   note?: string
+  /** 入手元がフリー素材の一覧(shared/media/free-sources.ts)のどれか。 */
+  sourceId?: string
+  /** クレジットが任意の素材でも、概要欄に表記を載せる。 */
+  creditOptIn?: boolean
 }
 
 interface AssetBase {
