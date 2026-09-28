@@ -26,10 +26,50 @@ export interface CohostRequest {
   vision?: CohostVision
 }
 
-export type CohostVision =
+export type CohostVision = (
   | { kind: 'frame'; atMs: number }
   | { kind: 'frames'; times: number[] }
   | { kind: 'clip'; startMs: number; endMs: number }
+) &
+  VisionOptions
+
+/** 見せる画像の画質。standard: 横 768px(場面の様子が分かる) / high: 長辺 1568px(細かい文字・数字も読める。利用枠を約4倍使う)。 */
+export type VisionQuality = 'standard' | 'high'
+
+/** 録画のうち見せる範囲。録画の幅・高さに対する割合(0〜1)。無ければ画面全体。 */
+export interface VisionRegion {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface VisionOptions {
+  quality?: VisionQuality
+  region?: VisionRegion
+}
+
+/** 画質ごとの画像の長辺の上限(px)。元の録画より大きくはしない。 */
+export const VISION_MAX_EDGE: Record<VisionQuality, number> = { standard: 768, high: 1568 }
+
+/** 範囲を 0〜1 に収め、小さすぎる範囲は広げる(最小 5%)。 */
+export function clampRegion(region: VisionRegion): VisionRegion {
+  const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, Number.isFinite(value) ? value : min))
+  const width = clamp(region.width, 0.05, 1)
+  const height = clamp(region.height, 0.05, 1)
+  return { x: clamp(region.x, 0, 1 - width), y: clamp(region.y, 0, 1 - height), width, height }
+}
+
+/** 画面全体を指しているか(ほぼ全体なら切り出さない)。 */
+export function isWholeFrame(region: VisionRegion | undefined): boolean {
+  return !region || (region.width >= 0.995 && region.height >= 0.995)
+}
+
+/** 範囲を人が読める形にする(例: 「左から50%・上から0%の、幅50%×高さ100%」)。 */
+export function describeRegion(region: VisionRegion): string {
+  const percent = (value: number): string => `${Math.round(value * 100)}%`
+  return `左から${percent(region.x)}・上から${percent(region.y)}の、幅${percent(region.width)}×高さ${percent(region.height)}`
+}
 
 /** 区間の映像は、何コマに分けて見せるか(長いほど多く、上限あり)。 */
 export const MAX_CLIP_FRAMES = 8
@@ -55,6 +95,12 @@ export function frameList(times: readonly number[]): number[] {
 /** 画像に添える説明(依頼文の最後に足す)。 */
 export function visionNote(vision: CohostVision, shownTimes: number[]): string {
   if (shownTimes.length === 0) return ''
+  const main = visionMainNote(vision, shownTimes)
+  if (isWholeFrame(vision.region)) return main
+  return `${main}\n画像はゲーム画面全体ではなく、一部(${describeRegion(clampRegion(vision.region!))})を切り出して大きく見せたものです。細かい文字や数字も読み取って、正確に触れてください。読み取れないものは推測で言わないでください。`
+}
+
+function visionMainNote(vision: CohostVision, shownTimes: number[]): string {
   if (vision.kind === 'frame' || (vision.kind === 'frames' && shownTimes.length === 1)) {
     return `## 画面
 添付の画像は、動画の ${formatMs(shownTimes[0]!)} のゲーム画面です。画面で起きていることも踏まえて返答してください(画面の説明をそのまま読み上げるのではなく、実況の会話として自然に触れる)。`

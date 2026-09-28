@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 
-import { frameList, MAX_CLIP_FRAMES, MAX_CLIP_MS, visionTimes, type CohostCandidate, type CohostLine } from '@shared/ai/cohost'
+import {
+  describeRegion,
+  frameList,
+  MAX_CLIP_FRAMES,
+  MAX_CLIP_MS,
+  visionTimes,
+  type CohostCandidate,
+  type CohostLine,
+  type VisionQuality,
+  type VisionRegion
+} from '@shared/ai/cohost'
 import { formatModelRef } from '@shared/ai/types'
 import type { Character, Project } from '@shared/project/types'
 
@@ -11,6 +21,7 @@ import { formatMs } from '../../lib/time'
 import { Modal } from '../../ui/Modal'
 import { NumberField } from '../../ui/NumberField'
 import { SynopsisDialog } from './SynopsisDialog'
+import { VisionRegionDialog } from './VisionRegionDialog'
 
 /**
  * 相方(AI)に返答を書かせる操作と、返ってきた候補の確認(REQUIREMENTS.md B-3〜B-10)。
@@ -33,6 +44,10 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
   const [clip, setClip] = useState({ startMs: 0, endMs: 5000 })
   // 「再生位置の画面」で見せる時刻。空なら今の再生位置の1コマ、追加すれば選んだ時刻をまとめて見せる。
   const [frames, setFrames] = useState<number[]>([])
+  // 見せる画像の画質と範囲(範囲は録画に対する割合。無ければ画面全体)。
+  const [visionQuality, setVisionQuality] = useState<VisionQuality>('standard')
+  const [visionRegion, setVisionRegion] = useState<VisionRegion | undefined>(undefined)
+  const [regionPickerOpen, setRegionPickerOpen] = useState(false)
   const setPlayhead = useEditorStore((state) => state.setPlayhead)
   const playheadMs = useEditorStore((state) => state.playheadMs)
   const hasVideo = project.items.some((item) => item.type === 'video')
@@ -48,6 +63,11 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
       ? '相方(AIの役)のキャラクターがいません'
       : null
 
+  const visionOptions = {
+    ...(visionQuality !== 'standard' ? { quality: visionQuality } : {}),
+    ...(visionRegion ? { region: visionRegion } : {})
+  }
+
   const run = (characterId?: string): void => {
     onError(null)
     void generate({
@@ -56,9 +76,14 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
       ...(characterId ? { characterId } : {}),
       ...(instruction.trim() ? { instruction: instruction.trim() } : {}),
       ...(visionMode === 'frame'
-        ? { vision: frames.length > 0 ? { kind: 'frames' as const, times: frames } : { kind: 'frame' as const, atMs: playheadMs } }
+        ? {
+            vision:
+              frames.length > 0
+                ? { kind: 'frames' as const, times: frames, ...visionOptions }
+                : { kind: 'frame' as const, atMs: playheadMs, ...visionOptions }
+          }
         : {}),
-      ...(visionMode === 'clip' ? { vision: { kind: 'clip' as const, startMs: clip.startMs, endMs: clip.endMs } } : {})
+      ...(visionMode === 'clip' ? { vision: { kind: 'clip' as const, startMs: clip.startMs, endMs: clip.endMs, ...visionOptions } } : {})
     })
   }
 
@@ -237,6 +262,41 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
             </>
           )}
         </div>
+      )}
+      {hasVideo && !compact && visionMode !== 'none' && (
+        <div className="cohost-controls__row cohost-controls__vision">
+          <label className="field--inline">
+            画質
+            <select
+              value={visionQuality}
+              onChange={(event) => setVisionQuality(event.target.value as VisionQuality)}
+              title="高画質は細かい文字や数字も読めますが、AIの利用枠を1枚あたり約4倍使います"
+              data-testid="cohost-vision-quality"
+            >
+              <option value="standard">標準</option>
+              <option value="high">高画質(利用枠 約4倍)</option>
+            </select>
+          </label>
+          <span className="note" data-testid="cohost-region-summary">
+            範囲: {visionRegion ? describeRegion(visionRegion) : '画面全体'}
+          </span>
+          <button type="button" className="button--small" onClick={() => setRegionPickerOpen(true)} data-testid="cohost-region-pick">
+            範囲を選ぶ…
+          </button>
+          {visionRegion && (
+            <button type="button" className="button--small" onClick={() => setVisionRegion(undefined)} data-testid="cohost-region-clear">
+              全体に戻す
+            </button>
+          )}
+        </div>
+      )}
+      {regionPickerOpen && (
+        <VisionRegionDialog
+          atMs={visionMode === 'clip' ? clip.startMs : (frames[0] ?? playheadMs)}
+          initial={visionRegion}
+          onPick={setVisionRegion}
+          onClose={() => setRegionPickerOpen(false)}
+        />
       )}
       {disabledReason && <p className="status status--warn">{disabledReason}</p>}
       {session && <CohostCandidates project={project} onError={onError} />}

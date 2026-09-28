@@ -36,10 +36,17 @@ import type { Services } from './services'
 export type Handler<C extends Channel> = (...args: ChannelArgs<C>) => Promise<ChannelResult<C>>
 export type HandlerTable = { [C in Channel]: Handler<C> }
 
+/** 相方に見せる画面の画質と範囲(範囲は録画に対する割合)。 */
+const visionOptionsShape = {
+  quality: z.enum(['standard', 'high']).optional(),
+  region: z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1), width: z.number().min(0).max(1), height: z.number().min(0).max(1) }).optional()
+}
+
 /**
  * レンダラから届く引数の検証。レンダラは main より信頼度が低い前提で、境界で型を確かめる。
  * プロジェクト本体は巨大なので構造の要所だけ確かめ、中身の整合性はコマンド適用側が保証する。
  */
+
 const pathArg = z.string().min(1).max(4096)
 const projectArg = z
   .object({
@@ -144,9 +151,9 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
       instruction: z.string().max(2000).optional(),
       vision: z
         .discriminatedUnion('kind', [
-          z.object({ kind: z.literal('frame'), atMs: z.number().min(0) }),
-          z.object({ kind: z.literal('frames'), times: z.array(z.number().min(0)).min(1).max(MAX_CLIP_FRAMES) }),
-          z.object({ kind: z.literal('clip'), startMs: z.number().min(0), endMs: z.number().min(0) })
+          z.object({ kind: z.literal('frame'), atMs: z.number().min(0), ...visionOptionsShape }),
+          z.object({ kind: z.literal('frames'), times: z.array(z.number().min(0)).min(1).max(MAX_CLIP_FRAMES), ...visionOptionsShape }),
+          z.object({ kind: z.literal('clip'), startMs: z.number().min(0), endMs: z.number().min(0), ...visionOptionsShape })
         ])
         .optional()
     })
@@ -161,6 +168,7 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
   ]) as unknown as z.ZodType<ChannelArgs<'ai:edit'>>,
   'ai:publish': z.tuple([projectArg]) as unknown as z.ZodType<ChannelArgs<'ai:publish'>>,
   'ai:briefing': z.tuple([projectArg]) as unknown as z.ZodType<ChannelArgs<'ai:briefing'>>,
+  'ai:visionFrame': z.tuple([projectArg, z.number().min(0)]) as unknown as z.ZodType<ChannelArgs<'ai:visionFrame'>>,
   'ai:briefingCheck': z.tuple([projectArg, z.object({}).loose(), z.array(z.string().max(100)).max(100).nullable()]) as unknown as z.ZodType<
     ChannelArgs<'ai:briefingCheck'>
   >,
@@ -285,7 +293,10 @@ export function createHandlers(services: Services): HandlerTable {
       // 画面を見せるなら、録画からその時刻のコマを取り出して添える。
       let vision: { shownFrames: number; imagesDropped: boolean } | undefined
       if (request.vision) {
-        const { images, shownTimes } = await grabFrames(project, visionTimes(request.vision), services.ffmpeg, (path) => requireAllowed(services, path))
+        const { images, shownTimes } = await grabFrames(project, visionTimes(request.vision), services.ffmpeg, (path) => requireAllowed(services, path), {
+          ...(request.vision.quality ? { quality: request.vision.quality } : {}),
+          ...(request.vision.region ? { region: request.vision.region } : {})
+        })
         if (images.length > 0) {
           const note = visionNote(request.vision, shownTimes)
           const turns = prompt.turns.map((turn, index) => (index === prompt.turns.length - 1 ? { ...turn, content: `${turn.content}\n\n${note}` } : turn))
@@ -334,6 +345,12 @@ export function createHandlers(services: Services): HandlerTable {
       const { commands, dropped } = filterPortraitCommands(project, value.commands)
       const note = dropped > 0 ? `(立ち絵以外に触れる操作 ${dropped} 件は除きました)` : ''
       return { reply: `${value.reply}${note}`, commands, generatedBy: result.generatedBy }
+    },
+    'ai:visionFrame': async (project, atMs) => {
+      // 範囲を選びやすいよう、送るときより少し大きめ(長辺 1280px)で取り出す。
+      const { images } = await grabFrames(project, [atMs], services.ffmpeg, (path) => requireAllowed(services, path), { maxEdge: 1280 })
+      const image = images[0]
+      return image ? `data:${image.mediaType};base64,${image.data}` : null
     },
     'ai:briefing': async (project) => {
       if (!project.meta.synopsis?.trim()) throw new AppError('INVALID_ARGUMENT', '企画メモが空です。先に企画メモを書いてください')
