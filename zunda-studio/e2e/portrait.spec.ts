@@ -76,6 +76,15 @@ test.describe('PSD 立ち絵', () => {
     const managerPreview = manager.getByTestId('portrait-preview')
     await expect.poll(() => countColor(managerPreview, COLORS.browAngry)).toBeGreaterThan(20)
     await expect.poll(() => countColor(managerPreview, COLORS.browNormal)).toBe(0)
+    // 一度パーツを選んだ後でも「なし」にでき、そのグループは何も表示されない(PSD で表示のパーツも消える)
+    await manager.getByTestId('expression-eyebrow').selectOption({ label: '(なし・表示しない)' })
+    await expect.poll(() => countColor(managerPreview, COLORS.browAngry)).toBe(0)
+    await expect.poll(() => countColor(managerPreview, COLORS.browNormal)).toBe(0)
+    // 「PSD の表示のまま」なら PSD で表示になっている眉が出る
+    await manager.getByTestId('expression-eyebrow').selectOption({ label: '(PSD の表示のまま)' })
+    await expect.poll(() => countColor(managerPreview, COLORS.browNormal)).toBeGreaterThan(20)
+    await manager.getByTestId('expression-eyebrow').selectOption({ label: '怒り' })
+    await expect.poll(() => countColor(managerPreview, COLORS.browAngry)).toBeGreaterThan(20)
 
     // Esc は上に重なった素材マネージャーだけを閉じる
     await page.keyboard.press('Escape')

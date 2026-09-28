@@ -111,10 +111,16 @@ export interface PortraitPartGroup {
   openSequence?: PartId[]
 }
 
+/**
+ * 表情で「このグループは何も表示しない」ことを表す値。
+ * 選ばない(キーが無い)ときは PSD の表示のままになるので、エフェクトなどを消すにはこれを入れる。
+ */
+export const NO_PART = '__none__'
+
 export interface Expression {
   id: ExpressionId
   name: string
-  /** パーツグループごとに選択するパーツ。口は口パクが制御するため含めない。 */
+  /** パーツグループごとに選択するパーツ(NO_PART なら何も表示しない)。口は口パクが制御するため含めない。 */
   selections: Record<PartGroupId, PartId>
 }
 

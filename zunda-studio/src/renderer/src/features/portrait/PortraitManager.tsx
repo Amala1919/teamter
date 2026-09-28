@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
 
 import { cleanLayerName } from '@shared/portrait/infer'
-import type {
-  CharacterId,
-  Expression,
-  PartId,
-  PartRole,
-  PortraitConfig,
-  PortraitPartGroup,
-  PortraitTransform,
-  Vowel
+import {
+  NO_PART,
+  type CharacterId,
+  type Expression,
+  type PartId,
+  type PartRole,
+  type PortraitConfig,
+  type PortraitPartGroup,
+  type PortraitTransform,
+  type Vowel
 } from '@shared/project/types'
 import { layerKey, walkLayers, type PsdLayerNode, type PsdManifest } from '@shared/psd/types'
 
@@ -180,6 +181,34 @@ function PartSelect({
   return (
     <select value={value ?? ''} onChange={(event) => onChange(event.target.value || undefined)} data-testid={testId}>
       {(allowNone || value === undefined) && <option value="">(なし)</option>}
+      {group.items.map((item) => (
+        <option key={item.id} value={item.id}>
+          {item.name}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+/**
+ * 表情でのパーツの選び方。「なし」は何も表示しない(エフェクトを消す)、「PSD のまま」は PSD で表示になっているものを出す。
+ * どれを選んだ後でも、なし・PSD のままに戻せる。
+ */
+function ExpressionPartSelect({
+  group,
+  value,
+  onChange,
+  testId
+}: {
+  group: PortraitPartGroup
+  value: PartId | undefined
+  onChange: (value: PartId | undefined) => void
+  testId?: string
+}): React.JSX.Element {
+  return (
+    <select value={value ?? ''} onChange={(event) => onChange(event.target.value || undefined)} data-testid={testId}>
+      <option value={NO_PART}>(なし・表示しない)</option>
+      <option value="">(PSD の表示のまま)</option>
       {group.items.map((item) => (
         <option key={item.id} value={item.id}>
           {item.name}
@@ -510,7 +539,7 @@ function ExpressionsEditor({
           {groups.map((group) => (
             <label key={group.id} className="field">
               <span className="field__label">{ROLE_LABELS[group.role]}({layerKey(group.layerPath)})</span>
-              <PartSelect
+              <ExpressionPartSelect
                 group={group}
                 value={expression.selections[group.id]}
                 testId={`expression-${group.role}`}

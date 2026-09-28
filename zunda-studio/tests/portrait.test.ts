@@ -8,7 +8,7 @@ import type { Command } from '@shared/commands/types'
 import { blinkPartAt, mouthPartFor, portraitSelections } from '@shared/portrait/animation'
 import { cleanLayerName, inferPortraitConfig, roleForName } from '@shared/portrait/infer'
 import { createEmptyProject } from '@shared/project/factory'
-import type { PortraitConfig, Project, SynthesisResult } from '@shared/project/types'
+import { NO_PART, type PortraitConfig, type Project, type SynthesisResult } from '@shared/project/types'
 import { findLayer, type PsdManifest } from '@shared/psd/types'
 import { renderFrame } from '@shared/render/compositor'
 import type { Ctx2D } from '@shared/render/types'
@@ -201,6 +201,29 @@ describe('立ち絵の描画', () => {
     }
     throw new Error('まばたきしていない時刻が見つかりません')
   }
+
+  it('表情で「なし」を選んだグループは、PSD で表示になっているパーツも含めて何も描かない', async () => {
+    const { project, characterId, config } = projectWithPortrait()
+    const brow = Object.values(config.partGroups).find((group) => group.role === 'eyebrow')!
+    const expressionId = config.defaultExpressionId!
+    const expression = config.expressions[expressionId]!
+    const withNone: PortraitConfig = {
+      ...config,
+      expressions: { ...config.expressions, [expressionId]: { ...expression, selections: { ...expression.selections, [brow.id]: NO_PART } } }
+    }
+    const hidden = apply(project, [{ op: 'character.setPortrait', characterId, portrait: withNone }])
+    const pixel = await render(hidden, openEyeTime(hidden, withNone, characterId, 0))
+    expect(pixel(POINTS.brow)).toEqual([...COLORS.body])
+    expect(pixel(POINTS.eye)).toEqual([...COLORS.eyeOpen])
+
+    // 選ばない(キーが無い)ときは、これまでどおり PSD の表示のまま
+    const selections = { ...expression.selections }
+    delete selections[brow.id]
+    const asPsd: PortraitConfig = { ...config, expressions: { ...config.expressions, [expressionId]: { ...expression, selections } } }
+    const psd = apply(project, [{ op: 'character.setPortrait', characterId, portrait: asPsd }])
+    const psdPixel = await render(psd, openEyeTime(psd, asPsd, characterId, 0))
+    expect(psdPixel(POINTS.brow)).toEqual([...COLORS.browNormal])
+  })
 
   it('既定の表情で、口を閉じ、目を開いて描く', async () => {
     const { project, characterId, config } = projectWithPortrait()
