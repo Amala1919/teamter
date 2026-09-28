@@ -344,6 +344,9 @@ function isFormatRejection(status: number, detail: string): boolean {
   return false
 }
 
+/** 無料枠を OpenCode 本体の外から使おうとしたときの文。 */
+const FREE_TIER_ONLY = /free tier.*(within|inside|only).*opencode|無料(枠|プラン).*OpenCode.*(内|中)/i
+
 /** キーそのものが間違っている・無いときの文。 */
 const INVALID_KEY = /invalid api key|missing api key|無効なAPIキー|APIキーがありません|unauthorized|incorrect api key/i
 
@@ -356,6 +359,13 @@ export function httpFailure(status: number, detail: string, model?: string): App
   const error = parseGatewayError(detail)
   const said = error ? `: ${error.message}` : ''
   const type = error?.type ?? ''
+  if (FREE_TIER_ONLY.test(error?.message ?? '')) {
+    return new AppError(
+      'AI_SUBSCRIPTION_REQUIRED',
+      `OpenCode: このキーのアカウントは無料枠として扱われました。無料枠は OpenCode のアプリの中からしか使えません(キーの誤りではありません)${said}`,
+      summary
+    )
+  }
   if (/RateLimit|UsageLimit/.test(type)) return new AppError('AI_RATE_LIMITED', `OpenCode: AIの利用上限に達しました${said}`, summary)
   if (type === 'CreditsError') {
     // Go のモデルでこうなるのは、キーのアカウントに Go の契約が無く、残高払いにも回せなかったとき。

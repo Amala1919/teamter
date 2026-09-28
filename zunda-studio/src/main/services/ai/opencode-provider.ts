@@ -132,7 +132,8 @@ export class OpenCodeProvider implements LlmProvider {
     }
     const ids = [...new Set([...live, ...(includeCatalog ? OPENCODE_CATALOG.map((entry) => entry.id) : [])])]
     const liveSet = new Set(live)
-    return [...ids.map((id) => describeModel(id, liveSet.has(id) ? 'cli' : 'static')), ...custom]
+    const viaApi = this.usesApi()
+    return [...ids.map((id) => describeModel(id, liveSet.has(id) ? 'cli' : 'static', viaApi)), ...custom]
   }
 
   /** 公式の接続先なら、Go と Zen の両方の一覧を取る(1つのキーで両方使える)。 */
@@ -239,8 +240,11 @@ export class OpenCodeProvider implements LlmProvider {
 
 const PLAN_GROUPS = { go: 'OpenCode Go(月額プラン)', zen: 'OpenCode Zen(従量課金)' } as const
 
-/** 一覧に出す形。名前は内蔵の一覧から、無ければ ID のまま。 */
-export function describeModel(id: string, source: ModelInfo['source']): ModelInfo {
+/**
+ * 一覧に出す形。名前は内蔵の一覧から、無ければ ID のまま。
+ * 無料のモデルは OpenCode 本体の中からしか使えないので、API キーで接続しているときはそう書き添える。
+ */
+export function describeModel(id: string, source: ModelInfo['source'], viaApi = false): ModelInfo {
   const entry = catalogEntry(id)
   const plan = opencodePlan(id)
   const group = plan === 'other' ? `その他のプロバイダ(${id.split('/')[0]})` : PLAN_GROUPS[plan]
@@ -249,7 +253,7 @@ export function describeModel(id: string, source: ModelInfo['source']): ModelInf
     label: entry ? entry.name : id,
     source,
     group,
-    ...(entry?.free ? { note: '無料' } : {})
+    ...(entry?.free ? { note: viaApi ? '無料・opencode コマンド経由のみ' : '無料' } : {})
   }
 }
 

@@ -63,7 +63,8 @@ describe('OpenCode の API(キーで接続)', () => {
     expect(recommended.every((model) => model.id.startsWith('opencode-go/'))).toBe(true)
     const zen = groups[1]!.models
     expect(zen.find((model) => model.id === 'opencode/claude-opus-5')).toMatchObject({ label: 'Claude Opus 5' })
-    expect(zen.find((model) => model.id === 'opencode/big-pickle')).toMatchObject({ note: '無料' })
+    // API キーでつなぐときは、無料のモデルは opencode コマンド経由でしか使えないと書き添える
+    expect(zen.find((model) => model.id === 'opencode/big-pickle')).toMatchObject({ note: '無料・opencode コマンド経由のみ' })
     expect((await provider('sk-wrong').listModels()).some((model) => model.source === 'static')).toBe(true)
   })
 
@@ -167,6 +168,11 @@ describe('OpenCode の API(キーで接続)', () => {
       code: 'AI_RATE_LIMITED',
       message: expect.stringContaining('5時間の利用上限')
     })
+    // 無料枠のアカウントは OpenCode 本体の中からしか使えない。キーの誤りとは言わない
+    const free = await provider(GOOD_KEY).generate('opencode-go/free-tier-model', request).catch((error: unknown) => error)
+    expect(free).toMatchObject({ code: 'AI_SUBSCRIPTION_REQUIRED', message: expect.stringContaining('無料枠として扱われました') })
+    expect(httpFailure(403, "OpenCode's free tier can only be used from within OpenCode").code).toBe('AI_SUBSCRIPTION_REQUIRED')
+
     expect(parseGatewayError('<html>Bad gateway</html>')).toEqual({ type: '', message: '<html>Bad gateway</html>' })
   })
 
