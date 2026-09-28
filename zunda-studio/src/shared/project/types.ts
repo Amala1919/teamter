@@ -269,6 +269,8 @@ export interface Layer {
   visible: boolean
   locked: boolean
   muted: boolean
+  /** このレイヤーの素材のタイムラインでの色(#rrggbb)。素材ごとの色があればそちらが優先。 */
+  color?: string
 }
 
 // ---------------------------------------------------------------- エフェクト
@@ -326,6 +328,8 @@ interface ItemBase {
   durationMs: Ms
   effects: Effect[]
   locked: boolean
+  /** タイムラインでの色(#rrggbb)。見分けるための印で、動画には出ない。無ければレイヤーの色、それも無ければ種類ごとの色。 */
+  color?: string
 }
 
 /** VOICEVOX の Mora。docs/ARCHITECTURE.md の音声合成の項を参照。 */

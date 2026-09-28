@@ -2038,3 +2038,42 @@ input[type='url'] {
 .cohost-controls__toggle {
   margin-left: auto;
 }
+
+/* 素材・レイヤーに付けた色(タイムラインの見分けのための印)。種類ごとの色より優先する。 */
+.timeline__item--colored {
+  background: color-mix(in srgb, var(--item-color) 38%, #12181e);
+  border-color: var(--item-color);
+}
+
+.timeline__item--colored.timeline__item--freeze {
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--item-color) 30%, #12181e) 0 6px,
+    color-mix(in srgb, var(--item-color) 45%, #12181e) 6px 12px
+  );
+}
+
+.timeline__item--colored.timeline__item--selected {
+  border-color: var(--accent);
+}
+
+.timeline__layerColor {
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 3px;
+  cursor: pointer;
+  flex: none;
+  height: 12px;
+  margin-right: 4px;
+  padding: 0;
+  width: 12px;
+}
+
+.timeline__layerColor--none {
+  background: transparent;
+  border-style: dashed;
+}
+
+.timeline__header .timeline__layerName {
+  flex: 1;
+  min-width: 0;
+}

@@ -110,6 +110,8 @@ export interface LayerUpdate {
   visible?: boolean
   locked?: boolean
   muted?: boolean
+  /** タイムラインでの色(#rrggbb)。null で種類ごとの色に戻す。 */
+  color?: string | null
 }
 
 // ------------------------------------------------------------------ 素材
@@ -524,6 +526,13 @@ export interface TimelineArrangeOverlaps {
   op: 'timeline.arrangeOverlaps'
 }
 
+/** タイムラインでの素材の色を変える(動画には出ない)。null ならレイヤー・種類の色に戻す。ロック中の素材も変えられる。 */
+export interface ItemSetColor {
+  op: 'item.setColor'
+  itemIds: ItemId[]
+  color: string | null
+}
+
 /** 素材の無いレイヤーを消す(既定のレイヤーは残す)。 */
 export interface LayerRemoveEmpty {
   op: 'layer.removeEmpty'
@@ -667,6 +676,7 @@ export type Command =
   | TimelineCloseGap
   | TimelineInsertGap
   | TimelineArrangeOverlaps
+  | ItemSetColor
   | LayerRemoveEmpty
   | MediaPlaceVideo
   | MediaPlaceImage

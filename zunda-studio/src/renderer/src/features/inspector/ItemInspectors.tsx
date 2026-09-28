@@ -1,6 +1,7 @@
 import type { Command } from '@shared/commands/types'
 import { FREE_SOURCES, freeSource, licenseFromSource } from '@shared/media/free-sources'
 import { DEFAULT_LAYER_IDS } from '@shared/project/factory'
+import { timelineColor } from '@shared/project/timeline-colors'
 import { ZOOM_METHODS, type AssetLicense, type AudioItem, type Effect, type Item, type Project, type ShapeItem, type TextItem, type Transform, type VideoItem, type ZoomItem } from '@shared/project/types'
 import { defaultEffect, EFFECT_LABELS } from '@shared/render/effects'
 import { defaultZoomTiming, ZOOM_METHOD_LABELS } from '@shared/render/zoom'
@@ -60,6 +61,25 @@ export function TimingInspector({ project, item, run }: { project: Project; item
           ))}
         </select>
       </label>
+      <div className="field field--inline">
+        <span className="field__label">タイムラインの色</span>
+        <span className="field__row">
+          <input
+            type="color"
+            value={timelineColor(project, item) ?? '#3fa34d'}
+            onChange={(event) => run([{ op: 'item.setColor', itemIds: [item.id], color: event.target.value }], '素材の色の変更')}
+            aria-label="タイムラインでの色"
+            data-testid="inspector-color"
+          />
+          {item.color ? (
+            <button type="button" className="button--small" onClick={() => run([{ op: 'item.setColor', itemIds: [item.id], color: null }], '素材の色の変更')} data-testid="inspector-color-reset">
+              レイヤー・種類の色に戻す
+            </button>
+          ) : (
+            <span className="note">{project.layers.find((layer) => layer.id === item.layerId)?.color ? 'レイヤーの色' : '種類ごとの色'}</span>
+          )}
+        </span>
+      </div>
     </section>
   )
 }

@@ -150,3 +150,50 @@ describe('重なりの自動振り分け', () => {
     expect(next.layers.map((layer) => layer.index).sort()).toEqual(project.layers.map((_, index) => index))
   })
 })
+
+describe('タイムラインの色', () => {
+  it('素材の色 > レイヤーの色 > 種類ごとの色(null)の順に決まり、戻せる', async () => {
+    const { timelineColor } = await import('@shared/project/timeline-colors')
+    const { project, zunda } = base()
+    let next = apply(project, [
+      { op: 'voice.insert', characterId: zunda, text: 'A', atMs: 0 },
+      { op: 'voice.insert', characterId: zunda, text: 'B', atMs: 5000 }
+    ])
+    const [a, b] = voices(next)
+    expect(timelineColor(next, a!)).toBeNull()
+
+    next = apply(next, [{ op: 'layer.update', layerId: DEFAULT_LAYER_IDS.voice, color: '#3B6FD6' }])
+    expect(timelineColor(next, line(next, 'A'))).toBe('#3b6fd6')
+    next = apply(next, [{ op: 'item.setColor', itemIds: [a!.id], color: '#d64545' }])
+    expect(timelineColor(next, line(next, 'A'))).toBe('#d64545')
+    expect(timelineColor(next, line(next, 'B'))).toBe('#3b6fd6')
+
+    // ロック中の素材も色は変えられる(見分けのための印なので)
+    next = apply(next, [{ op: 'item.setLocked', itemId: b!.id, locked: true }, { op: 'item.setColor', itemIds: [b!.id], color: '#3fa34d' }])
+    expect(timelineColor(next, line(next, 'B'))).toBe('#3fa34d')
+
+    next = apply(next, [{ op: 'item.setColor', itemIds: [a!.id], color: null }, { op: 'layer.update', layerId: DEFAULT_LAYER_IDS.voice, color: null }])
+    expect(timelineColor(next, line(next, 'A'))).toBeNull()
+    expect(line(next, 'A')).not.toHaveProperty('color')
+
+    // 不正な色は断る
+    expect(() => apply(next, [{ op: 'item.setColor', itemIds: [a!.id], color: 'red' }])).toThrow('色の指定が不正です')
+    expect(() => apply(next, [{ op: 'layer.update', layerId: DEFAULT_LAYER_IDS.voice, color: '#12345678' }])).toThrow('色の指定が不正です')
+  })
+
+  it('ボイスとボイス 2 のように、同じ種類のレイヤーでも別々の色にできる', async () => {
+    const { timelineColor } = await import('@shared/project/timeline-colors')
+    const { project, zunda, metan } = base()
+    let next = apply(project, [
+      { op: 'voice.insert', characterId: zunda, text: 'A', atMs: 0 },
+      { op: 'voice.insert', characterId: metan, text: 'B', atMs: 100 }
+    ])
+    const second = next.layers.find((layer) => layer.name === 'ボイス 2')!
+    next = apply(next, [
+      { op: 'layer.update', layerId: DEFAULT_LAYER_IDS.voice, color: '#3fa34d' },
+      { op: 'layer.update', layerId: second.id, color: '#d65a9e' }
+    ])
+    expect(timelineColor(next, line(next, 'A'))).toBe('#3fa34d')
+    expect(timelineColor(next, line(next, 'B'))).toBe('#d65a9e')
+  })
+})

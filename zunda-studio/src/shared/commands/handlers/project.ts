@@ -1,6 +1,7 @@
 import { isSafeModelId } from '../../ai/types'
 import type { Layer } from '../../project/types'
 import { normalizeChapters } from '../../project/chapters'
+import { TIMELINE_COLOR } from '../../project/timeline-colors'
 import { fail, insertLayer, requireLayer, refreshSubtitleLines, type HandlerTable } from '../env'
 
 type ProjectHandlers = Pick<
@@ -96,6 +97,11 @@ export const projectHandlers: ProjectHandlers = {
     if (command.visible !== undefined) layer.visible = command.visible
     if (command.locked !== undefined) layer.locked = command.locked
     if (command.muted !== undefined) layer.muted = command.muted
+    if (command.color !== undefined) {
+      if (command.color === null) delete layer.color
+      else if (!TIMELINE_COLOR.test(command.color)) fail(command.op, `色の指定が不正です: ${command.color}`)
+      else layer.color = command.color.toLowerCase()
+    }
   },
 
   'layer.insert': (draft, command, env) => {
