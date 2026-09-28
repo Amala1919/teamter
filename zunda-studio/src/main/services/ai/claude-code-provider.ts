@@ -135,8 +135,10 @@ export class ClaudeCodeProvider implements LlmProvider {
       '--system-prompt-file',
       systemFile,
       // 台本生成にファイル操作やシェルは不要。ツールを全て外して純粋な文章生成にする。
+      // 事実の確かめ(webSearch)のときだけ、読むだけのウェブ検索・取得を許す。
       '--tools',
-      '',
+      request.webSearch ? 'WebSearch,WebFetch' : '',
+      ...(request.webSearch ? ['--allowedTools', 'WebSearch,WebFetch'] : []),
       // --tools は MCP のツールには効かないため、別途すべて拒否する。
       '--disallowedTools',
       'mcp__*',
@@ -157,7 +159,7 @@ export class ClaudeCodeProvider implements LlmProvider {
         cwd: this.workDirectory,
         env: this.childEnv(),
         input: streaming ? streamJsonInput(turnsToPrompt(request.turns), images) : turnsToPrompt(request.turns),
-        timeoutMs: this.config().timeoutMs,
+        timeoutMs: Math.max(this.config().timeoutMs, request.timeoutMs ?? 0),
         ...(signal ? { signal } : {})
       })
     } catch (error) {
@@ -182,6 +184,7 @@ export class ClaudeCodeProvider implements LlmProvider {
     if (request.jsonSchema) {
       result.structured = parsed.structured_output ?? parseStructuredFallback(text)
     }
+    if (request.webSearch) result.webSearch = true
     return result
   }
 

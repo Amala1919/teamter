@@ -10,6 +10,7 @@ import { useEditorStore } from '../../state/store'
 import { formatMs } from '../../lib/time'
 import { Modal } from '../../ui/Modal'
 import { NumberField } from '../../ui/NumberField'
+import { SynopsisDialog } from './SynopsisDialog'
 
 /**
  * 相方(AI)に返答を書かせる操作と、返ってきた候補の確認(REQUIREMENTS.md B-3〜B-10)。
@@ -33,6 +34,7 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
   const playheadMs = useEditorStore((state) => state.playheadMs)
   const hasVideo = project.items.some((item) => item.type === 'video')
 
+  const unverifiedFacts = project.ai.briefing?.facts.filter((fact) => fact.status === 'unverified').length ?? 0
   const characters = Object.values(project.characters)
   const aiCharacter = characters.find((character) => character.authorRole === 'ai')
   const userCharacter = characters.find((character) => character.authorRole === 'user')
@@ -139,8 +141,19 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
             自分のセリフの案
           </button>
         )}
-        <button type="button" className="button--small" onClick={() => setSynopsisOpen(true)} data-testid="open-synopsis">
+        <button
+          type="button"
+          className="button--small"
+          onClick={() => setSynopsisOpen(true)}
+          title="企画メモと、相方のスタンス・前提知識"
+          data-testid="open-synopsis"
+        >
           企画メモ
+          {unverifiedFacts > 0 && (
+            <span className="badge badge--warn" data-testid="briefing-unverified-badge">
+              要確認{unverifiedFacts}
+            </span>
+          )}
         </button>
         </div>
       )}
@@ -325,37 +338,3 @@ function CandidateCard({
   )
 }
 
-function SynopsisDialog({ onClose }: { onClose: () => void }): React.JSX.Element {
-  const synopsis = useEditorStore((state) => state.project.meta.synopsis ?? '')
-  const dispatch = useEditorStore((state) => state.dispatch)
-  const [draft, setDraft] = useState(synopsis)
-  return (
-    <Modal
-      title="企画メモ"
-      onClose={onClose}
-      footer={
-        <button
-          type="button"
-          className="button--primary"
-          onClick={() => {
-            if (draft !== synopsis) dispatch([{ op: 'project.setMeta', synopsis: draft }], '企画メモの変更')
-            onClose()
-          }}
-          data-testid="synopsis-save"
-        >
-          保存
-        </button>
-      }
-    >
-      <p className="note">動画の題材や見どころを書いておくと、相方の返答や編集AIが話題からそれにくくなります。</p>
-      <textarea
-        rows={8}
-        className="synopsis__text"
-        value={draft}
-        placeholder="例: 初見でホラーゲーム『〇〇』を遊ぶ回。ずんだもんが怖がり、めたんが冷静にツッコむ。見どころはボス戦の逆転。"
-        onChange={(event) => setDraft(event.target.value)}
-        data-testid="synopsis-text"
-      />
-    </Modal>
-  )
-}

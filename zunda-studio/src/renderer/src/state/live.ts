@@ -1,3 +1,4 @@
+import { briefingPromptSection } from '@shared/ai/briefing'
 import type { LiveProfile } from '@shared/live/types'
 import type { Project } from '@shared/project/types'
 
@@ -28,7 +29,10 @@ export function liveProfileFrom(project: Project): LiveProfile | null {
         postPhonemeLength: voice.postPhonemeLength
       }
     },
-    projectTitle: project.meta.title
+    projectTitle: project.meta.title,
+    briefing: [project.meta.synopsis?.trim() ? `## 企画メモ\n${project.meta.synopsis.trim()}` : '', briefingPromptSection(project)]
+      .filter(Boolean)
+      .join('\n\n')
   }
 }
 

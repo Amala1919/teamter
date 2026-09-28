@@ -9,6 +9,7 @@
 import type { GeneratedBy, ModelRef } from '../ai/types'
 import type {
   AiPersona,
+  ProjectBriefing,
   Asset,
   AssetId,
   AssetLicense,
@@ -51,6 +52,15 @@ export interface ProjectSetMeta {
 export interface ProjectSetConversationAi {
   op: 'project.setConversationAi'
   model: ModelRef | null
+}
+
+/**
+ * 企画メモから作った相方のスタンスと前提知識を保存する(null で消す)。
+ * 利用者の確認を経てから保存する前提で、AI の編集提案からは使わせない。
+ */
+export interface ProjectSetBriefing {
+  op: 'project.setBriefing'
+  briefing: ProjectBriefing | null
 }
 
 export interface ProjectSetEditing {
@@ -642,6 +652,7 @@ export type Command =
   | ProjectSetMeta
   | ProjectSetConversationAi
   | ProjectSetEditing
+  | ProjectSetBriefing
   | CreditsSet
   | PublishSet
   | ChatAppend

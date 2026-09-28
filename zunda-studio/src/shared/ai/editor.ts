@@ -1,6 +1,7 @@
 import { formatDurationJa, formatMs } from '../lib/time'
 import { itemEndMs, projectDurationMs, voiceItemsInOrder } from '../project/queries'
 import type { ChatMessage, Item, ItemId, Project } from '../project/types'
+import { briefingPromptSection } from './briefing'
 import { MAX_AI_COMMANDS } from './edit-commands'
 import type { ChatTurn, GenerateRequest } from './types'
 
@@ -76,6 +77,7 @@ export function buildEditorContext(project: Project, selection: readonly ItemId[
   return [
     `## 動画\n${project.canvas.width}x${project.canvas.height} ${project.canvas.fps}fps 総尺 ${formatDurationJa(projectDurationMs(project))}`,
     project.meta.synopsis?.trim() ? `## 企画メモ\n${project.meta.synopsis.trim()}` : '',
+    `\n${briefingPromptSection(project)}`,
     `## キャラクター\n${characters.join('\n') || '(なし)'}`,
     `## 台本(発話順。ID 話者 開始 尺 セリフ)\n${note}${
       shown

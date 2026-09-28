@@ -1,3 +1,4 @@
+import { validateBriefing } from '../../ai/briefing'
 import { isSafeModelId } from '../../ai/types'
 import type { Layer } from '../../project/types'
 import { normalizeChapters } from '../../project/chapters'
@@ -9,6 +10,7 @@ type ProjectHandlers = Pick<
   | 'project.setMeta'
   | 'project.setConversationAi'
   | 'project.setEditing'
+  | 'project.setBriefing'
   | 'credits.set'
   | 'publish.set'
   | 'chat.append'
@@ -86,6 +88,17 @@ export const projectHandlers: ProjectHandlers = {
     const message = draft.chat.messages.find((candidate) => candidate.id === command.messageId)
     if (!message) fail(command.op, '発言が見つかりません')
     message.outcome = command.outcome
+  },
+
+  'project.setBriefing': (draft, command) => {
+    if (command.briefing === null) {
+      draft.ai.briefing = null
+      return
+    }
+    const problem = validateBriefing(command.briefing)
+    if (problem) fail(command.op, problem)
+    // immer の下書きへは素の値として入れる。
+    draft.ai.briefing = JSON.parse(JSON.stringify(command.briefing)) as typeof command.briefing
   },
 
   'layer.update': (draft, command, env) => {

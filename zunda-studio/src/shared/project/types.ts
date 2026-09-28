@@ -626,4 +626,55 @@ export interface EditingSettings {
 export interface ProjectAiSettings {
   /** この動画で相方を演じるAI。null ならアプリの既定値。 */
   conversation: ModelRef | null
+  /** 企画メモから作った、相方のスタンスと前提知識(shared/ai/briefing.ts)。無ければ使わない。 */
+  briefing?: ProjectBriefing | null
+}
+
+/** 前提知識の出どころ。memo: 企画メモに書いてある / ai: AI が補った一般的な知識 / user: 利用者が書き足した。 */
+export type BriefingFactOrigin = 'memo' | 'ai' | 'user'
+
+/** confirmed だけが AI への依頼に使われる。unverified(未確認)と rejected(使わない)は使わない。 */
+export type BriefingFactStatus = 'confirmed' | 'unverified' | 'rejected'
+
+export interface BriefingSource {
+  title: string
+  url: string
+}
+
+/** AI による裏付けの確認の結果。確認済みにするかは利用者が決める(AI の判断だけでは使わない)。 */
+export interface BriefingCheck {
+  /** supported: 裏付けあり / contradicted: 誤りの可能性が高い / unclear: 確かめられなかった */
+  verdict: 'supported' | 'contradicted' | 'unclear'
+  reason: string
+  /** 出典。ウェブで調べたときだけ(調べていないのに URL を出させない)。 */
+  sources: BriefingSource[]
+  /** ウェブで調べたか。false なら AI の知識だけでの見直し。 */
+  webSearched: boolean
+  /** 誤りの可能性があるとき、正しいと思われる内容。 */
+  suggestion: string | null
+  at: string
+}
+
+export interface BriefingFact {
+  id: string
+  text: string
+  origin: BriefingFactOrigin
+  /** memo のとき、企画メモの該当箇所(原文のまま)。 */
+  quote: string | null
+  status: BriefingFactStatus
+  /** AI が付けた「確かめるべき点」。 */
+  checkHint: string | null
+  check: BriefingCheck | null
+}
+
+export interface ProjectBriefing {
+  /** 相方がこの動画で取る立ち位置(知識の程度・視聴者への向き合い方・避けること)。 */
+  stance: string
+  facts: BriefingFact[]
+  /** 企画メモだけでは分からず、AI が投稿者に確かめたいこと。 */
+  questions: string[]
+  /** 作ったときの企画メモ。今のメモと違えば作り直しを勧める。 */
+  sourceSynopsis: string
+  generatedBy: GeneratedBy | null
+  updatedAt: string
 }

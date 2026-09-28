@@ -73,6 +73,12 @@ export interface GenerateRequest {
   /** 指定すると構造化出力を求める。検証は呼び出し側で必ず行う。 */
   jsonSchema?: Record<string, unknown>
   /**
+   * ウェブ検索を使わせる(事実の確かめ用)。使える接続方法(Claude Code)だけで効き、使えたかは結果の webSearch で分かる。
+   */
+  webSearch?: boolean
+  /** この依頼だけ待つ時間を延ばす(ウェブ検索など時間のかかる依頼)。設定の待ち時間より短くはしない。 */
+  timeoutMs?: number
+  /**
    * どの会話の続きかを見分ける名前。同じ会話の生成には同じ値を渡す。
    * OpenCode Go はこれを元にした x-opencode-session で振り分けとキャッシュを行う(無いと断られる)。
    */
@@ -92,6 +98,8 @@ export interface GenerateResult {
   durationMs: number
   /** 画像を添えたが、モデル・接続方法が画像を読めなかったので外して生成した。 */
   imagesDropped?: boolean
+  /** ウェブ検索を使える状態で生成したか(webSearch を求めたときだけ)。 */
+  webSearch?: boolean
 }
 
 const MODEL_ID_PATTERN = /^[A-Za-z0-9._:/@[\]-]{1,200}$/

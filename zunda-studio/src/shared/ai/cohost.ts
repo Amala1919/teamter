@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { formatMs } from '../lib/time'
 import { voiceItemsInOrder } from '../project/queries'
 import type { BanterRole, Character, CharacterId, ItemId, Project, VoiceItem } from '../project/types'
+import { briefingPromptSection } from './briefing'
 import type { ChatTurn, GenerateRequest } from './types'
 
 /**
@@ -163,6 +164,7 @@ export function buildCohostPrompt(project: Project, request: CohostRequest): Omi
     describePersona(actor),
     others.length > 0 ? `\n## 掛け合いの相手\n${others.map((other) => `${other.name}${other.authorRole === 'user' ? '(投稿者本人が演じる)' : ''}`).join('\n')}` : '',
     project.meta.synopsis?.trim() ? `\n## 動画の企画メモ\n${project.meta.synopsis.trim()}` : '',
+    `\n${briefingPromptSection(project)}`,
     '',
     '## 守ること',
     '- セリフは字幕と合成音声でそのまま使われる。話者名・かっこ・ト書き・絵文字・改行を入れない',

@@ -5,6 +5,17 @@ import { z } from 'zod'
 
 import { buildCohostPrompt, cohostResponseSchema, interpretCohostResponse, visionNote, visionTimes } from '@shared/ai/cohost'
 import { editorResponseSchema, toCommands } from '@shared/ai/edit-commands'
+import {
+  applyCheckResults,
+  briefingCheckSchema,
+  briefingResponseSchema,
+  buildBriefingPrompt,
+  buildCheckPrompt,
+  factsToCheck,
+  interpretBriefing,
+  mapCheckIds,
+  validateBriefing
+} from '@shared/ai/briefing'
 import { buildDraftPrompt, liveMomentsFor, wrapDraftCommands } from '@shared/ai/draft'
 import { buildEditorPrompt } from '@shared/ai/editor'
 import { buildPortraitPrompt, filterPortraitCommands, portraitResponseSchema } from '@shared/ai/portraits'
@@ -148,6 +159,10 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
     })
   ]) as unknown as z.ZodType<ChannelArgs<'ai:edit'>>,
   'ai:publish': z.tuple([projectArg]) as unknown as z.ZodType<ChannelArgs<'ai:publish'>>,
+  'ai:briefing': z.tuple([projectArg]) as unknown as z.ZodType<ChannelArgs<'ai:briefing'>>,
+  'ai:briefingCheck': z.tuple([projectArg, z.object({}).loose(), z.array(z.string().max(100)).max(100).nullable()]) as unknown as z.ZodType<
+    ChannelArgs<'ai:briefingCheck'>
+  >,
   'ai:portraits': z.tuple([projectArg, z.object({ instruction: z.string().max(4000).optional() })]) as unknown as z.ZodType<ChannelArgs<'ai:portraits'>>,
   'ai:draft': z.tuple([
     projectArg,
@@ -182,7 +197,8 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
         userName: z.string().min(1).max(100),
         model: z.object({ providerId: z.enum(PROVIDER_IDS), model: z.string().min(1).max(200) }).nullable(),
         voice: z.object({ engineId: z.string().max(100), speakerId: z.number(), params: voiceParamsSchema }).nullable(),
-        projectTitle: z.string().max(200)
+        projectTitle: z.string().max(200),
+        briefing: z.string().max(20_000).optional()
       })
       .loose()
   ]) as unknown as z.ZodType<ChannelArgs<'live:setProfile'>>,
@@ -317,6 +333,36 @@ export function createHandlers(services: Services): HandlerTable {
       const { commands, dropped } = filterPortraitCommands(project, value.commands)
       const note = dropped > 0 ? `(立ち絵以外に触れる操作 ${dropped} 件は除きました)` : ''
       return { reply: `${value.reply}${note}`, commands, generatedBy: result.generatedBy }
+    },
+    'ai:briefing': async (project) => {
+      if (!project.meta.synopsis?.trim()) throw new AppError('INVALID_ARGUMENT', '企画メモが空です。先に企画メモを書いてください')
+      const { value, result } = await services.ai.generateStructured(
+        'editor',
+        { ...buildBriefingPrompt(project), session: projectSession(project.meta, 'briefing') },
+        briefingResponseSchema
+      )
+      return interpretBriefing(project, value, result.generatedBy, new Date())
+    },
+    'ai:briefingCheck': async (project, briefing, factIds) => {
+      const problem = validateBriefing(briefing)
+      if (problem) throw new AppError('INVALID_ARGUMENT', problem)
+      const facts = factsToCheck(briefing, factIds ?? undefined)
+      if (facts.length === 0) return { briefing, webSearched: false, checked: 0 }
+      // ウェブ検索を使える接続方法(Claude Code)なら使い、出典つきで確かめる。時間がかかるので待ち時間を延ばす。
+      // 使えない接続方法には「使えない」と伝えた依頼にする(調べたふりをさせない)。
+      const canSearch = services.ai.resolve('editor').providerId === 'claude-code'
+      const { value, result } = await services.ai.generateStructured(
+        'editor',
+        {
+          ...buildCheckPrompt(project, facts, canSearch),
+          webSearch: canSearch,
+          timeoutMs: canSearch ? 10 * 60_000 : 0,
+          session: projectSession(project.meta, 'briefing-check')
+        },
+        briefingCheckSchema
+      )
+      const webSearched = canSearch && result.webSearch === true
+      return { briefing: applyCheckResults(briefing, mapCheckIds(facts, value), webSearched, new Date()), webSearched, checked: facts.length }
     },
     'ai:publish': async (project) => {
       const { value, result } = await services.ai.generateStructured(
