@@ -386,6 +386,11 @@ export interface VideoItem extends ItemBase {
   transform: Transform
   volume: number
   playbackRate: number
+  /**
+   * 静止画(フリーズフレーム)。真なら、素材の inMs のコマを尺いっぱい表示し続ける(音は鳴らさない)。
+   * 無い古いプロジェクトは通常の動画として扱う。
+   */
+  freeze?: boolean
 }
 
 export interface ImageItem extends ItemBase {

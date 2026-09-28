@@ -99,7 +99,8 @@ export const itemHandlers: ItemHandlers = {
     if (start < 0) fail(command.op, '開始時刻は負の値にできません')
     if (end - start < MIN_DURATION_MS) fail(command.op, '尺が短すぎます')
 
-    if (item.type === 'video' || (item.type === 'audio' && !item.loop)) {
+    // 静止画は同じコマを出し続けるので、長さだけが変わる。
+    if ((item.type === 'video' && !item.freeze) || (item.type === 'audio' && !item.loop)) {
       // 素材の切り出し位置も一緒に動かす。映像は画面上の位置を保ったまま端だけが動く。
       const rate = item.type === 'video' ? item.playbackRate : 1
       const inMs = Math.round(item.inMs + (start - item.startMs) * rate)

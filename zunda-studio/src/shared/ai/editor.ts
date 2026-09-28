@@ -28,6 +28,7 @@ function itemSummary(project: Project, item: Item): string {
   switch (item.type) {
     case 'video':
     case 'audio':
+      if (item.type === 'video' && item.freeze) return `${base} asset=${item.assetId} 静止画(素材の${formatMs(item.inMs)}のコマ)`
       return `${base} asset=${item.assetId} 素材の${formatMs(item.inMs)}から 音量${item.volume}${item.type === 'audio' && item.loop ? ' ループ' : ''}`
     case 'image':
       return `${base} asset=${item.assetId}`

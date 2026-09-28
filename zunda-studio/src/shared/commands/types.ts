@@ -461,6 +461,21 @@ export interface ItemPaste {
   tempIdPrefix?: string
 }
 
+/**
+ * 動画をその時刻のコマで止めて、静止画として durationMs の間表示する(フリーズフレーム)。
+ * insert: 止めている間、後ろのアイテムをずらす(その時刻にかかっているズームは、静止画の間も寄ったまま伸ばす)。
+ * overwrite: 後ろはずらさず、動画のその先を静止画で置き換える。
+ * atMs が動画の終わりちょうどなら、最後のコマで止める。静止画のアイテムは tempId で受け取れる。
+ */
+export interface ItemFreezeFrame {
+  op: 'item.freezeFrame'
+  itemId: ItemId
+  atMs: Ms
+  durationMs: Ms
+  mode: 'insert' | 'overwrite'
+  tempId?: string
+}
+
 /** 動画の再生速度を変える。切り出す区間はそのままで、画面上の長さが変わる。 */
 export interface ItemSetSpeed {
   op: 'item.setSpeed'
@@ -597,6 +612,7 @@ export type Command =
   | ItemSplit
   | ItemPaste
   | ItemSetSpeed
+  | ItemFreezeFrame
   | ItemSetLocked
   | TimelineRippleDelete
   | TimelineCloseGap

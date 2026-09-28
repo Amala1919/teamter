@@ -17,6 +17,7 @@ import {
   cutSelection,
   duplicateSelection,
   FRAME_MS,
+  freezeAtPlayhead,
   jumpToEditPoint,
   jumpToEnd,
   nudgePlayhead,
@@ -147,7 +148,8 @@ export function App(): React.JSX.Element {
 
 /**
  * タイムラインの編集のショートカット。扱ったら true を返す。
- *   S: 再生位置で分割 / Delete: 削除 / Shift+Delete: 削除して詰める
+ *   S: 再生位置で分割 / F: 再生位置で止めて2秒の静止画を挟む(Shift+F は先を静止画にする)
+ *   Delete: 削除 / Shift+Delete: 削除して詰める
  *   Ctrl+C・X・V・D・A: コピー・切り取り・貼り付け・複製・すべて選択
  *   ←→: 1コマ送り(Shift で1秒) / ↑↓: 前後の編集点へ / Home・End: 先頭・末尾へ
  */
@@ -182,6 +184,11 @@ function timelineShortcut(event: KeyboardEvent, modifier: boolean, report: (mess
     case 's':
     case 'S':
       report(splitAtPlayhead())
+      return true
+    case 'f':
+    case 'F':
+      // 再生位置で止めて、2秒の静止画を挟む。
+      report(freezeAtPlayhead(2000, event.shiftKey ? 'overwrite' : 'insert'))
       return true
     case 'ArrowLeft':
       nudgePlayhead(event.shiftKey ? -1000 : -FRAME_MS)

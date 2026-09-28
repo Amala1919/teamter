@@ -286,7 +286,8 @@ export class ExportService {
         fps,
         width,
         height,
-        playbackRate: item.playbackRate
+        playbackRate: item.freeze ? 1 : item.playbackRate,
+        singleFrame: item.freeze === true
       }),
       canvas: createCanvas(width, height),
       width,

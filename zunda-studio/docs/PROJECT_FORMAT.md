@@ -258,6 +258,11 @@ PSDのレイヤーツリーに対する「役割の割り当て」を保存す�
   "transform": { "x": 960, "y": 540, "scale": 1.0, "rotation": 0, "opacity": 1.0 },
   "volume": 0.4, "playbackRate": 1.0 }
 
+// 静止画(フリーズフレーム): 動画の inMs のコマを尺いっぱい止めて表示する。音は鳴らさない。
+// freeze が無い(古い)プロジェクトは通常の動画として扱う。
+{ "type": "video", "assetId": "ast_gameplay", "inMs": 762333, "outMs": 762333,
+  "transform": { /* 同上 */ }, "volume": 0.4, "playbackRate": 1.0, "freeze": true }
+
 // 画像
 { "type": "image", "assetId": "ast_cutin", "transform": { /* 同上 */ } }
 

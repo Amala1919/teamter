@@ -72,7 +72,15 @@ export function InspectorPane({ onError }: { onError: (message: string) => void 
           {item.type === 'text' && <TextInspector project={project} item={item} run={run} />}
           {item.type === 'shape' && <ShapeInspector item={item} run={run} />}
           {item.type === 'audio' && <AudioInspector item={item} run={run} />}
-          {item.type === 'video' && (
+          {item.type === 'video' && item.freeze && (
+            <section>
+              <h3>静止画</h3>
+              <p className="note" data-testid="inspector-freeze">
+                元の動画の {formatMs(item.inMs)} のコマを止めて表示しています(音は鳴りません)。長さはタイムラインの端か、上の「長さ」で変えられます。
+              </p>
+            </section>
+          )}
+          {item.type === 'video' && !item.freeze && (
             <section>
               <h3>再生</h3>
               <VolumeField item={item} run={run} />

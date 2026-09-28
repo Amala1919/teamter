@@ -1,5 +1,5 @@
 import { DEFAULT_LAYER_IDS } from '../../project/factory'
-import type { Effect, Item, Ms, Project } from '../../project/types'
+import type { Effect, Item, Ms, Project, VideoItem } from '../../project/types'
 import { fail, findMutableItem, itemEnd, layerOrDefault, requireFinite, shiftItemsFrom, type HandlerTable } from '../env'
 import type { CommandOp } from '../types'
 import { validateEffect } from './item'
@@ -7,7 +7,7 @@ import { validateTransform, validateVolume } from './media'
 
 type EditHandlers = Pick<
   HandlerTable,
-  'item.split' | 'item.paste' | 'item.setSpeed' | 'item.setLocked' | 'timeline.rippleDelete' | 'timeline.closeGap' | 'timeline.insertGap'
+  'item.split' | 'item.freezeFrame' | 'item.paste' | 'item.setSpeed' | 'item.setLocked' | 'timeline.rippleDelete' | 'timeline.closeGap' | 'timeline.insertGap'
 >
 
 /** 分けたときに両側に残す最短の尺。 */
@@ -45,6 +45,38 @@ function splitEffects(effects: readonly Effect[]): { first: Effect[]; second: Ef
   return { first, second }
 }
 
+/**
+ * アイテムを at で2つに分け、後半(新しいアイテム)を返す。前半は元のアイテムのまま短くなる。
+ * 動画・音声は素材の区間も分け、フェードは前半に入り・後半に出だけを残す。
+ */
+function splitItem(draft: Project, item: Item, at: Ms, newId: string): Item {
+  const second = clone(item)
+  second.id = newId
+  second.startMs = at
+  second.durationMs = itemEnd(item) - at
+  item.durationMs = at - item.startMs
+  const effects = splitEffects(item.effects)
+  item.effects = effects.first
+  second.effects = effects.second
+
+  if (item.type === 'video' && second.type === 'video' && !item.freeze) {
+    const cut = Math.round(item.inMs + item.durationMs * item.playbackRate)
+    second.inMs = cut
+    item.outMs = cut
+  } else if (item.type === 'audio' && second.type === 'audio') {
+    // ループ再生の音は、後半も素材の頭から繰り返す(区間はそのまま)。
+    if (!item.loop) {
+      const cut = item.inMs + item.durationMs
+      second.inMs = cut
+      item.outMs = cut
+    }
+    item.fadeOutMs = 0
+    second.fadeInMs = 0
+  }
+  draft.items.splice(draft.items.indexOf(item) + 1, 0, second)
+  return second
+}
+
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
@@ -75,32 +107,65 @@ export const editHandlers: EditHandlers = {
     if (at - item.startMs < MIN_PART_MS || itemEnd(item) - at < MIN_PART_MS) {
       fail(command.op, '分ける位置がアイテムの中にありません')
     }
-    const second = clone(item)
-    second.id = env.ctx.newId('itm')
-    second.startMs = at
-    second.durationMs = itemEnd(item) - at
-    item.durationMs = at - item.startMs
-    const effects = splitEffects(item.effects)
-    item.effects = effects.first
-    second.effects = effects.second
+    const second = splitItem(draft, item, at, env.ctx.newId('itm'))
+    if (command.tempId) env.resolvedIds[command.tempId] = second.id
+  },
 
-    if (item.type === 'video' && second.type === 'video') {
-      const cut = Math.round(item.inMs + item.durationMs * item.playbackRate)
-      second.inMs = cut
-      item.outMs = cut
-    } else if (item.type === 'audio' && second.type === 'audio') {
-      // ループ再生の音は、後半も素材の頭から繰り返す(区間はそのまま)。
-      if (!item.loop) {
-        const cut = item.inMs + item.durationMs
-        second.inMs = cut
-        item.outMs = cut
+  'item.freezeFrame': (draft, command, env) => {
+    const item = findMutableItem(draft, env.resolve(command.itemId), command.op)
+    if (item.type !== 'video') fail(command.op, '静止画にできるのは動画だけです')
+    if (item.freeze) fail(command.op, 'すでに静止画です(長さを変えてください)')
+    const at = Math.round(requireFinite(command.atMs, command.op, '止める位置'))
+    const length = Math.round(requireFinite(command.durationMs, command.op, '止める長さ'))
+    if (length < MIN_PART_MS) fail(command.op, '止める長さが短すぎます')
+    if (at < item.startMs || at > itemEnd(item)) fail(command.op, '止める位置が動画の中にありません')
+
+    // 止める直前に映っていたコマ(区切りの位置そのものは、後半の最初のコマになるため)。
+    const asset = draft.assets[item.assetId]
+    const frameMs = 1000 / (asset?.type === 'video' && asset.fps > 0 ? asset.fps : 30)
+    const cutSource = item.inMs + (at - item.startMs) * item.playbackRate
+    const frameSource = Math.round(Math.min(Math.max(item.inMs, cutSource - frameMs), Math.max(item.inMs, item.outMs - frameMs)))
+
+    // 静止画の後ろに続く動画(途中で止めるなら後半、頭で止めるなら動画全体、終わりで止めるなら無し)。
+    let after: VideoItem | null = null
+    if (at - item.startMs >= MIN_PART_MS && itemEnd(item) - at >= MIN_PART_MS) {
+      after = splitItem(draft, item, at, env.ctx.newId('itm')) as VideoItem
+    } else if (at - item.startMs < MIN_PART_MS) {
+      after = item
+    }
+
+    if (command.mode === 'insert') {
+      // その時刻にかかっているズームは、止めている間も寄ったままにする。
+      for (const other of draft.items) {
+        if (other.type === 'zoom' && !other.locked && other.startMs < at && at < itemEnd(other)) other.durationMs += length
       }
-      item.fadeOutMs = 0
-      second.fadeInMs = 0
+      shiftItemsFrom(draft, at, length, new Set())
+    } else if (after) {
+      // 上書き: 動画のその先を静止画の長さだけ削る。
+      if (after.durationMs <= length) {
+        draft.items.splice(draft.items.indexOf(after), 1)
+      } else {
+        after.inMs = Math.round(after.inMs + length * after.playbackRate)
+        after.startMs = at + length
+        after.durationMs -= length
+      }
+    }
+
+    const still: VideoItem = {
+      ...clone(item),
+      id: env.ctx.newId('itm'),
+      startMs: at,
+      durationMs: length,
+      inMs: frameSource,
+      outMs: frameSource,
+      playbackRate: 1,
+      freeze: true,
+      effects: [],
+      locked: false
     }
     const index = draft.items.indexOf(item)
-    draft.items.splice(index + 1, 0, second)
-    if (command.tempId) env.resolvedIds[command.tempId] = second.id
+    draft.items.splice(index + 1, 0, still)
+    if (command.tempId) env.resolvedIds[command.tempId] = still.id
   },
 
   'item.paste': (draft, command, env) => {
@@ -125,6 +190,7 @@ export const editHandlers: EditHandlers = {
   'item.setSpeed': (draft, command, env) => {
     const item = findMutableItem(draft, env.resolve(command.itemId), command.op)
     if (item.type !== 'video') fail(command.op, '速度を変えられるのは動画だけです')
+    if (item.freeze) fail(command.op, '静止画の速度は変えられません')
     requireFinite(command.rate, command.op, '速度')
     if (command.rate < MIN_SPEED || command.rate > MAX_SPEED) fail(command.op, `速度は${MIN_SPEED}〜${MAX_SPEED}倍にしてください`)
     item.playbackRate = command.rate

@@ -392,6 +392,7 @@ function itemLabel(project: Project, item: Item): string {
     case 'voice':
       return item.text
     case 'video':
+      return `${item.freeze ? '静止画: ' : ''}${assetName(project.assets[item.assetId])}`
     case 'image':
     case 'audio':
       return assetName(project.assets[item.assetId])
@@ -426,8 +427,9 @@ function TimelineItem(props: TimelineItemProps): React.JSX.Element {
   if (props.selected) classes.push('timeline__item--selected')
   if (props.dragging) classes.push('timeline__item--dragging')
   if (props.locked) classes.push('timeline__item--locked')
+  if (item.type === 'video' && item.freeze) classes.push('timeline__item--freeze')
   const asset = 'assetId' in item ? project.assets[item.assetId] : undefined
-  const waveform = (item.type === 'audio' || (item.type === 'video' && asset?.type === 'video' && asset.hasAudio)) && asset
+  const waveform = (item.type === 'audio' || (item.type === 'video' && !item.freeze && asset?.type === 'video' && asset.hasAudio)) && asset
 
   return (
     <div

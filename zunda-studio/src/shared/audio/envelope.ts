@@ -29,7 +29,7 @@ export function sourceSpanMs(item: SoundItem): Ms {
  * 動画は再生速度を掛ける。ループする音声は素材の区間を繰り返す。
  */
 export function sourceTimeMs(item: SoundItem, relMs: Ms): Ms {
-  if (item.type === 'video') return item.inMs + relMs * item.playbackRate
+  if (item.type === 'video') return item.freeze ? item.inMs : item.inMs + relMs * item.playbackRate
   const span = sourceSpanMs(item)
   if (item.loop && span > 0) return item.inMs + (relMs % span)
   return item.inMs + relMs
