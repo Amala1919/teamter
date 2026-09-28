@@ -193,6 +193,10 @@ describe('OpenCode の API(キーで接続)', () => {
     const free = await provider(GOOD_KEY).generate('opencode-go/free-tier-model', request).catch((error: unknown) => error)
     expect(free).toMatchObject({ code: 'AI_SUBSCRIPTION_REQUIRED', message: expect.stringContaining('無料枠として扱われました') })
     expect(httpFailure(403, "OpenCode's free tier can only be used from within OpenCode").code).toBe('AI_SUBSCRIPTION_REQUIRED')
+    // 無料のモデルを選んでいたなら、Go の契約があっても使えないことと、Go のモデルを選べばよいことを伝える
+    const freeModel = httpFailure(401, JSON.stringify({ error: { message: "OpenCode's free tier can only be used from within OpenCode" } }), 'opencode/big-pickle')
+    expect(freeModel).toMatchObject({ code: 'AI_SUBSCRIPTION_REQUIRED', message: expect.stringContaining('Go を契約していても') })
+    expect(freeModel.message).toContain('無料ではないモデル')
 
     expect(parseGatewayError('<html>Bad gateway</html>')).toEqual({ type: '', message: '<html>Bad gateway</html>' })
   })
