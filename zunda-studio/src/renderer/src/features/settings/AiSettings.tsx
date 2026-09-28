@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 
-import { AI_ROLE_LABELS, type ProviderId } from '@shared/ai/types'
+import { AI_ROLES, AI_ROLE_LABELS, type ModelRef, type ProviderId } from '@shared/ai/types'
 import { OPENCODE_GO_BASE_URL, OPENCODE_ZEN_BASE_URL, type AppSettings } from '@shared/settings/schema'
 
+import { api, toAppError } from '../../api'
 import { PathField } from '../../ui/PathField'
 import { useSettingsStore } from '../../state/settings'
 import { ModelPicker } from './ModelPicker'
@@ -136,7 +137,7 @@ export function AiSettings({ settings, onError }: AiSettingsProps): React.JSX.El
 
         {opencode.connection === 'api-key' ? (
           <>
-            <OpenCodeKeyField onError={onError} />
+            <OpenCodeKeyField settings={settings} onError={onError} />
             <label className="field">
               <span className="field__label">契約しているプラン</span>
               <select
@@ -219,26 +220,84 @@ export function AiSettings({ settings, onError }: AiSettingsProps): React.JSX.El
   )
 }
 
-/** OpenCode の API キー。入れたキーは画面に戻さず、末尾の数文字だけ見せる。 */
-function OpenCodeKeyField({ onError }: { onError: (error: unknown) => void }): React.JSX.Element {
+/** OpenCode のおすすめのモデル(契約しているプランのもの)。一覧が取れなければ null。 */
+async function recommendedOpenCodeModel(): Promise<string | null> {
+  const list = await useSettingsStore.getState().loadModels('opencode', true)
+  return (list.find((model) => model.recommended === true) ?? list[0])?.id ?? null
+}
+
+/**
+ * 役割ごとのAIを OpenCode にする。既に OpenCode を選んでいる役割はそのまま。
+ * onlyUnset なら、まだ何も選んでいない役割だけを埋める(Claude を選んでいる役割は変えない)。
+ */
+async function assignOpenCodeToRoles(settings: AppSettings, onlyUnset: boolean): Promise<void> {
+  const model = await recommendedOpenCodeModel()
+  if (!model) return
+  const roles: Partial<Record<(typeof AI_ROLES)[number], ModelRef>> = {}
+  for (const role of AI_ROLES) {
+    const current = settings.ai.roles[role]
+    if (current?.providerId === 'opencode') continue
+    if (onlyUnset && current !== null) continue
+    roles[role] = { providerId: 'opencode', model }
+  }
+  if (Object.keys(roles).length > 0) await useSettingsStore.getState().update({ ai: { roles } })
+}
+
+/** 接続テストに使うモデル。役割で OpenCode のモデルを選んでいればそれ、無ければおすすめ。 */
+async function modelForTest(settings: AppSettings): Promise<string | null> {
+  const chosen = AI_ROLES.map((role) => settings.ai.roles[role]).find((ref) => ref?.providerId === 'opencode')
+  return chosen?.model ?? (await recommendedOpenCodeModel())
+}
+
+type TestState = { kind: 'idle' | 'running' | 'ok' | 'error'; text: string }
+
+/** OpenCode の API キー。入れたキーは画面に戻さず、末尾の数文字だけ見せる。保存したらそのまま接続を確かめる。 */
+function OpenCodeKeyField({ settings, onError }: { settings: AppSettings; onError: (error: unknown) => void }): React.JSX.Element {
   const secrets = useSettingsStore((state) => state.secrets)
   const loadSecrets = useSettingsStore((state) => state.loadSecrets)
   const setSecret = useSettingsStore((state) => state.setSecret)
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
+  const [test, setTest] = useState<TestState>({ kind: 'idle', text: '' })
   const status = secrets.find((item) => item.name === 'opencode.apiKey')
 
   useEffect(() => {
     loadSecrets().catch(onError)
   }, [loadSecrets, onError])
 
+  const runTest = async (current: AppSettings): Promise<void> => {
+    setTest({ kind: 'running', text: '接続を確かめています…' })
+    try {
+      const model = await modelForTest(current)
+      if (!model) {
+        setTest({ kind: 'error', text: 'モデルの一覧を取れませんでした。' })
+        return
+      }
+      const result = await api.invoke('ai:test', 'opencode', model)
+      setTest({ kind: 'ok', text: `つながりました(${model}: ${result.text})` })
+    } catch (error) {
+      const appError = toAppError(error)
+      setTest({ kind: 'error', text: `${appError.message}。${appError.guidance}` })
+    }
+  }
+
   const store = (value: string | null): void => {
     setBusy(true)
+    setTest({ kind: 'idle', text: '' })
     setSecret('opencode.apiKey', value)
-      .then(() => setDraft(''))
+      .then(async () => {
+        setDraft('')
+        if (value === null) return
+        // 役割のAIがまだ何も選ばれていなければ OpenCode にする(選ばれていないと生成できないため)。
+        await assignOpenCodeToRoles(settings, true)
+        await runTest(useSettingsStore.getState().settings ?? settings)
+      })
       .catch(onError)
       .finally(() => setBusy(false))
   }
+
+  // 役割のAIが OpenCode 以外(Claude・未選択)のままだと、キーを入れても OpenCode は使われない。
+  const otherRoles = AI_ROLES.filter((role) => settings.ai.roles[role]?.providerId !== 'opencode')
 
   return (
     <div className="field">
@@ -248,7 +307,7 @@ function OpenCodeKeyField({ onError }: { onError: (error: unknown) => void }): R
           type="password"
           autoComplete="off"
           spellCheck={false}
-          placeholder={status?.set ? `保存済み(${status.hint ?? ''})。変えるときだけ入力` : 'sk-… を貼り付け'}
+          placeholder={status?.set ? `保存済み(${status.hint ?? ''})。変えるときだけ入力` : 'キーを貼り付け(sk-… など)'}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
@@ -261,6 +320,16 @@ function OpenCodeKeyField({ onError }: { onError: (error: unknown) => void }): R
           保存して接続
         </button>
         {status?.set && (
+          <button
+            type="button"
+            disabled={busy || test.kind === 'running'}
+            onClick={() => void runTest(settings)}
+            data-testid="opencode-key-test"
+          >
+            接続テスト
+          </button>
+        )}
+        {status?.set && (
           <button type="button" disabled={busy} onClick={() => store(null)} data-testid="opencode-key-clear">
             キーを消す
           </button>
@@ -270,6 +339,32 @@ function OpenCodeKeyField({ onError }: { onError: (error: unknown) => void }): R
         {status?.set ? `保存済み ${status.hint ?? ''}` : '未入力'}
         {status?.set && !status.secure ? '(この環境では暗号化できないため、そのまま保存しています)' : ''}
       </span>
+      {test.kind !== 'idle' && (
+        <span
+          className={`status ${test.kind === 'ok' ? 'status--ok' : test.kind === 'error' ? 'status--error' : ''}`}
+          data-testid="opencode-key-test-result"
+        >
+          {test.text}
+        </span>
+      )}
+      {status?.set && otherRoles.length > 0 && (
+        <div className="note" data-testid="opencode-role-notice">
+          {otherRoles
+            .map((role) => {
+              const ref = settings.ai.roles[role]
+              return `${AI_ROLE_LABELS[role]}: ${ref ? 'Claude' : '未選択'}`
+            })
+            .join('、')}
+          。OpenCode を使うには、上の「役割ごとのAI」で OpenCode を選んでください。{' '}
+          <button
+            type="button"
+            onClick={() => assignOpenCodeToRoles(settings, false).catch(onError)}
+            data-testid="opencode-use-for-roles"
+          >
+            OpenCode にする
+          </button>
+        </div>
+      )}
     </div>
   )
 }

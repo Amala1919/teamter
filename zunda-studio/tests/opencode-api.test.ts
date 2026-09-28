@@ -7,11 +7,12 @@ import { z } from 'zod'
 import { PLAIN_CIPHER, SecretStore } from '@main/core/secret-store'
 import { AiService } from '@main/services/ai/ai-service'
 import { CLAUDE_MODELS } from '@main/services/ai/claude-code-provider'
-import { apiModelName, baseUrlFor, formatsFor, modelPrefix, usesOfficialEndpoints } from '@main/services/ai/opencode-api'
+import { apiModelName, baseUrlFor, formatsFor, httpFailure, modelPrefix, parseGatewayError, usesOfficialEndpoints } from '@main/services/ai/opencode-api'
 import { OpenCodeProvider } from '@main/services/ai/opencode-provider'
 import { groupModels, markRecommended, OPENCODE_RECOMMENDED } from '@shared/ai/models'
 import type { ModelInfo } from '@shared/ai/types'
 import type { AppSettings } from '@shared/settings/schema'
+import { normalizeApiKey } from '@shared/settings/secrets'
 
 import { GOOD_KEY, startMockOpenCodeApi, type MockOpenCodeApi } from './fixtures/mock-opencode-api.mjs'
 import { settingsWith, tempDir } from './helpers/env'
@@ -123,6 +124,59 @@ describe('OpenCode の API(キーで接続)', () => {
     await expect(provider(GOOD_KEY).generate('opencode-go/limited-model', request)).rejects.toMatchObject({ code: 'AI_RATE_LIMITED' })
   })
 
+  it('キーは形式ごとに決まったヘッダーだけで送り、エラーの文は日本語で求める', async () => {
+    const ai = provider(GOOD_KEY)
+    const request = { system: 's', turns: [{ role: 'user' as const, content: 'やあ' }] }
+    mock.calls.length = 0
+    await ai.generate('opencode-go/kimi-k3', request)
+    await ai.generate('opencode-go/minimax-m3', request)
+    await ai.generate('opencode/gemini-3.8-flash', request)
+    const [chat, messages, gemini] = mock.calls.map((call) => call.headers)
+    expect(chat).toMatchObject({ authorization: `Bearer ${GOOD_KEY}`, 'accept-language': 'ja' })
+    expect(chat!['x-api-key']).toBeUndefined()
+    expect(messages).toMatchObject({ 'x-api-key': GOOD_KEY, 'anthropic-version': '2023-06-01' })
+    expect(messages!['authorization']).toBeUndefined()
+    expect(gemini).toMatchObject({ 'x-goog-api-key': GOOD_KEY })
+    expect(gemini!['authorization']).toBeUndefined()
+  })
+
+  it('貼り付けたキーの余計な部分(Bearer・引用符・改行・全角)を取り除いて使う', async () => {
+    const request = { system: 's', turns: [{ role: 'user' as const, content: 'やあ' }] }
+    for (const pasted of [`Bearer ${GOOD_KEY}`, ` "${GOOD_KEY}"\n`, `OPENCODE_API_KEY=${GOOD_KEY}`, `\uFEFF${GOOD_KEY}\u3000`, GOOD_KEY.replace('sk', 'ｓｋ')]) {
+      expect(normalizeApiKey(pasted)).toBe(GOOD_KEY)
+      expect((await provider(pasted).generate('opencode-go/kimi-k3', request)).text).toContain('kimi-k3')
+    }
+  })
+
+  it('残高不足・同意が必要などは、キーの誤りと言わずにサーバーの理由を見せる', async () => {
+    const request = { system: 's', turns: [{ role: 'user' as const, content: 'やあ' }] }
+    const wrong = await provider('sk-wrong').generate('opencode-go/kimi-k3', request).catch((error: unknown) => error)
+    expect(wrong).toMatchObject({ code: 'AI_KEY_REQUIRED', message: expect.stringContaining('無効なAPIキーです') })
+
+    const balance = await provider(GOOD_KEY).generate('opencode-go/balance-model', request).catch((error: unknown) => error)
+    expect(balance).toMatchObject({ code: 'AI_MODEL_UNAVAILABLE', message: expect.stringContaining('残高が不足しています') })
+    expect((balance as Error).message).toContain('OpenCode Go を契約しているアカウント')
+
+    const consent = await provider(GOOD_KEY).generate('opencode-go/consent-model', request).catch((error: unknown) => error)
+    expect(consent).toMatchObject({ code: 'AI_MODEL_UNAVAILABLE', message: expect.stringContaining('明示的な同意が必要') })
+
+    expect(httpFailure(401, JSON.stringify({ type: 'error', error: { type: 'CreditsError', message: 'Insufficient balance.' } }), 'opencode/claude-opus-5').message).toContain(
+      'OpenCode Go(月額プラン)」のモデルを選んでください'
+    )
+    expect(httpFailure(429, JSON.stringify({ type: 'error', error: { type: 'GoUsageLimitError', message: '5時間の利用上限に達しました' } }))).toMatchObject({
+      code: 'AI_RATE_LIMITED',
+      message: expect.stringContaining('5時間の利用上限')
+    })
+    expect(parseGatewayError('<html>Bad gateway</html>')).toEqual({ type: '', message: '<html>Bad gateway</html>' })
+  })
+
+  it('「この形式では使えない」と 401 で断られても、別の形式で試し直す', async () => {
+    mock.calls.length = 0
+    const result = await provider(GOOD_KEY).generate('opencode-go/strict-model', { system: 's', turns: [{ role: 'user', content: 'やあ' }] })
+    expect(result.text).toContain('responses')
+    expect(mock.calls.map((call) => call.path)).toEqual(['/chat/completions', '/messages', '/responses'])
+  })
+
   it('構造化出力も、アプリ側の検証とやり直しの仕組みにそのまま乗る', async () => {
     process.env['FAKE_OPENCODE_JSON'] = '```json\n{"lines":["はいはい"]}\n```'
     try {
@@ -176,6 +230,9 @@ describe('APIキーの保管', () => {
     await reopened.set('opencode.apiKey', null)
     expect(reopened.status('opencode.apiKey').set).toBe(false)
     await expect(reopened.set('opencode.apiKey', 'a\nb')).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' })
+    // 貼り付けで付いた余計な部分は、保存する前に取り除く
+    await reopened.set('opencode.apiKey', 'Bearer "sk-abcdef9876"\n')
+    expect(reopened.get('opencode.apiKey')).toBe('sk-abcdef9876')
   })
 })
 

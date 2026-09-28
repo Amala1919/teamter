@@ -18,7 +18,18 @@ const MODELS = {
   // 名前からは形式が分からないモデル(chat と見当をつけて外れる)
   'odd-model': 'responses',
   // 上限に達したふりをする
-  'limited-model': 'chat'
+  'limited-model': 'chat',
+  // 残高が無いアカウントで Zen のモデルを呼んだふり(本物も 401 で返す)
+  'balance-model': 'chat',
+  // データ利用への同意が要るモデル(本物は 403)
+  'consent-model': 'chat',
+  // 形式違いを 401 の ModelError で断るモデル
+  'strict-model': 'responses'
+}
+
+/** 本物の OpenCode と同じ形のエラー。 */
+function gatewayError(type, message) {
+  return { type: 'error', error: { type, message } }
 }
 
 const PATHS = { '/chat/completions': 'chat', '/messages': 'messages', '/responses': 'responses' }
@@ -65,8 +76,14 @@ export async function startMockOpenCodeApi({ port = 0, basePath = '/zen/go/v1' }
       const url = new URL(request.url ?? '/', 'http://localhost')
       if (!url.pathname.startsWith(basePath)) return send(404, { error: 'not found' })
       const path = url.pathname.slice(basePath.length)
-      const key = (request.headers.authorization ?? '').replace(/^Bearer /, '') || request.headers['x-api-key']
-      if (key !== GOOD_KEY) return send(401, { error: { message: 'Invalid API key' } })
+      // 本物と同じく、形式ごとに決まったヘッダーからだけキーを読む。
+      const key = path.endsWith('/messages')
+        ? request.headers['x-api-key']
+        : geminiModel(path)
+          ? request.headers['x-goog-api-key']
+          : (request.headers.authorization ?? '').split(' ')[1]
+      if (!key) return send(401, gatewayError('AuthError', 'APIキーがありません。'))
+      if (key !== GOOD_KEY) return send(401, gatewayError('AuthError', '無効なAPIキーです。'))
 
       if (request.method === 'GET' && path === '/models') {
         return send(200, { object: 'list', data: Object.keys(MODELS).map((id) => ({ id, object: 'model' })) })
@@ -76,10 +93,19 @@ export async function startMockOpenCodeApi({ port = 0, basePath = '/zen/go/v1' }
       if (request.method !== 'POST' || !format) return send(404, { error: 'not found' })
       const body = JSON.parse(raw || '{}')
       if (gemini) body.model = gemini
-      calls.push({ path, model: body.model, body })
+      calls.push({ path, model: body.model, body, headers: request.headers })
       const accepts = MODELS[body.model]
       if (!accepts) return send(400, { error: { message: `Model ${body.model} not found` } })
       if (body.model === 'limited-model') return send(429, { error: { message: 'rate limit exceeded' } })
+      if (body.model === 'balance-model') {
+        return send(401, gatewayError('CreditsError', '残高が不足しています。こちらから請求を管理してください: https://opencode.ai/workspace/billing'))
+      }
+      if (body.model === 'consent-model') {
+        return send(403, gatewayError('DataPolicyError', 'このモデルは品質向上のためのデータを収集します。利用するには明示的な同意が必要です'))
+      }
+      if (body.model === 'strict-model' && accepts !== format) {
+        return send(401, gatewayError('ModelError', `フォーマット ${format} ではモデル strict-model はサポートされていません`))
+      }
       if (accepts !== format) return send(404, { error: { message: `Endpoint is unavailable for ${body.model}` } })
       return send(200, reply(format, answer(body, format)))
     })
