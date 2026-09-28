@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { MAX_CLIP_MS, visionTimes, type CohostCandidate, type CohostLine } from '@shared/ai/cohost'
 import { formatModelRef } from '@shared/ai/types'
@@ -20,10 +20,13 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
   const defaultModel = useSettingsStore((state) => state.settings?.ai.roles.conversation ?? null)
   const session = useCohostStore((state) => state.session)
   const generate = useCohostStore((state) => state.generate)
+  const requestSeq = useCohostStore((state) => state.requestSeq)
   const [candidates, setCandidates] = useState(2)
   const [rounds, setRounds] = useState(1)
   const [instruction, setInstruction] = useState('')
   const [synopsisOpen, setSynopsisOpen] = useState(false)
+  // たたむと「生成」のボタンだけにして、台本を広く見せる(開き具合は覚えておく)。
+  const [compact, setCompact] = useState(() => readCompact())
   // 画面を見せるか: none / frame(再生位置の画面) / clip(区間の映像)
   const [visionMode, setVisionMode] = useState<'none' | 'frame' | 'clip'>('none')
   const [clip, setClip] = useState({ startMs: 0, endMs: 5000 })
@@ -52,6 +55,21 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
     })
   }
 
+  // セリフの右クリックやショートカット(Ctrl+Shift+Enter)からの依頼。最初の描画では動かさない。
+  const handledSeq = useRef(requestSeq)
+  useEffect(() => {
+    if (requestSeq === handledSeq.current) return
+    handledSeq.current = requestSeq
+    if (disabledReason !== null) {
+      onError(disabledReason)
+      return
+    }
+    if (session?.loading) return
+    run()
+    // run は毎回作り直されるので依存に入れない(依頼の回数が変わったときだけ動かす)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestSeq])
+
   return (
     <div className="cohost-controls" data-testid="cohost-controls">
       <div className="cohost-controls__row">
@@ -59,7 +77,7 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
           type="button"
           className="button--primary"
           disabled={disabledReason !== null || session?.loading === true}
-          title={disabledReason ?? '選んでいるセリフ(無ければ最後のセリフ)の後に続く返答を作ります'}
+          title={disabledReason ?? '選んでいるセリフ(無ければ最後のセリフ)の後に続く返答を作ります(Ctrl+Shift+Enter)'}
           onClick={() => run()}
           data-testid="cohost-generate"
         >
@@ -85,8 +103,22 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
             ))}
           </select>
         </label>
+        <button
+          type="button"
+          className="button--small cohost-controls__toggle"
+          onClick={() => {
+            setCompact(!compact)
+            writeCompact(!compact)
+          }}
+          title={compact ? '指示・画面などの設定を出す' : '設定をたたんで台本を広く見せる'}
+          aria-expanded={!compact}
+          data-testid="cohost-compact"
+        >
+          {compact ? '設定 ▴' : 'たたむ ▾'}
+        </button>
       </div>
-      <div className="cohost-controls__row">
+      {!compact && (
+        <div className="cohost-controls__row">
         <input
           type="text"
           className="cohost-controls__instruction"
@@ -110,8 +142,9 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
         <button type="button" className="button--small" onClick={() => setSynopsisOpen(true)} data-testid="open-synopsis">
           企画メモ
         </button>
-      </div>
-      {hasVideo && (
+        </div>
+      )}
+      {hasVideo && !compact && (
         <div className="cohost-controls__row cohost-controls__vision">
           <label className="field--inline">
             画面
@@ -152,6 +185,24 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
       {synopsisOpen && <SynopsisDialog onClose={() => setSynopsisOpen(false)} />}
     </div>
   )
+}
+
+const COMPACT_KEY = 'zunda.cohostCompact'
+
+function readCompact(): boolean {
+  try {
+    return localStorage.getItem(COMPACT_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeCompact(value: boolean): void {
+  try {
+    localStorage.setItem(COMPACT_KEY, value ? '1' : '0')
+  } catch {
+    // 覚えられなくても動作には関係ない
+  }
 }
 
 function CohostCandidates({ project, onError }: { project: Project; onError: (message: string | null) => void }): React.JSX.Element | null {

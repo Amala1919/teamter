@@ -35,6 +35,12 @@ export interface CohostSession {
 
 interface CohostState {
   session: CohostSession | null
+  /**
+   * 「返答を作って」の依頼の回数。台本の下の操作欄がこれを見て、今の設定(候補の数・指示など)で生成する。
+   * セリフの右クリックやショートカットから、操作欄までスクロールせずに頼めるようにするため。
+   */
+  requestSeq: number
+  requestGenerate: () => void
   generate: (request: Omit<CohostRequest, 'afterItemId'>) => Promise<void>
   regenerate: () => Promise<void>
   discard: () => void
@@ -52,6 +58,8 @@ function anchorLine(): ItemId | null {
 
 export const useCohostStore = create<CohostState>((set, get) => ({
   session: null,
+  requestSeq: 0,
+  requestGenerate: () => set((state) => ({ requestSeq: state.requestSeq + 1 })),
 
   generate: async (options) => {
     const afterItemId = anchorLine()

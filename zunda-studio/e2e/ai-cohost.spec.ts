@@ -65,6 +65,47 @@ test.describe('相方の返答と編集チャット', () => {
     await expect(lines).toHaveCount(1)
   })
 
+  test('台本が長くても、返答の操作は下に固定され、セリフの右クリックやショートカットから返答を作れる', async ({ page }) => {
+    const script = Array.from({ length: 24 }, (_, index) => `${index % 2 === 0 ? 'ずんだもん' : '四国めたん'}:${index + 1}番目のセリフなのだ`).join('\n')
+    await startWithLines(page, script)
+    const pane = page.locator('.pane--script')
+    // 一番上までスクロールしても、返答の操作は画面の中にある
+    await pane.evaluate((element) => element.scrollTo(0, 0))
+    await expect(page.getByTestId('cohost-generate')).toBeInViewport()
+    await pane.evaluate((element) => element.scrollTo(0, element.scrollHeight))
+    await expect(page.getByTestId('cohost-generate')).toBeInViewport()
+
+    // 途中のセリフを右クリックして、そのセリフへの返答を作る
+    queueAiResponses([reply(['四国めたん:三番目への返事よ'])])
+    await page.getByTestId('cohost-candidates').selectOption('1')
+    await pane.evaluate((element) => element.scrollTo(0, 0))
+    await page.getByTestId('script-line').nth(2).click({ button: 'right', position: { x: 8, y: 8 } })
+    await page.getByTestId('context-menu').getByTestId('menu-line-cohost').click()
+    await expect(page.getByTestId('cohost-line-text')).toHaveValue('三番目への返事よ')
+    const call = aiCalls().at(-1)!
+    expect(call.stdin).toContain('3番目のセリフなのだ')
+    expect(call.stdin).not.toContain('4番目のセリフなのだ')
+    await page.getByTestId('cohost-discard').click()
+
+    // セリフの入力中に Ctrl+Shift+Enter でも作れる(書きかけの文も反映してから頼む)
+    queueAiResponses([reply(['四国めたん:書きかけにも返事するわ'])])
+    const fifth = page.getByTestId('script-line').nth(4).getByTestId('script-text')
+    await fifth.fill('ここを書き直したのだ')
+    await fifth.press('Control+Shift+Enter')
+    await expect(page.getByTestId('cohost-line-text')).toHaveValue('書きかけにも返事するわ')
+    expect(aiCalls().at(-1)!.stdin).toContain('ここを書き直したのだ')
+    // 行は増えていない(Ctrl+Enter の「次にセリフを追加」とは別)
+    await expect(page.getByTestId('script-line')).toHaveCount(24)
+
+    // 設定をたたむと生成のボタンだけになり、開き直すと戻る
+    await page.getByTestId('cohost-discard').click()
+    await page.getByTestId('cohost-compact').click()
+    await expect(page.getByTestId('cohost-instruction')).toHaveCount(0)
+    await expect(page.getByTestId('cohost-generate')).toBeVisible()
+    await page.getByTestId('cohost-compact').click()
+    await expect(page.getByTestId('cohost-instruction')).toBeVisible()
+  })
+
   test('続きをまとめて作ると、両者のセリフが交互に入る。AIの応答が壊れていれば理由を出す', async ({ page }) => {
     await startWithLines(page, 'ずんだもん:今日はホラーゲームなのだ')
     queueAiResponses([reply(['四国めたん:怖いのは苦手じゃなかった?', 'ずんだもん:ぜんぜん平気なのだ', '四国めたん:声が震えてるわよ'])])

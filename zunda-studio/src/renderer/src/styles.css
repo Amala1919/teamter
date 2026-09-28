@@ -2014,3 +2014,27 @@ input[type='url'] {
   align-items: center;
   gap: 6px;
 }
+
+/*
+ * 相方の返答の操作欄。台本の下に固定して、台本が長くても常に見えるようにする。
+ * 候補が長いときは欄の中だけでスクロールし、台本を覆い尽くさない。
+ */
+.script__dock {
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  bottom: -8px;
+  margin-top: auto;
+  padding-top: 6px;
+  position: sticky;
+  z-index: 2;
+}
+
+.script__dock .cohost-controls {
+  margin-bottom: 0;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.cohost-controls__toggle {
+  margin-left: auto;
+}
