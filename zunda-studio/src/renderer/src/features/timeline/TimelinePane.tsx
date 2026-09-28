@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import type { Command } from '@shared/commands/types'
 import { entryTimelineMs } from '@shared/live/timing'
@@ -22,6 +22,10 @@ const HEADER_WIDTH = 112
 /** これより動かなければドラッグではなくクリックとみなす。 */
 const DRAG_THRESHOLD_PX = 3
 const SNAP_PX = 8
+/** 拡大の範囲(1秒あたりの画素数)と、ホイール1段での倍率。 */
+const MIN_PX_PER_SECOND = 5
+const MAX_PX_PER_SECOND = 300
+const WHEEL_ZOOM_STEP = 1.2
 
 type DragMode = 'move' | 'start' | 'end'
 
@@ -46,6 +50,17 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
   const [pxPerSecond, setPxPerSecond] = useState(60)
   const [drag, setDrag] = useState<DragState | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const rulerRef = useRef<HTMLDivElement>(null)
+  const zoomRef = useRef(pxPerSecond)
+  zoomRef.current = pxPerSecond
+  const pendingScroll = useRef<number | null>(null)
+
+  useLayoutEffect(() => {
+    const scroller = scrollRef.current
+    if (pendingScroll.current === null || !scroller) return
+    scroller.scrollLeft = Math.max(0, pendingScroll.current)
+    pendingScroll.current = null
+  }, [pxPerSecond])
 
   const visibleMs = Math.max(projectDurationMs(project) + TAIL_MS, MIN_VISIBLE_MS)
   const contentWidth = (visibleMs / 1000) * pxPerSecond
@@ -81,6 +96,33 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
       scroller.scrollLeft = x - HEADER_WIDTH - 40
     }
   })
+
+  /**
+   * 目盛りの上でホイールを回すと拡大・縮小する(上で拡大)。タイムラインのどこでも Ctrl+ホイールで同じ。
+   * マウスの下の時刻が動かないよう、横のスクロールも合わせる。
+   * React の wheel は preventDefault できない(passive)ので、要素に直接付ける。
+   */
+  useEffect(() => {
+    const scroller = scrollRef.current
+    const ruler = rulerRef.current
+    if (!scroller || !ruler) return
+    const onWheel = (event: WheelEvent): void => {
+      const onRuler = event.target instanceof Node && ruler.contains(event.target)
+      if (!onRuler && !event.ctrlKey) return
+      if (event.deltaY === 0) return
+      event.preventDefault()
+      const current = zoomRef.current
+      const next = Math.min(MAX_PX_PER_SECOND, Math.max(MIN_PX_PER_SECOND, current * (event.deltaY < 0 ? WHEEL_ZOOM_STEP : 1 / WHEEL_ZOOM_STEP)))
+      if (next === current) return
+      const seconds = Math.max(0, (event.clientX - ruler.getBoundingClientRect().left) / current)
+      zoomRef.current = next
+      // 幅が広がるのは描き直した後なので、スクロールはその後で合わせる(useLayoutEffect)。
+      pendingScroll.current = scroller.scrollLeft + seconds * (next - current)
+      setPxPerSecond(next)
+    }
+    scroller.addEventListener('wheel', onWheel, { passive: false })
+    return () => scroller.removeEventListener('wheel', onWheel)
+  }, [])
 
   const run = (commands: Command[], label: string): void => {
     const result = dispatch(commands, label)
@@ -209,12 +251,14 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
           拡大
           <input
             type="range"
-            min={5}
-            max={300}
-            step={5}
-            value={pxPerSecond}
+            min={MIN_PX_PER_SECOND}
+            max={MAX_PX_PER_SECOND}
+            step={1}
+            value={Math.round(pxPerSecond)}
             onChange={(event) => setPxPerSecond(Number(event.target.value))}
             aria-label="タイムラインの拡大"
+            title="目盛りの上でマウスホイールを回しても拡大・縮小できます"
+            data-testid="timeline-zoom"
           />
         </label>
         <span className="pane__count">{project.items.length}アイテム</span>
@@ -226,6 +270,7 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
             <div className="timeline__header timeline__header--corner" />
             <div
               className="timeline__ruler"
+              ref={rulerRef}
               onPointerDown={scrub}
               onContextMenu={(event) => openContextMenu(event, rulerMenu(timeAt(event), menuContext))}
               data-testid="timeline-ruler"
