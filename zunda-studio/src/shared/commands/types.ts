@@ -61,6 +61,7 @@ export interface ProjectSetEditing {
   duckFadeMs?: Ms
   portraitDim?: number
   portraitHop?: boolean
+  avoidOverlap?: boolean
 }
 
 /**
@@ -515,6 +516,19 @@ export interface TimelineInsertGap {
   durationMs: Ms
 }
 
+/**
+ * 同じレイヤーで重なっている素材を、空いている同じ種類のレイヤーへ振り分ける(無ければレイヤーを増やす)。
+ * 後から始まる方を動かす。立ち絵の区間とズームは動かさない。
+ */
+export interface TimelineArrangeOverlaps {
+  op: 'timeline.arrangeOverlaps'
+}
+
+/** 素材の無いレイヤーを消す(既定のレイヤーは残す)。 */
+export interface LayerRemoveEmpty {
+  op: 'layer.removeEmpty'
+}
+
 // ------------------------------------------------------------------ 立ち絵(場面ごと)
 
 /** 登場・退場の動き。fade: ふわっと / pop: ぽんっと / none: 動き無し。 */
@@ -652,6 +666,8 @@ export type Command =
   | TimelineRippleDelete
   | TimelineCloseGap
   | TimelineInsertGap
+  | TimelineArrangeOverlaps
+  | LayerRemoveEmpty
   | MediaPlaceVideo
   | MediaPlaceImage
   | MediaPlaceAudio

@@ -56,6 +56,7 @@ export const projectHandlers: ProjectHandlers = {
       draft.editing.portraitDim = command.portraitDim
     }
     if (command.portraitHop !== undefined) draft.editing.portraitHop = command.portraitHop
+    if (command.avoidOverlap !== undefined) draft.editing.avoidOverlap = command.avoidOverlap
   },
 
   'credits.set': (draft, command) => {

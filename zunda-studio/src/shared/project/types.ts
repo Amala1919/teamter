@@ -612,6 +612,11 @@ export interface EditingSettings {
   portraitDim?: number
   /** 話し始めに立ち絵を小さく跳ねさせる。 */
   portraitHop?: boolean
+  /**
+   * 同じレイヤーで素材が重なったら、足した・動かした方を空いている同じ種類のレイヤーへ移す(無ければ増やす)。
+   * 無いときは有効(false のときだけ重ねたままにする)。
+   */
+  avoidOverlap?: boolean
 }
 
 export interface ProjectAiSettings {

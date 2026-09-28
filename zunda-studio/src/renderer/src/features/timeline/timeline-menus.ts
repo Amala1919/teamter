@@ -1,3 +1,4 @@
+import type { Command } from '@shared/commands/types'
 import { itemEndMs } from '@shared/project/queries'
 import type { Item, Layer, Ms, Project } from '@shared/project/types'
 import { clampRegion, regionHeight } from '@shared/render/zoom'
@@ -263,7 +264,36 @@ export function laneMenu(project: Project, layer: Layer, atMs: Ms, context: Menu
     },
     'separator',
     { label: 'すべて選択', shortcut: 'Ctrl+A', onSelect: selectAll },
-    { label: `「${layer.name}」をすべて選択`, onSelect: () => selectLayer(layer.id) }
+    { label: `「${layer.name}」をすべて選択`, onSelect: () => selectLayer(layer.id) },
+    'separator',
+    ...overlapMenu(project, context)
+  ]
+}
+
+/**
+ * 重なりの振り分け。同じレイヤーで重なった素材を、空いている同じ種類のレイヤーへ移す(shared/commands/arrange.ts)。
+ * レイヤーの見出しと、レーンの何も無いところの右クリックから使う。
+ */
+function overlapMenu(project: Project, context: MenuContext): MenuEntry[] {
+  const dispatch = (commands: Command[], label: string) =>
+    report(context, () => {
+      const result = state().dispatch(commands, label)
+      return result.ok ? null : result.message
+    })
+  const auto = project.editing.avoidOverlap !== false
+  return [
+    {
+      label: '重なったら別のレイヤーへ自動で移す',
+      checked: auto,
+      onSelect: dispatch([{ op: 'project.setEditing', avoidOverlap: !auto }], '重なりの自動振り分けの切り替え'),
+      testId: 'menu-avoid-overlap'
+    },
+    {
+      label: '重なりを整理(空いているレイヤーへ振り分け)',
+      onSelect: dispatch([{ op: 'timeline.arrangeOverlaps' }], '重なりの整理'),
+      testId: 'menu-arrange-overlaps'
+    },
+    { label: '空のレイヤーを消す', onSelect: dispatch([{ op: 'layer.removeEmpty' }], '空のレイヤーを消す'), testId: 'menu-remove-empty-layers' }
   ]
 }
 
@@ -299,7 +329,9 @@ export function layerMenu(layer: Layer, context: MenuContext): MenuEntry[] {
     { label: 'ミュート', checked: layer.muted, onSelect: toggle('muted', 'レイヤーのミュートの切り替え') },
     { label: 'ロック', checked: layer.locked, onSelect: toggle('locked', 'レイヤーのロックの切り替え') },
     'separator',
-    { label: 'このレイヤーをすべて選択', onSelect: () => selectLayer(layer.id) }
+    { label: 'このレイヤーをすべて選択', onSelect: () => selectLayer(layer.id) },
+    'separator',
+    ...overlapMenu(state().project, context)
   ]
 }
 

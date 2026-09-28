@@ -1,5 +1,6 @@
 import { DEFAULT_LAYER_IDS } from '../../project/factory'
 import type { Effect, Item, Ms, Project, VideoItem } from '../../project/types'
+import { removeEmptyLayers, resolveOverlaps } from '../arrange'
 import { fail, findMutableItem, itemEnd, layerOrDefault, requireFinite, shiftItemsFrom, type HandlerTable } from '../env'
 import type { CommandOp } from '../types'
 import { validateEffect } from './item'
@@ -7,7 +8,16 @@ import { validateTransform, validateVolume } from './media'
 
 type EditHandlers = Pick<
   HandlerTable,
-  'item.split' | 'item.freezeFrame' | 'item.paste' | 'item.setSpeed' | 'item.setLocked' | 'timeline.rippleDelete' | 'timeline.closeGap' | 'timeline.insertGap'
+  | 'item.split'
+  | 'item.freezeFrame'
+  | 'item.paste'
+  | 'item.setSpeed'
+  | 'item.setLocked'
+  | 'timeline.rippleDelete'
+  | 'timeline.closeGap'
+  | 'timeline.insertGap'
+  | 'timeline.arrangeOverlaps'
+  | 'layer.removeEmpty'
 >
 
 /** 分けたときに両側に残す最短の尺。 */
@@ -250,6 +260,18 @@ export const editHandlers: EditHandlers = {
     if (at < 0) fail(command.op, '位置は負の値にできません')
     if (length <= 0) fail(command.op, '空ける長さは正の値にしてください')
     shiftItemsFrom(draft, at, Math.round(length), new Set())
+  },
+
+  'timeline.arrangeOverlaps': (draft, _command, env) => {
+    resolveOverlaps(
+      draft,
+      draft.items.map((item) => item.id),
+      env
+    )
+  },
+
+  'layer.removeEmpty': (draft) => {
+    removeEmptyLayers(draft)
   }
 }
 

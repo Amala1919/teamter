@@ -218,7 +218,8 @@ describe('差分', () => {
       { kind: 'added', index: 3, speaker: '四国めたん', before: null, after: '足したわ', notes: [] },
       { kind: 'removed', index: 3, speaker: 'ずんだもん', before: 'セリフ3番', after: null, notes: [] }
     ])
-    expect(diff.others.sort()).toEqual(['ズームを追加(1件)', 'テロップを追加(1件)'])
+    // テロップは背景の映像と重なるので、空いている「背景 2」へ振り分けられ、レイヤーが増える
+    expect(diff.others.sort()).toEqual(['ズームを追加(1件)', 'テロップを追加(1件)', 'レイヤーを変更'])
     expect(diff.durationBeforeMs).toBeGreaterThan(0)
     expect(diff.empty).toBe(false)
     expect(diffProjects(project, project).empty).toBe(true)
