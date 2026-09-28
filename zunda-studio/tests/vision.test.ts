@@ -11,8 +11,8 @@ import { buildBody } from '@main/services/ai/opencode-api'
 import { OpenCodeProvider } from '@main/services/ai/opencode-provider'
 import type { LlmProvider } from '@main/services/ai/provider'
 import { FfmpegLocator } from '@main/services/media/ffmpeg'
-import { grabFrames } from '@main/services/media/frame-grabber'
-import { visionNote, visionTimes } from '@shared/ai/cohost'
+import { frameFilter, grabFrames } from '@main/services/media/frame-grabber'
+import { clampRegion, describeRegion, visionNote, visionTimes } from '@shared/ai/cohost'
 import type { AiImage, GenerateRequest } from '@shared/ai/types'
 import { applyCommands, type CommandContext } from '@shared/commands/apply'
 import type { Command } from '@shared/commands/types'
@@ -90,6 +90,64 @@ describe('録画からコマを取り出す(本物の ffmpeg)', () => {
     expect(green[1]).toBeGreaterThan(180)
     expect(green[0]).toBeLessThan(80)
   })
+})
+
+describe('見せる画像の画質と範囲', () => {
+  it('範囲は 0〜1 に収め、小さすぎる範囲は広げる。全体なら切り出さない', () => {
+    expect(clampRegion({ x: 0.9, y: -0.2, width: 0.5, height: 0.01 })).toEqual({ x: 0.5, y: 0, width: 0.5, height: 0.05 })
+    expect(describeRegion({ x: 0.5, y: 0, width: 0.5, height: 1 })).toBe('左から50%・上から0%の、幅50%×高さ100%')
+    expect(frameFilter(768)).toBe("scale='if(gte(iw,ih),min(768,iw),-2)':'if(gte(iw,ih),-2,min(768,ih))'")
+    expect(frameFilter(1568, { x: 0, y: 0, width: 1, height: 1 })).not.toContain('crop')
+    expect(frameFilter(1568, { x: 0.5, y: 0.25, width: 0.5, height: 0.5 })).toMatch(/^crop=trunc\(iw\*0\.5000\/2\)\*2:trunc\(ih\*0\.5000\/2\)\*2:trunc\(iw\*0\.5000\):trunc\(ih\*0\.2500\),scale=/)
+    // 切り出したことと、読めないものは推測しないことを AI に伝える
+    const note = visionNote({ kind: 'frame', atMs: 3000, region: { x: 0.5, y: 0, width: 0.5, height: 1 } }, [3000])
+    expect(note).toContain('一部(左から50%・上から0%の、幅50%×高さ100%)を切り出して')
+    expect(note).toContain('推測で言わない')
+    expect(visionNote({ kind: 'frame', atMs: 3000 }, [3000])).not.toContain('切り出して')
+  })
+
+  it('本物の ffmpeg で、標準は長辺 768px・高画質は長辺 1568px、範囲はその部分だけを切り出す', async () => {
+    const directory = await tempDir('zs-vision-quality-')
+    const video = join(directory, 'big.mp4')
+    // 左半分が赤、右半分が青の 1920x1080
+    execFileSync('ffmpeg', [
+      '-y', '-hide_banner', '-loglevel', 'error',
+      '-f', 'lavfi', '-i', 'color=c=red:s=1920x1080:r=30:d=1',
+      '-vf', 'drawbox=x=960:y=0:w=960:h=1080:color=blue:t=fill', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', video
+    ])
+    const project = apply(createEmptyProject(), [
+      {
+        op: 'asset.add',
+        asset: { type: 'video', path: { absolute: video, relative: null }, license: { source: '自分で録画', creditRequired: false }, durationMs: 1000, width: 1920, height: 1080, fps: 30, hasAudio: false },
+        tempId: 'v'
+      },
+      { op: 'media.placeVideo', assetId: 'v', atMs: 0 }
+    ])
+    const ffmpeg = new FfmpegLocator(() => defaultSettings())
+    const allow = async (): Promise<void> => undefined
+    const sizeAndColor = async (item: AiImage): Promise<{ width: number; height: number; left: number[]; right: number[] }> => {
+      const picture = await loadImage(Buffer.from(item.data, 'base64'))
+      const canvas = createCanvas(picture.width, picture.height)
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(picture, 0, 0)
+      const at = (x: number): number[] => Array.from(ctx.getImageData(x, picture.height / 2, 1, 1).data.slice(0, 3))
+      return { width: picture.width, height: picture.height, left: at(4), right: at(picture.width - 4) }
+    }
+
+    const standard = await sizeAndColor((await grabFrames(project, [500], ffmpeg, allow)).images[0]!)
+    expect([standard.width, standard.height]).toEqual([768, 432])
+    const high = await sizeAndColor((await grabFrames(project, [500], ffmpeg, allow, { quality: 'high' })).images[0]!)
+    expect([high.width, high.height]).toEqual([1568, 882])
+
+    // 右半分だけ: 960x1080 は高画質の上限より小さいので、元の大きさのまま。全部青
+    const { images } = await grabFrames(project, [500], ffmpeg, allow, { quality: 'high', region: { x: 0.5, y: 0, width: 0.5, height: 1 } })
+    expect(images[0]!.caption).toBe('動画の 0:00.500 の画面(一部を切り出したもの)')
+    const cropped = await sizeAndColor(images[0]!)
+    expect([cropped.width, cropped.height]).toEqual([960, 1080])
+    expect(cropped.left[2]).toBeGreaterThan(180)
+    expect(cropped.right[2]).toBeGreaterThan(180)
+    expect(cropped.left[0]).toBeLessThan(80)
+  }, 60_000)
 })
 
 describe('AI に画像を渡す', () => {

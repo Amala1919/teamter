@@ -87,6 +87,8 @@ export interface IpcContract {
   'ai:draft': { args: [project: Project, request: DraftRequest]; result: { reply: string; commands: Command[]; generatedBy: GeneratedBy; candidates: number } }
   /** 立ち絵(表情・出し入れ・位置・話し手の強調)をまとめて調整する提案を作る。適用は差分を確かめてから。 */
   'ai:portraits': { args: [project: Project, request: PortraitRequest]; result: { reply: string; commands: Command[]; generatedBy: GeneratedBy } }
+  /** 相方に見せる範囲を選ぶための、その時刻の録画のコマ(JPEG の data URL)。録画が映っていなければ null。 */
+  'ai:visionFrame': { args: [project: Project, atMs: number]; result: string | null }
   /** 企画メモから、相方のスタンスと前提知識を作る。保存は利用者が確かめてから(project.setBriefing)。 */
   'ai:briefing': { args: [project: Project]; result: ProjectBriefing }
   /**

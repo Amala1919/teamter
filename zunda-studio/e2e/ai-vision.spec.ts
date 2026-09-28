@@ -94,5 +94,35 @@ test.describe('相方に画面を見せる', () => {
     // すべて外すと、今の再生位置の1コマに戻る
     await page.getByTestId('cohost-frame-clear').click()
     await expect(page.getByTestId('cohost-frame')).toHaveCount(0)
+    await page.getByTestId('cohost-discard').click()
+
+    // 高画質で、画面の右半分だけを切り出して見せる(範囲は実際のコマの上でドラッグして選ぶ)
+    await page.mouse.click(ruler.x + 5 * 60, ruler.y + ruler.height / 2)
+    await page.getByTestId('cohost-vision-quality').selectOption('high')
+    await page.getByTestId('cohost-region-pick').click()
+    const picker = page.getByTestId('region-picker')
+    await expect(picker.locator('img')).toBeVisible()
+    const box = (await picker.boundingBox())!
+    // 端より外まで引いても、コマの端で止まる
+    await page.mouse.move(box.x + box.width * 0.5 + 1, box.y + 1)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width + 30, box.y + box.height + 30, { steps: 5 })
+    await page.mouse.up()
+    // ドラッグは1ピクセル単位なので、1%のずれは許す
+    await expect(page.getByTestId('region-summary')).toContainText(/左から50%・上から[01]%の、幅50%×高さ(99|100)%/)
+    await page.getByTestId('region-apply').click()
+    await expect(page.getByTestId('cohost-region-summary')).toContainText(/幅50%×高さ(99|100)%/)
+
+    queueAiResponses([reply('右側の青いのがよく見えるわ')])
+    await page.getByTestId('cohost-generate').click()
+    await expect(page.getByTestId('cohost-line-text')).toHaveValue('右側の青いのがよく見えるわ')
+    const cropCall = aiCalls().at(-1) as unknown as { stdin: string; images: { caption: string; bytes: number }[] }
+    expect(cropCall.images).toHaveLength(1)
+    expect(cropCall.images[0]!.caption).toBe('動画の 0:05.000 の画面(一部を切り出したもの)')
+    expect(cropCall.stdin).toMatch(/一部\(左から50%・上から[01]%の、幅50%×高さ(99|100)%\)を切り出して/)
+
+    // 全体に戻せる
+    await page.getByTestId('cohost-region-clear').click()
+    await expect(page.getByTestId('cohost-region-summary')).toContainText('画面全体')
   })
 })
