@@ -1,6 +1,7 @@
 import type { Command } from '@shared/commands/types'
 import { itemEndMs } from '@shared/project/queries'
 import type { Item, Layer, Ms, Project } from '@shared/project/types'
+import { TIMELINE_PALETTE } from '@shared/project/timeline-colors'
 import { clampRegion, regionHeight } from '@shared/render/zoom'
 
 import {
@@ -24,6 +25,7 @@ import {
   setVolume,
   splitAtPlayhead
 } from '../../state/edit-actions'
+import { pickColor } from '../../lib/pick-color'
 import { deleteSelection, useEditorStore } from '../../state/store'
 import type { MenuEntry } from '../../ui/ContextMenu'
 
@@ -114,7 +116,22 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
     'separator',
     { label: '再生位置へ移動', disabled: locked || many, onSelect: report(context, () => moveToPlayhead(item.id)), testId: 'menu-move-to-playhead' },
     { label: '再生位置をここの頭へ', onSelect: () => state().setPlayhead(item.startMs) },
-    { label: '再生位置をここの終わりへ', onSelect: () => state().setPlayhead(itemEndMs(item)) }
+    { label: '再生位置をここの終わりへ', onSelect: () => state().setPlayhead(itemEndMs(item)) },
+    'separator',
+    {
+      label: many ? `選んだ${ids.length}個の色` : '色',
+      testId: 'menu-item-color',
+      submenu: colorSubmenu(
+        item.color ?? null,
+        (color) => {
+          const result = state().dispatch([{ op: 'item.setColor', itemIds: ids, color }], '素材の色の変更')
+          return result.ok ? null : result.message
+        },
+        'レイヤー・種類の色に戻す',
+        'menu-item-color',
+        context
+      )
+    }
   ]
 
   const tools: MenuEntry[] = []
@@ -328,10 +345,52 @@ export function layerMenu(layer: Layer, context: MenuContext): MenuEntry[] {
     { label: '表示する', checked: layer.visible, onSelect: toggle('visible', 'レイヤーの表示の切り替え') },
     { label: 'ミュート', checked: layer.muted, onSelect: toggle('muted', 'レイヤーのミュートの切り替え') },
     { label: 'ロック', checked: layer.locked, onSelect: toggle('locked', 'レイヤーのロックの切り替え') },
+    {
+      label: 'レイヤーの色',
+      testId: 'menu-layer-color',
+      submenu: colorSubmenu(
+        layer.color ?? null,
+        (color) => {
+          const result = state().dispatch([{ op: 'layer.update', layerId: layer.id, color }], 'レイヤーの色の変更')
+          return result.ok ? null : result.message
+        },
+        '種類ごとの色に戻す',
+        'menu-layer-color',
+        context
+      )
+    },
     'separator',
     { label: 'このレイヤーをすべて選択', onSelect: () => selectLayer(layer.id) },
     'separator',
     ...overlapMenu(state().project, context)
+  ]
+}
+
+/**
+ * 色の選択肢。決まった色の一覧、自由に選ぶ、元に戻す。
+ * 色はタイムラインで見分けるための印で、動画には出ない。
+ */
+function colorSubmenu(
+  current: string | null,
+  apply: (color: string | null) => string | null,
+  resetLabel: string,
+  testPrefix: string,
+  context: MenuContext
+): MenuEntry[] {
+  return [
+    ...TIMELINE_PALETTE.map((entry) => ({
+      label: `${entry.swatch} ${entry.name}`,
+      checked: current === entry.hex,
+      onSelect: report(context, () => apply(entry.hex)),
+      testId: `${testPrefix}-${entry.hex.slice(1)}`
+    })),
+    'separator' as const,
+    {
+      label: 'ほかの色を選ぶ…',
+      onSelect: () => pickColor(current ?? '#3fa34d', (color) => report(context, () => apply(color))()),
+      testId: `${testPrefix}-pick`
+    },
+    { label: resetLabel, disabled: current === null, onSelect: report(context, () => apply(null)), testId: `${testPrefix}-reset` }
   ]
 }
 

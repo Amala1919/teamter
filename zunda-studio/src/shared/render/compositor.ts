@@ -277,6 +277,11 @@ export function fontFamilyStack(family: string): string {
     .join(', ')
 }
 
+/** 字幕を描く(字幕の設定画面の見本用。動画と同じ描き方)。 */
+export function drawSubtitleLines(context: Ctx2D, lines: readonly string[], style: SubtitleStyle): void {
+  drawText(context, lines, style)
+}
+
 /**
  * 文字を描く。字幕は指定位置を最終行の下端として上へ積む。
  * centered なら行の塊の中心を指定位置に置く(テロップ)。

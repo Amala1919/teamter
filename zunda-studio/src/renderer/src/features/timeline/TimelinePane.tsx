@@ -3,9 +3,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Command } from '@shared/commands/types'
 import { entryTimelineMs } from '@shared/live/timing'
 import { itemEndMs, projectDurationMs } from '@shared/project/queries'
+import { timelineColor } from '@shared/project/timeline-colors'
 import type { Item, Layer, Ms, Project } from '@shared/project/types'
 import { ZOOM_METHOD_LABELS } from '@shared/render/zoom'
 
+import { pickColor } from '../../lib/pick-color'
 import { formatMs } from '../../lib/time'
 import { usePlaybackStore } from '../../playback/player'
 import { assetName, importMediaFiles } from '../../state/media'
@@ -399,6 +401,15 @@ function LayerHeader({
     run([{ op: 'layer.update', layerId: layer.id, [key]: !layer[key] }], label)
   return (
     <div className="timeline__header" onContextMenu={onContextMenu}>
+      <button
+        type="button"
+        className={layer.color ? 'timeline__layerColor' : 'timeline__layerColor timeline__layerColor--none'}
+        style={layer.color ? { background: layer.color } : undefined}
+        onClick={() => pickColor(layer.color ?? '#3fa34d', (color) => run([{ op: 'layer.update', layerId: layer.id, color }], 'レイヤーの色の変更'))}
+        title="このレイヤーの素材の色(右クリックで一覧から選ぶ・戻す)"
+        aria-label={`${layer.name}の色`}
+        data-testid={`layer-color-${layer.id}`}
+      />
       <span className="timeline__layerName" title={layer.name}>
         {layer.name}
       </span>
@@ -485,13 +496,24 @@ function TimelineItem(props: TimelineItemProps): React.JSX.Element {
   if (props.locked) classes.push('timeline__item--locked')
   if (item.type === 'video' && item.freeze) classes.push('timeline__item--freeze')
   if (item.type === 'portrait') classes.push(`timeline__item--portrait-${item.kind ?? 'show'}`)
+  // 素材・レイヤーに色が付いていれば、種類ごとの色の代わりにその色で描く。
+  const color = timelineColor(project, item)
+  if (color) classes.push('timeline__item--colored')
   const asset = 'assetId' in item ? project.assets[item.assetId] : undefined
   const waveform = (item.type === 'audio' || (item.type === 'video' && !item.freeze && asset?.type === 'video' && asset.hasAudio)) && asset
 
   return (
     <div
       className={classes.join(' ')}
-      style={{ left: `${props.left}px`, width: `${props.width}px`, transform: `translateY(${props.top}px)` }}
+      style={
+        {
+          left: `${props.left}px`,
+          width: `${props.width}px`,
+          transform: `translateY(${props.top}px)`,
+          ...(color ? { '--item-color': color } : {})
+        } as React.CSSProperties
+      }
+      data-color={color ?? undefined}
       title={`${itemLabel(project, item)}\n${formatMs(item.startMs)} – ${formatMs(itemEndMs(item))}`}
       onPointerDown={(event) => props.onPointerDown(event, item, 'move')}
       onContextMenu={(event) => props.onContextMenu(event, item)}

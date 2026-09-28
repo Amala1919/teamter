@@ -1,5 +1,6 @@
 import { DEFAULT_LAYER_IDS } from '../../project/factory'
 import type { Effect, Item, Ms, Project, VideoItem } from '../../project/types'
+import { TIMELINE_COLOR } from '../../project/timeline-colors'
 import { removeEmptyLayers, resolveOverlaps } from '../arrange'
 import { fail, findMutableItem, itemEnd, layerOrDefault, requireFinite, shiftItemsFrom, type HandlerTable } from '../env'
 import type { CommandOp } from '../types'
@@ -18,6 +19,7 @@ type EditHandlers = Pick<
   | 'timeline.insertGap'
   | 'timeline.arrangeOverlaps'
   | 'layer.removeEmpty'
+  | 'item.setColor'
 >
 
 /** 分けたときに両側に残す最短の尺。 */
@@ -272,6 +274,18 @@ export const editHandlers: EditHandlers = {
 
   'layer.removeEmpty': (draft) => {
     removeEmptyLayers(draft)
+  },
+
+  'item.setColor': (draft, command, env) => {
+    if (command.color !== null && !TIMELINE_COLOR.test(command.color)) fail(command.op, `色の指定が不正です: ${command.color}`)
+    for (const rawId of command.itemIds) {
+      const id = env.resolve(rawId)
+      // 色はタイムラインの見分けのための印なので、ロック中の素材も変えられる。
+      const item = draft.items.find((candidate) => candidate.id === id)
+      if (!item) fail(command.op, `アイテムが見つかりません: ${id}`)
+      if (command.color === null) delete item.color
+      else item.color = command.color.toLowerCase()
+    }
   }
 }
 

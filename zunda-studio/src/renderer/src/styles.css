@@ -1978,3 +1978,219 @@ input[type='url'] {
   background: #4a3f1f;
   border-color: #a8872f;
 }
+
+/* 字幕(ボイステロップ)の設定 */
+.subtitle-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.subtitle-editor__sample {
+  width: 100%;
+  max-width: 560px;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid var(--border, #444);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.input--narrow {
+  width: 6em;
+}
+
+.subtitle-editor input.input--narrow {
+  width: 6em;
+  flex: none;
+}
+
+.subtitle-editor input[type='color'] {
+  width: 3em;
+  flex: none;
+}
+
+.subtitle-editor .field__row {
+  align-items: center;
+  gap: 6px;
+}
+
+/*
+ * 相方の返答の操作欄。台本の下に固定して、台本が長くても常に見えるようにする。
+ * 候補が長いときは欄の中だけでスクロールし、台本を覆い尽くさない。
+ */
+.script__dock {
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  bottom: -8px;
+  margin-top: auto;
+  padding-top: 6px;
+  position: sticky;
+  z-index: 2;
+}
+
+.script__dock .cohost-controls {
+  margin-bottom: 0;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.cohost-controls__toggle {
+  margin-left: auto;
+}
+
+/* 素材・レイヤーに付けた色(タイムラインの見分けのための印)。種類ごとの色より優先する。 */
+.timeline__item--colored {
+  background: color-mix(in srgb, var(--item-color) 38%, #12181e);
+  border-color: var(--item-color);
+}
+
+.timeline__item--colored.timeline__item--freeze {
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--item-color) 30%, #12181e) 0 6px,
+    color-mix(in srgb, var(--item-color) 45%, #12181e) 6px 12px
+  );
+}
+
+.timeline__item--colored.timeline__item--selected {
+  border-color: var(--accent);
+}
+
+.timeline__layerColor {
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 3px;
+  cursor: pointer;
+  flex: none;
+  height: 12px;
+  margin-right: 4px;
+  padding: 0;
+  width: 12px;
+}
+
+.timeline__layerColor--none {
+  background: transparent;
+  border-style: dashed;
+}
+
+.timeline__header .timeline__layerName {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 企画メモと相方の前提 */
+.briefing {
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+  padding-top: 8px;
+}
+
+.briefing__summary {
+  color: var(--text-dim);
+  font-size: 12px;
+  margin: 6px 0;
+}
+
+.briefing__facts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+.briefing__fact {
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+}
+
+.briefing__fact--confirmed {
+  border-left-color: #3fa34d;
+}
+
+.briefing__fact--unverified {
+  border-left-color: #d4b21f;
+}
+
+.briefing__fact--rejected {
+  border-left-color: #7c8894;
+  opacity: 0.7;
+}
+
+.briefing__factHeader {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: space-between;
+}
+
+.briefing__origin {
+  border-radius: 10px;
+  font-size: 11px;
+  padding: 1px 8px;
+}
+
+.briefing__origin--memo {
+  background: #1f3a5c;
+}
+
+.briefing__origin--ai {
+  background: #4a3a17;
+}
+
+.briefing__origin--user {
+  background: #234a17;
+}
+
+.briefing__status {
+  display: flex;
+  gap: 4px;
+}
+
+.briefing__text {
+  width: 100%;
+}
+
+.briefing__check {
+  background: var(--bg-raised);
+  border-radius: 4px;
+  font-size: 12px;
+  padding: 4px 6px;
+}
+
+.briefing__check--supported strong {
+  color: #6fcf7a;
+}
+
+.briefing__check--contradicted strong {
+  color: #ff7b7b;
+}
+
+.briefing__check--unclear strong {
+  color: #e0c060;
+}
+
+.briefing__sources {
+  margin: 2px 0;
+  padding-left: 18px;
+}
+
+.briefing__questions {
+  font-size: 12px;
+}
+
+.badge--warn {
+  background: #7a5a12;
+  border-color: #e0b04a;
+  color: #fff;
+  font-size: 10px;
+  margin-left: 4px;
+  padding: 0 5px;
+}

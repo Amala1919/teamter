@@ -5,6 +5,7 @@ import { entryTimelineMs } from '../live/timing'
 import { normalizeChapters } from '../project/chapters'
 import { projectDurationMs, voiceItemsInOrder } from '../project/queries'
 import type { Chapter, Project } from '../project/types'
+import { briefingPromptSection } from './briefing'
 import type { GenerateRequest } from './types'
 
 /**
@@ -57,6 +58,7 @@ export function buildPublishPrompt(project: Project): Omit<GenerateRequest, 'jso
   const content = [
     `## 動画\n総尺 ${formatDurationJa(projectDurationMs(project))} / 登場: ${characters.join('、') || '(なし)'}`,
     project.meta.synopsis?.trim() ? `## 企画メモ\n${project.meta.synopsis.trim()}` : '',
+    `\n${briefingPromptSection(project)}`,
     `## 仮のタイトル\n${project.meta.title}`,
     markers.length > 0 ? `## 録画中に打った目印\n${markers.join('\n')}` : '',
     `## 台本${step > 1 ? `(${step}行に1行だけ)` : ''}\n${script || '(まだセリフが無い)'}`

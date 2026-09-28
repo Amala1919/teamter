@@ -175,7 +175,9 @@ export class OpenCodeProvider implements LlmProvider {
     const started = Date.now()
 
     if (this.usesApi()) {
-      const text = await this.api.generate(this.apiOptions(), model, { ...request, system }, signal)
+      const options = this.apiOptions()
+      // OpenCode ではウェブ検索は使えない(結果の webSearch は false のまま)。待ち時間の延長だけ効かせる。
+      const text = await this.api.generate({ ...options, timeoutMs: Math.max(options.timeoutMs, request.timeoutMs ?? 0) }, model, { ...request, system }, signal)
       return this.result(model, text, started, request)
     }
 
@@ -192,7 +194,7 @@ export class OpenCodeProvider implements LlmProvider {
         cwd: this.workDirectory,
         env: this.childEnv(system),
         input: turnsToPrompt(request.turns),
-        timeoutMs: this.config().timeoutMs,
+        timeoutMs: Math.max(this.config().timeoutMs, request.timeoutMs ?? 0),
         ...(signal ? { signal } : {})
       })
     } catch (error) {
@@ -215,6 +217,8 @@ export class OpenCodeProvider implements LlmProvider {
       generatedBy: { providerId: this.id, model, at: new Date().toISOString() },
       durationMs: Date.now() - started
     }
+    // OpenCode 経由ではウェブ検索を使えない。求められたときは「使えなかった」と返す。
+    if (request.webSearch) result.webSearch = false
     if (request.jsonSchema) {
       try {
         result.structured = extractJson(text)

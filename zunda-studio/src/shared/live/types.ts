@@ -18,6 +18,8 @@ export interface LiveProfile {
   voice: { engineId: string; speakerId: number; params: VoiceParams } | null
   /** どのプロジェクトから始めたか(表示用)。 */
   projectTitle: string
+  /** 企画メモと、相方のスタンス・確認済みの前提知識(shared/ai/briefing.ts)。ライブの返答にも同じ前提を使う。 */
+  briefing?: string
 }
 
 /** セッションの一覧に出す要約。 */

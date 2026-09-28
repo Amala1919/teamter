@@ -8,6 +8,7 @@ import { SettingsDialog } from './features/settings/SettingsDialog'
 import { TimelinePane } from './features/timeline/TimelinePane'
 import { Toolbar } from './features/toolbar/Toolbar'
 import { togglePlayback } from './playback/player'
+import { useCohostStore } from './state/ai'
 import { useSettingsStore } from './state/settings'
 import { RecoveryBanner } from './features/toolbar/RecoveryBanner'
 import { EngineInstallBanner } from './features/voice/EngineInstall'
@@ -84,6 +85,13 @@ export function App(): React.JSX.Element {
         }
       }
       if (!modifier) return
+      // Ctrl+Shift+Enter: 選んでいるセリフ(無ければ最後)への相方の返答を作る。台本の入力欄の中ではその行が処理する。
+      if (event.key === 'Enter' && event.shiftKey && !document.querySelector('[role="dialog"]')) {
+        if (target?.dataset['testid'] === 'script-text') return
+        event.preventDefault()
+        useCohostStore.getState().requestGenerate()
+        return
+      }
       // 入力欄の中では、その入力欄の取り消し(文字単位)を優先する。
       if (typing && (event.key === 'z' || event.key === 'y')) return
       if (event.key === 'z' && !event.shiftKey) {

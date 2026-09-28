@@ -31,7 +31,8 @@ export function buildLivePrompt(profile: LiveProfile, entries: readonly LiveEntr
     `- プレイの邪魔をしないよう、${limit}文字以内で短く答える`,
     '- 質問には要点だけ答える。分からないことは分からないと言う',
     '- 話者名・かっこ・絵文字・改行を入れない。セリフだけを書く',
-    '- この会話はあとで動画の台本の素材になる。人物像を崩さない'
+    '- この会話はあとで動画の台本の素材になる。人物像を崩さない',
+    profile.briefing?.trim() ? `\n${profile.briefing.trim()}` : null
   ]
     .filter((line) => line !== null)
     .join('\n')

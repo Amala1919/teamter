@@ -20,6 +20,8 @@ interface ScriptLineProps {
   onFocusHandled: () => void
   onCommitText: (text: string) => void
   onAddAfter: () => void
+  /** このセリフへの相方の返答を作る(Ctrl+Shift+Enter)。 */
+  onRequestReply: () => void
   onChangeCharacter: (characterId: string) => void
   onChangeExpression: (expressionId: string | null) => void
   onMove: (direction: -1 | 1) => void
@@ -113,6 +115,13 @@ export function ScriptLine(props: ScriptLineProps): React.JSX.Element {
         rows={2}
         onBlur={commit}
         onKeyDown={(event) => {
+          if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && event.shiftKey) {
+            // Ctrl+Shift+Enter: このセリフへの相方の返答を作る
+            event.preventDefault()
+            commit()
+            props.onRequestReply()
+            return
+          }
           if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
             event.preventDefault()
             commit()

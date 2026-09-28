@@ -8,7 +8,7 @@ import type { MediaProbe, ProxyFormat, WaveformPeaks } from '../media/types'
 import type { GeneratedBy, ModelInfo, ProviderId, ProviderStatus } from '../ai/types'
 import type { AppErrorShape } from '../errors'
 import type { LiveProfile, LiveSessionSummary, LiveState } from '../live/types'
-import type { AiPersona, LiveEntry, LiveSession, Project, PublishInfo } from '../project/types'
+import type { AiPersona, LiveEntry, LiveSession, Project, ProjectBriefing, PublishInfo } from '../project/types'
 import type { PsdManifest } from '../psd/types'
 import type { AppSettings, SettingsPatch } from '../settings/schema'
 import type { SecretName, SecretStatus } from '../settings/secrets'
@@ -87,6 +87,13 @@ export interface IpcContract {
   'ai:draft': { args: [project: Project, request: DraftRequest]; result: { reply: string; commands: Command[]; generatedBy: GeneratedBy; candidates: number } }
   /** 立ち絵(表情・出し入れ・位置・話し手の強調)をまとめて調整する提案を作る。適用は差分を確かめてから。 */
   'ai:portraits': { args: [project: Project, request: PortraitRequest]; result: { reply: string; commands: Command[]; generatedBy: GeneratedBy } }
+  /** 企画メモから、相方のスタンスと前提知識を作る。保存は利用者が確かめてから(project.setBriefing)。 */
+  'ai:briefing': { args: [project: Project]; result: ProjectBriefing }
+  /**
+   * 前提知識の裏付けを確かめる(使えればウェブ検索で)。factIds が無ければ未確認の AI の知識をまとめて確かめる。
+   * 結果を書き込んだ前提を返す。確認済みにはしない。
+   */
+  'ai:briefingCheck': { args: [project: Project, briefing: ProjectBriefing, factIds: string[] | null]; result: { briefing: ProjectBriefing; webSearched: boolean; checked: number } }
   /** 投稿用の文(タイトル案・概要欄・チャプター)の下書きを作る。 */
   'ai:publish': { args: [project: Project]; result: PublishInfo }
   /** 編集の指示をコマンド列の提案にする。適用は利用者が差分を確かめてから行う。 */

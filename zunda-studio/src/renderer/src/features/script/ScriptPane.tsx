@@ -5,8 +5,10 @@ import { itemEndMs, voiceItemsInOrder } from '@shared/project/queries'
 import type { CharacterId, ItemId } from '@shared/project/types'
 
 import { player } from '../../playback/player'
+import { useCohostStore } from '../../state/ai'
 import { copySelection } from '../../state/edit-actions'
 import { useEditorStore } from '../../state/store'
+import { characterLook } from '../../state/subtitle-defaults'
 import { useVoiceStore } from '../../state/voice'
 import { openContextMenu } from '../../ui/ContextMenu'
 import { CharacterDialog } from '../characters/CharacterDialog'
@@ -27,6 +29,7 @@ export function ScriptPane({ onError }: ScriptPaneProps): React.JSX.Element {
   const selectedItemIds = useEditorStore((state) => state.selectedItemIds)
   const lineStatuses = useVoiceStore((state) => state.lines)
   const retry = useVoiceStore((state) => state.retry)
+  const requestGenerate = useCohostStore((state) => state.requestGenerate)
 
   const characters = Object.values(project.characters)
   const lines = voiceItemsInOrder(project)
@@ -40,6 +43,12 @@ export function ScriptPane({ onError }: ScriptPaneProps): React.JSX.Element {
     const result = dispatch(commands, label)
     onError(result.ok ? null : result.message)
     return result.ok ? result.resolvedIds : null
+  }
+
+  /** そのセリフを選んで、相方の返答を頼む(台本の下の操作欄が今の設定で作る)。 */
+  const requestReply = (itemId: ItemId): void => {
+    setSelection([itemId])
+    requestGenerate()
   }
 
   /** 2人の掛け合いでは、次のセリフはもう一方の話者であることが多い。 */
@@ -96,12 +105,12 @@ export function ScriptPane({ onError }: ScriptPaneProps): React.JSX.Element {
       [
         {
           op: 'style.upsertSubtitle',
-          props: { name: 'ずんだもん', outline: { color: '#2b7a0b', widthPx: 8 } },
+          props: { ...characterLook('#2b7a0b'), name: 'ずんだもん' },
           tempId: 'zundaStyle'
         },
         {
           op: 'style.upsertSubtitle',
-          props: { name: '四国めたん', outline: { color: '#a0306a', widthPx: 8 } },
+          props: { ...characterLook('#a0306a'), name: '四国めたん' },
           tempId: 'metanStyle'
         },
         {
@@ -182,7 +191,6 @@ export function ScriptPane({ onError }: ScriptPaneProps): React.JSX.Element {
               まとめて入力
             </button>
           </div>
-          <CohostControls onError={onError} />
 
           {failedCount > 0 && firstFailure?.state === 'error' && (
             <div className="banner banner--error" role="alert" data-testid="synthesis-banner">
@@ -214,6 +222,7 @@ export function ScriptPane({ onError }: ScriptPaneProps): React.JSX.Element {
                 onFocusHandled={() => setFocusItemId(null)}
                 onCommitText={(text) => run([{ op: 'voice.setText', itemId: line.id, text }], 'セリフの編集')}
                 onAddAfter={() => addAfter(line.id, line.characterId)}
+                onRequestReply={() => requestReply(line.id)}
                 onChangeCharacter={(characterId) =>
                   run([{ op: 'voice.setCharacter', itemId: line.id, characterId }], '話者の変更')
                 }
@@ -231,6 +240,7 @@ export function ScriptPane({ onError }: ScriptPaneProps): React.JSX.Element {
                     { label: 'このセリフを再生', disabled: !line.synthesis, onSelect: () => void player.play(line.startMs, line.startMs + line.durationMs) },
                     { label: '再生位置をここへ', onSelect: () => setPlayhead(line.startMs) },
                     'separator',
+                    { label: 'このセリフへの返答を作る', shortcut: 'Ctrl+Shift+Enter', onSelect: () => requestReply(line.id), testId: 'menu-line-cohost' },
                     { label: '次にセリフを追加', shortcut: 'Ctrl+Enter', onSelect: () => addAfter(line.id, line.characterId), testId: 'menu-line-add-after' },
                     {
                       label: '話者',
@@ -269,9 +279,14 @@ export function ScriptPane({ onError }: ScriptPaneProps): React.JSX.Element {
           </ol>
           {lines.length > 0 && (
             <p className="note">
-              Ctrl+Enter で次のセリフを追加(2人なら話者が交互になります)。全体の尺: {(itemEndMs(lines[lines.length - 1]!) / 1000).toFixed(1)}秒
+              Ctrl+Enter で次のセリフを追加(2人なら話者が交互になります)。Ctrl+Shift+Enter で選んでいるセリフへの返答を作ります。全体の尺:{' '}
+              {(itemEndMs(lines[lines.length - 1]!) / 1000).toFixed(1)}秒
             </p>
           )}
+          {/* 相方の返答の操作は台本の下に固定し、台本が長くてもスクロールせずに使えるようにする。 */}
+          <div className="script__dock" data-testid="script-dock">
+            <CohostControls onError={onError} />
+          </div>
         </>
       )}
 

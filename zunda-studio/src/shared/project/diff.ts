@@ -114,6 +114,7 @@ export function diffProjects(before: Project, after: Project): ProjectDiff {
   if (JSON.stringify(before.subtitleStyles) !== JSON.stringify(after.subtitleStyles)) others.push('字幕スタイルを変更')
   if (before.meta.title !== after.meta.title || before.meta.synopsis !== after.meta.synopsis) others.push('タイトル・企画メモを変更')
   if (JSON.stringify(before.editing) !== JSON.stringify(after.editing)) others.push('編集の設定を変更')
+  if (JSON.stringify(before.ai.briefing ?? null) !== JSON.stringify(after.ai.briefing ?? null)) others.push('相方のスタンス・前提知識を変更')
 
   script.sort((a, b) => a.index - b.index)
   return {

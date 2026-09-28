@@ -4,6 +4,7 @@ import { recordingTimeMs } from '../live/timing'
 import type { CandidateSegment } from '../media/analysis'
 import { projectDurationMs } from '../project/queries'
 import type { AssetId, Ms, Project } from '../project/types'
+import { briefingPromptSection } from './briefing'
 import { MAX_AI_COMMANDS } from './edit-commands'
 import type { GenerateRequest } from './types'
 
@@ -74,6 +75,7 @@ export function buildDraftPrompt(project: Project, request: DraftRequest, candid
   const content = [
     `## 録画\n${asset?.path.absolute.split(/[\\/]/).at(-1) ?? request.recordingAssetId}(長さ ${asset && asset.type === 'video' ? formatDurationJa(asset.durationMs) : '不明'})`,
     project.meta.synopsis?.trim() ? `## 企画メモ\n${project.meta.synopsis.trim()}` : '',
+    `\n${briefingPromptSection(project)}`,
     `## 使えそうな区間の候補(録画上の時刻)\n${table || '(候補なし)'}`,
     transcript ? `## 録画中の会話と目印(録画上の時刻)\n${transcript}` : '## 録画中の会話\n(記録なし)',
     request.instruction?.trim() ? `## 投稿者からの指示\n${request.instruction.trim()}` : ''

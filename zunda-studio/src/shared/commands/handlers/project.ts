@@ -1,6 +1,8 @@
+import { validateBriefing } from '../../ai/briefing'
 import { isSafeModelId } from '../../ai/types'
 import type { Layer } from '../../project/types'
 import { normalizeChapters } from '../../project/chapters'
+import { TIMELINE_COLOR } from '../../project/timeline-colors'
 import { fail, insertLayer, requireLayer, refreshSubtitleLines, type HandlerTable } from '../env'
 
 type ProjectHandlers = Pick<
@@ -8,6 +10,7 @@ type ProjectHandlers = Pick<
   | 'project.setMeta'
   | 'project.setConversationAi'
   | 'project.setEditing'
+  | 'project.setBriefing'
   | 'credits.set'
   | 'publish.set'
   | 'chat.append'
@@ -87,6 +90,17 @@ export const projectHandlers: ProjectHandlers = {
     message.outcome = command.outcome
   },
 
+  'project.setBriefing': (draft, command) => {
+    if (command.briefing === null) {
+      draft.ai.briefing = null
+      return
+    }
+    const problem = validateBriefing(command.briefing)
+    if (problem) fail(command.op, problem)
+    // immer の下書きへは素の値として入れる。
+    draft.ai.briefing = JSON.parse(JSON.stringify(command.briefing)) as typeof command.briefing
+  },
+
   'layer.update': (draft, command, env) => {
     const layer = requireLayer(draft, env.resolve(command.layerId), command.op)
     if (command.name !== undefined) {
@@ -96,6 +110,11 @@ export const projectHandlers: ProjectHandlers = {
     if (command.visible !== undefined) layer.visible = command.visible
     if (command.locked !== undefined) layer.locked = command.locked
     if (command.muted !== undefined) layer.muted = command.muted
+    if (command.color !== undefined) {
+      if (command.color === null) delete layer.color
+      else if (!TIMELINE_COLOR.test(command.color)) fail(command.op, `色の指定が不正です: ${command.color}`)
+      else layer.color = command.color.toLowerCase()
+    }
   },
 
   'layer.insert': (draft, command, env) => {

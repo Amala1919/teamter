@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react'
 
 import type { Command } from '@shared/commands/types'
+import { wrapSubtitle } from '@shared/project/subtitle'
 import type { AiPersona, BanterRole, Character, CharacterId, VoiceParams } from '@shared/project/types'
 
 import { api, toAppError } from '../../api'
 import { useSettingsStore } from '../../state/settings'
 import { useEditorStore } from '../../state/store'
+import { characterLook } from '../../state/subtitle-defaults'
 import { useVoiceStore } from '../../state/voice'
 import { Modal } from '../../ui/Modal'
 import { PortraitSection } from '../portrait/PortraitSection'
+import { SubtitleStyleEditor } from './SubtitleStyleEditor'
 import { VoiceParamsEditor } from './VoiceParamsEditor'
 
 const BANTER_ROLES: { id: BanterRole; label: string }[] = [
@@ -61,8 +64,8 @@ export function CharacterDialog({ onClose, initialCharacterId }: CharacterDialog
         {
           op: 'style.upsertSubtitle',
           props: {
-            name: `キャラクター${count + 1}`,
-            outline: { color: OUTLINE_COLORS[count % OUTLINE_COLORS.length]!, widthPx: 8 }
+            ...characterLook(OUTLINE_COLORS[count % OUTLINE_COLORS.length]!),
+            name: `キャラクター${count + 1}`
           },
           tempId: 'style'
         },
@@ -141,6 +144,12 @@ function CharacterEditor({ character, run, onDeleted }: CharacterEditorProps): R
   const loadSpeakers = useVoiceStore((state) => state.loadSpeakers)
   const ensureEngine = useVoiceStore((state) => state.ensureEngine)
   const style = useEditorStore((state) => state.project.subtitleStyles[character.subtitleStyleId])
+  const firstLine = useEditorStore((state) =>
+    state.project.items.find((item) => item.type === 'voice' && item.characterId === character.id && item.text.trim() !== '')
+  )
+  // 見本はこのキャラクターの最初のセリフ(無ければ見本の文)を、今の1行の文字数で折り返したもの。
+  const sampleText = firstLine?.type === 'voice' ? firstLine.text : `${character.name}のセリフの見本なのだ。字幕はこう見えるのだ！`
+  const sampleLines = style ? wrapSubtitle(sampleText, style.maxCharsPerLine) : []
   const [speakerError, setSpeakerError] = useState<string | null>(null)
   const [persona, setPersona] = useState<AiPersona>(character.persona ?? DEFAULT_PERSONA)
   const [personaVersion, setPersonaVersion] = useState(0)
@@ -291,51 +300,8 @@ function CharacterEditor({ character, run, onDeleted }: CharacterEditorProps): R
 
       {style && (
         <section>
-          <h3>字幕</h3>
-          <label className="field">
-            <span className="field__label">文字の色</span>
-            <input
-              type="color"
-              value={style.color.slice(0, 7)}
-              onChange={(event) =>
-                run([{ op: 'style.upsertSubtitle', styleId: style.id, props: { color: event.target.value } }], '字幕の色の変更')
-              }
-            />
-          </label>
-          <label className="field">
-            <span className="field__label">縁取りの色</span>
-            <input
-              type="color"
-              value={(style.outline?.color ?? '#000000').slice(0, 7)}
-              onChange={(event) =>
-                run(
-                  [
-                    {
-                      op: 'style.upsertSubtitle',
-                      styleId: style.id,
-                      props: { outline: { color: event.target.value, widthPx: style.outline?.widthPx ?? 8 } }
-                    }
-                  ],
-                  '字幕の縁取りの変更'
-                )
-              }
-            />
-          </label>
-          <label className="field">
-            <span className="field__label">1行の文字数</span>
-            <input
-              type="number"
-              min={4}
-              max={60}
-              defaultValue={style.maxCharsPerLine}
-              onBlur={(event) => {
-                const value = Number(event.target.value)
-                if (Number.isInteger(value) && value !== style.maxCharsPerLine) {
-                  run([{ op: 'style.upsertSubtitle', styleId: style.id, props: { maxCharsPerLine: value } }], '字幕の文字数の変更')
-                }
-              }}
-            />
-          </label>
+          <h3>字幕(ボイステロップ)</h3>
+          <SubtitleStyleEditor style={style} sampleLines={sampleLines} run={run} />
         </section>
       )}
 

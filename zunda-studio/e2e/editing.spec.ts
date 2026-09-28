@@ -89,6 +89,45 @@ test.describe('右クリックとショートカットでの編集', () => {
     await expect(page.getByTestId('layer-lyr_bgm')).toHaveCount(1)
   })
 
+  test('タイムラインの素材の色を、素材ごと・レイヤーごとに変えられる', async ({ page, request }) => {
+    await openFresh(page)
+    await queuePick(request, [image])
+    await page.getByTestId('add-media').click()
+    const images = page.locator('[data-item-type="image"]')
+    await expect(images).toHaveCount(1)
+    // 2つ目を後ろに複製
+    await images.first().click({ button: 'right' })
+    await choose(page, 'menu-duplicate')
+    await expect(images).toHaveCount(2)
+    await expect(images.first()).not.toHaveAttribute('data-color')
+
+    // レイヤーの色: 背景のレイヤーを青にすると、そのレイヤーの素材が全部青になる
+    await page.getByTestId('layer-lyr_bg').locator('.timeline__header').click({ button: 'right' })
+    await page.getByTestId('context-menu').getByTestId('menu-layer-color').click()
+    await choose(page, 'menu-layer-color-3b6fd6')
+    await expect(images.nth(0)).toHaveAttribute('data-color', '#3b6fd6')
+    await expect(images.nth(1)).toHaveAttribute('data-color', '#3b6fd6')
+    await expect(page.getByTestId('layer-color-lyr_bg')).toHaveCSS('background-color', 'rgb(59, 111, 214)')
+
+    // 素材の色: 1つ目だけ赤にする(レイヤーの色より優先)
+    await images.first().click({ button: 'right' })
+    await page.getByTestId('context-menu').getByTestId('menu-item-color').click()
+    await choose(page, 'menu-item-color-d64545')
+    await expect(images.nth(0)).toHaveAttribute('data-color', '#d64545')
+    await expect(images.nth(1)).toHaveAttribute('data-color', '#3b6fd6')
+
+    // インスペクタからも好きな色にでき、戻せる
+    await images.nth(1).click()
+    await page.getByTestId('inspector-color').fill('#123456')
+    await expect(images.nth(1)).toHaveAttribute('data-color', '#123456')
+    await page.getByTestId('inspector-color-reset').click()
+    await expect(images.nth(1)).toHaveAttribute('data-color', '#3b6fd6')
+
+    // 取り消しで戻る
+    await page.keyboard.press('Control+z')
+    await expect(images.nth(1)).toHaveAttribute('data-color', '#123456')
+  })
+
   test('分割・コピー・貼り付け・空白を詰める・削除して詰める・複製', async ({ page, request }) => {
     await openFresh(page)
     await queuePick(request, [image])
