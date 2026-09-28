@@ -1,3 +1,5 @@
+import { createHash, randomUUID } from 'node:crypto'
+
 import type { AiImage, ChatTurn, GenerateRequest } from '@shared/ai/types'
 import { catalogEntry, opencodePlan, type OpenCodeApiFormat } from '@shared/ai/opencode-catalog'
 import { OPENCODE_GO_BASE_URL, OPENCODE_ZEN_BASE_URL } from '@shared/settings/schema'
@@ -96,11 +98,35 @@ export interface OpenCodeApiOptions {
   fetch?: FetchLike
 }
 
+/** OpenCode に名乗るアプリ名(User-Agent)。OpenCode Go は、汎用の HTTP ライブラリ名ではなく自分の名前を名乗るよう求めている。 */
+export const DEFAULT_CLIENT_NAME = 'zunda-studio'
+
 export class OpenCodeApi {
   /** 通った形式を覚えておき、次からはそれを先に使う。 */
   private readonly learned = new Map<string, ApiFormat>()
+  /** 会話の名前を渡されなかったときの、モデルごとのセッション ID(アプリを開いている間は同じ)。 */
+  private readonly fallbackSessions = new Map<string, string>()
 
-  constructor(private readonly fetchImpl: FetchLike = (input, init) => fetch(input, init)) {}
+  constructor(
+    private readonly fetchImpl: FetchLike = (input, init) => fetch(input, init),
+    private readonly clientName: string = DEFAULT_CLIENT_NAME
+  ) {}
+
+  /**
+   * x-opencode-session に送る ID。OpenCode Go は、会話ごとに変わらない ID を求めている(振り分けとキャッシュのため)。
+   * 会話の名前はそのまま送らず、ハッシュにする(プロジェクトの作成日時などを外に出さない)。
+   */
+  sessionId(model: string, session: string | undefined): string {
+    if (session !== undefined && session !== '') {
+      return `zs_${createHash('sha256').update(session).digest('hex').slice(0, 32)}`
+    }
+    let id = this.fallbackSessions.get(model)
+    if (!id) {
+      id = `zs_${randomUUID().replace(/-/g, '')}`
+      this.fallbackSessions.set(model, id)
+    }
+    return id
+  }
 
   async listModels(options: Omit<OpenCodeApiOptions, 'fetch'>): Promise<string[]> {
     const response = await this.request(options, '/models', 'list', { method: 'GET' })
@@ -120,6 +146,7 @@ export class OpenCodeApi {
   ): Promise<string> {
     const name = apiModelName(model)
     const target = { ...options, baseUrl: baseUrlFor(model, options.baseUrl) }
+    const session = { 'x-opencode-session': this.sessionId(model, request.session) }
     const learned = this.learned.get(model)
     const formats = learned ? [learned, ...formatsFor(model).filter((format) => format !== learned)] : formatsFor(model)
     let lastError: AppError | null = null
@@ -127,6 +154,7 @@ export class OpenCodeApi {
       const response = await this.request(target, formatPath(format, name), format, {
         method: 'POST',
         body: JSON.stringify(buildBody(format, name, request.system, request.turns, request.images ?? [])),
+        headers: session,
         ...(signal ? { signal } : {})
       }, true)
       if (response.ok) {
@@ -165,7 +193,8 @@ export class OpenCodeApi {
           'content-type': 'application/json',
           // エラーの文を日本語で返してもらう。
           'accept-language': 'ja',
-          'user-agent': 'zunda-studio',
+          'user-agent': this.clientName,
+          ...(init.headers as Record<string, string> | undefined),
           ...authHeaders(format, apiKey)
         }
       })

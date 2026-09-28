@@ -141,6 +141,27 @@ describe('OpenCode の API(キーで接続)', () => {
     expect(gemini!['authorization']).toBeUndefined()
   })
 
+  it('OpenCode Go の求めどおり、アプリ名を名乗り、会話ごとに変わらないセッション ID を送る', async () => {
+    const ai = new OpenCodeProvider(() => settingsFor(), work, {}, () => GOOD_KEY, undefined, 'zunda-studio/9.9.9')
+    const turns = [{ role: 'user' as const, content: 'やあ' }]
+    mock.calls.length = 0
+    await ai.generate('opencode-go/kimi-k3', { system: 's', turns, session: 'project:a:cohost' })
+    await ai.generate('opencode-go/kimi-k3', { system: 's', turns, session: 'project:a:cohost' })
+    await ai.generate('opencode-go/kimi-k3', { system: 's', turns, session: 'project:b:cohost' })
+    await ai.generate('opencode-go/kimi-k3', { system: 's', turns })
+    await ai.generate('opencode-go/kimi-k3', { system: 's', turns })
+    const sessions = mock.calls.map((call) => call.headers['x-opencode-session'])
+    expect(sessions[0]).toMatch(/^zs_[0-9a-f]{32}$/)
+    expect(sessions[1]).toBe(sessions[0])
+    expect(sessions[2]).not.toBe(sessions[0])
+    // 名前が無くても、アプリを開いている間は同じ ID を送る
+    expect(sessions[3]).toMatch(/^zs_[0-9a-f]{32}$/)
+    expect(sessions[4]).toBe(sessions[3])
+    // 会話の名前そのものは外に出さない
+    expect(JSON.stringify(sessions)).not.toContain('project:a')
+    expect(mock.calls[0]!.headers['user-agent']).toBe('zunda-studio/9.9.9')
+  })
+
   it('貼り付けたキーの余計な部分(Bearer・引用符・改行・全角)を取り除いて使う', async () => {
     const request = { system: 's', turns: [{ role: 'user' as const, content: 'やあ' }] }
     for (const pasted of [`Bearer ${GOOD_KEY}`, ` "${GOOD_KEY}"\n`, `OPENCODE_API_KEY=${GOOD_KEY}`, `\uFEFF${GOOD_KEY}\u3000`, GOOD_KEY.replace('sk', 'ｓｋ')]) {

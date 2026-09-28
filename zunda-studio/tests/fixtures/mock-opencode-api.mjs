@@ -93,6 +93,10 @@ export async function startMockOpenCodeApi({ port = 0, basePath = '/zen/go/v1' }
       const gemini = geminiModel(path)
       const format = gemini ? 'gemini' : PATHS[path]
       if (request.method !== 'POST' || !format) return send(404, { error: 'not found' })
+      // 本物の OpenCode Go と同じく、会話の ID が無い生成は断る。
+      if (!request.headers['x-opencode-session']) {
+        return send(400, gatewayError('error', 'Request is missing x-opencode-session and cannot be routed efficiently. Please see https://opencode.ai/docs/go/#where-can-i-use-it'))
+      }
       const body = JSON.parse(raw || '{}')
       if (gemini) body.model = gemini
       calls.push({ path, model: body.model, body, headers: request.headers })

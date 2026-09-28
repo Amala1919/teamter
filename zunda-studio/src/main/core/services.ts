@@ -104,7 +104,9 @@ export async function createServices(options: ServicesOptions): Promise<Services
   const env = options.env ?? process.env
   const ai = new AiService(getSettings)
   ai.register(new ClaudeCodeProvider(getSettings, paths.cache.aiWork, env))
-  ai.register(new OpenCodeProvider(getSettings, paths.cache.aiWork, env, () => secrets.get('opencode.apiKey'), options.fetch))
+  ai.register(
+    new OpenCodeProvider(getSettings, paths.cache.aiWork, env, () => secrets.get('opencode.apiKey'), options.fetch, `zunda-studio/${options.appVersion}`)
+  )
 
   const engineInstaller = new EngineInstaller({
     root: join(paths.userData, 'engines'),

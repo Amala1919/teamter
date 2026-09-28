@@ -57,9 +57,11 @@ export class OpenCodeProvider implements LlmProvider {
     private readonly baseEnv: NodeJS.ProcessEnv = process.env,
     /** 保存してある API キー。キーで接続するときに使う。 */
     private readonly getApiKey: () => string | null = () => null,
-    fetchImpl?: FetchLike
+    fetchImpl?: FetchLike,
+    /** API に名乗る名前(例: zunda-studio/1.2.0)。 */
+    clientName?: string
   ) {
-    this.api = new OpenCodeApi(fetchImpl)
+    this.api = new OpenCodeApi(fetchImpl, clientName)
   }
 
   private config(): AppSettings['ai']['providers']['opencode'] {
