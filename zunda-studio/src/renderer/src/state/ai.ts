@@ -3,6 +3,7 @@ import { create } from 'zustand'
 
 import type { CohostCandidate, CohostLine, CohostRequest } from '@shared/ai/cohost'
 import type { DraftRequest } from '@shared/ai/draft'
+import type { PortraitRequest } from '@shared/ai/portraits'
 import type { GeneratedBy } from '@shared/ai/types'
 import { applyCommands } from '@shared/commands/apply'
 import { CommandError, type Command } from '@shared/commands/types'
@@ -125,6 +126,8 @@ interface ChatState {
   send: (message: string) => Promise<void>
   /** 録画から下書きを作らせ、提案としてチャットに出す。 */
   draft: (request: DraftRequest, label: string) => Promise<void>
+  /** 立ち絵をまとめて調整させ、提案としてチャットに出す。 */
+  portraits: (request: PortraitRequest, label: string) => Promise<void>
   apply: (message: ChatMessage) => string | null
   reject: (message: ChatMessage) => void
 }
@@ -169,6 +172,25 @@ export const useChatStore = create<ChatState>((set) => ({
       append({
         role: 'assistant',
         content: `${result.reply}(使えそうな区間の候補 ${result.candidates} か所から選びました)`,
+        generatedBy: result.generatedBy,
+        ...(result.commands.length > 0 ? { proposedCommands: result.commands } : {})
+      })
+    } catch (error) {
+      const appError = toAppError(error)
+      append({ role: 'assistant', content: '', error: `${appError.message}${appError.guidance ? `。${appError.guidance}` : ''}` })
+    } finally {
+      set({ sending: false })
+    }
+  },
+
+  portraits: async (request, label) => {
+    append({ role: 'user', content: label })
+    set({ sending: true })
+    try {
+      const result = await api.invoke('ai:portraits', useEditorStore.getState().project, request)
+      append({
+        role: 'assistant',
+        content: result.reply,
         generatedBy: result.generatedBy,
         ...(result.commands.length > 0 ? { proposedCommands: result.commands } : {})
       })

@@ -29,6 +29,14 @@ const effect = z.discriminatedUnion('type', [
   z.object({ type: z.literal('shake'), amplitudePx: z.number().min(0), frequencyHz: z.number().positive().max(60), durationMs: ms })
 ])
 
+const portraitTransform = z.object({
+  x: z.number(),
+  y: z.number(),
+  scale: z.number().positive().max(20),
+  flipX: z.boolean(),
+  anchor: z.enum(['top-left', 'top-center', 'top-right', 'center', 'bottom-left', 'bottom-center', 'bottom-right'])
+})
+
 const nullableNumber = z.number().nullable().optional()
 
 export const aiCommandSchema = z.discriminatedUnion('op', [
@@ -151,7 +159,28 @@ export const aiCommandSchema = z.discriminatedUnion('op', [
     tempId
   }),
   z.object({ op: z.literal('project.setMeta'), title: z.string().min(1).max(200).optional(), synopsis: z.string().max(4000).optional() }),
-  z.object({ op: z.literal('project.setEditing'), rippleOnVoiceChange: z.boolean().optional(), defaultGapMs: ms.optional(), duckVolume: z.number().min(0).max(1).optional(), duckFadeMs: ms.optional() })
+  z.object({
+    op: z.literal('project.setEditing'),
+    rippleOnVoiceChange: z.boolean().optional(),
+    defaultGapMs: ms.optional(),
+    duckVolume: z.number().min(0).max(1).optional(),
+    duckFadeMs: ms.optional(),
+    portraitDim: z.number().min(0).max(0.8).optional(),
+    portraitHop: z.boolean().optional()
+  }),
+  // 場面ごとの立ち絵
+  z.object({
+    op: z.literal('portrait.insert'),
+    characterId: id,
+    atMs: ms,
+    durationMs: ms,
+    kind: z.enum(['show', 'hide', 'adjust']).optional(),
+    transform: portraitTransform.nullable().optional(),
+    expressionId: id.nullable().optional(),
+    transition: z.enum(['none', 'fade', 'pop']).optional(),
+    tempId
+  }),
+  z.object({ op: z.literal('portrait.update'), itemId: id, kind: z.enum(['show', 'hide', 'adjust']).optional(), transform: portraitTransform.nullable().optional(), expressionId: id.nullable().optional() })
 ])
 
 export type AiCommand = z.infer<typeof aiCommandSchema>

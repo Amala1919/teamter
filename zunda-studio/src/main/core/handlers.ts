@@ -7,6 +7,7 @@ import { buildCohostPrompt, cohostResponseSchema, interpretCohostResponse } from
 import { editorResponseSchema, toCommands } from '@shared/ai/edit-commands'
 import { buildDraftPrompt, liveMomentsFor, wrapDraftCommands } from '@shared/ai/draft'
 import { buildEditorPrompt } from '@shared/ai/editor'
+import { buildPortraitPrompt, filterPortraitCommands, portraitResponseSchema } from '@shared/ai/portraits'
 import { candidateSegments } from '@shared/media/analysis'
 import { buildPublishPrompt, interpretPublishResponse, publishResponseSchema } from '@shared/ai/publish'
 import { PROVIDER_IDS } from '@shared/ai/types'
@@ -140,6 +141,7 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
     })
   ]) as unknown as z.ZodType<ChannelArgs<'ai:edit'>>,
   'ai:publish': z.tuple([projectArg]) as unknown as z.ZodType<ChannelArgs<'ai:publish'>>,
+  'ai:portraits': z.tuple([projectArg, z.object({ instruction: z.string().max(4000).optional() })]) as unknown as z.ZodType<ChannelArgs<'ai:portraits'>>,
   'ai:draft': z.tuple([
     projectArg,
     z.object({
@@ -276,6 +278,15 @@ export function createHandlers(services: Services): HandlerTable {
         generatedBy: result.generatedBy,
         candidates: candidates.length
       }
+    },
+    'ai:portraits': async (project, request) => {
+      if (!Object.values(project.characters).some((character) => character.portrait)) {
+        throw new AppError('INVALID_ARGUMENT', '立ち絵のあるキャラクターがいません。キャラクター画面で立ち絵(PSD)を設定してください')
+      }
+      const { value, result } = await services.ai.generateStructured('editor', buildPortraitPrompt(project, request), portraitResponseSchema)
+      const { commands, dropped } = filterPortraitCommands(project, value.commands)
+      const note = dropped > 0 ? `(立ち絵以外に触れる操作 ${dropped} 件は除きました)` : ''
+      return { reply: `${value.reply}${note}`, commands, generatedBy: result.generatedBy }
     },
     'ai:publish': async (project) => {
       const { value, result } = await services.ai.generateStructured('editor', buildPublishPrompt(project), publishResponseSchema)
