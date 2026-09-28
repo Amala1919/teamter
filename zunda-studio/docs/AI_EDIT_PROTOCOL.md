@@ -241,3 +241,12 @@ AIの呼び出しはローカルのCLI(Claude Code / OpenCode)を経由し、ア
 ## 立ち絵のまとめ調整
 
 チャットの「立ち絵をAIで調整」は、台本(話者・時刻・セリフ・今の表情)・場面(録画とズームの区間)・各キャラクターの表情の一覧と今の配置・今ある場面ごとの立ち絵を編集AIに渡し、立ち絵に関わるコマンドだけを出させる(`src/shared/ai/portraits.ts`)。出してよいのは `voice.setExpression`・`portrait.insert`・`portrait.update`・`project.setEditing`(`portraitDim`・`portraitHop` のみ)と、場面ごとの立ち絵に対する `item.setTimeRange`・`item.delete`。立ち絵以外のアイテムを対象にしたものは取り除き、除いた数を返事に書き添える。提案は編集チャットと同じく差分を確かめてから1回で適用する。
+
+## 画面を見せる(相方の返答)
+
+相方の返答を作るとき、`vision` を付けるとゲーム画面を画像として添える(`src/shared/ai/cohost.ts`、`src/main/services/media/frame-grabber.ts`)。
+- `frame`: その時刻の1コマ。`clip`: 区間を両端を含めて等間隔に分けたコマ(2秒ごとに1枚増え、最大8枚・最長60秒)。
+- コマは、その時刻に映っている一番前面の録画から ffmpeg で取り出した JPEG(横768px まで)。立ち絵・字幕は重ねない。映像の無い時刻は飛ばす。
+- 各画像の前に「動画の 0:12.000 の画面」という説明を置き、依頼文の最後に画像の説明を足す。
+- 送り方: Claude(Claude Code)は `--input-format stream-json` で画像ブロックとして、OpenCode の API は形式ごとの画像の書き方(`image_url`・`image`・`input_image`・`inline_data`)で送る。opencode コマンド経由では画像を送らない。
+- 画像を受け付けないモデルでエラーになったら、画像を外して文字だけでやり直し、そのことを画面に出す(`imagesDropped`)。

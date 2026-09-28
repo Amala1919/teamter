@@ -193,3 +193,59 @@ async function isExecutable(path: string, platform: NodeJS.Platform): Promise<bo
     return false
   }
 }
+
+export interface BufferRunResult {
+  exitCode: number | null
+  stdout: Buffer
+  stderr: string
+  timedOut: boolean
+}
+
+const MAX_BUFFER_BYTES = 32 * 1024 * 1024
+
+/** 標準出力をバイト列のまま受け取る(画像などを出すコマンド用)。 */
+export function runProcessBuffer(options: Omit<RunOptions, 'input' | 'onStdoutLine' | 'onStderrLine'>): Promise<BufferRunResult> {
+  return new Promise((resolvePromise, rejectPromise) => {
+    let child: ChildProcess
+    try {
+      child = spawnProcess(options)
+    } catch (error) {
+      rejectPromise(error)
+      return
+    }
+    const chunks: Buffer[] = []
+    let size = 0
+    let stderr = ''
+    let timedOut = false
+    child.stdin?.end()
+    child.stdout?.on('data', (chunk: Buffer) => {
+      if (size + chunk.length > MAX_BUFFER_BYTES) return
+      chunks.push(chunk)
+      size += chunk.length
+    })
+    child.stderr?.setEncoding('utf8')
+    child.stderr?.on('data', (chunk: string) => {
+      stderr = (stderr + chunk).slice(-8000)
+    })
+    const timer = options.timeoutMs
+      ? setTimeout(() => {
+          timedOut = true
+          child.kill('SIGKILL')
+        }, options.timeoutMs)
+      : null
+    const onAbort = (): void => {
+      child.kill('SIGKILL')
+    }
+    options.signal?.addEventListener('abort', onAbort, { once: true })
+    child.on('error', (error) => {
+      if (timer) clearTimeout(timer)
+      options.signal?.removeEventListener('abort', onAbort)
+      rejectPromise(error)
+    })
+    child.on('close', (code) => {
+      if (timer) clearTimeout(timer)
+      options.signal?.removeEventListener('abort', onAbort)
+      resolvePromise({ exitCode: code, stdout: Buffer.concat(chunks), stderr, timedOut })
+    })
+  })
+}

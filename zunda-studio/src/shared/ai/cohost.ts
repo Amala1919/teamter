@@ -21,6 +21,35 @@ export interface CohostRequest {
   characterId?: CharacterId
   /** その場の指示(「もっと辛口で」など)。 */
   instruction?: string
+  /** ゲーム画面を見せる。frame: その時刻の1コマ / clip: 区間を数コマに分けて見せる。 */
+  vision?: CohostVision
+}
+
+export type CohostVision = { kind: 'frame'; atMs: number } | { kind: 'clip'; startMs: number; endMs: number }
+
+/** 区間の映像は、何コマに分けて見せるか(長いほど多く、上限あり)。 */
+export const MAX_CLIP_FRAMES = 8
+export const MAX_CLIP_MS = 60_000
+
+/** 見せる時刻の一覧。区間は両端を含めて等間隔に分ける。 */
+export function visionTimes(vision: CohostVision): number[] {
+  if (vision.kind === 'frame') return [Math.max(0, Math.round(vision.atMs))]
+  const start = Math.max(0, Math.min(vision.startMs, vision.endMs))
+  const end = Math.max(start, Math.min(Math.max(vision.startMs, vision.endMs), start + MAX_CLIP_MS))
+  const count = Math.min(MAX_CLIP_FRAMES, Math.max(2, 2 + Math.floor((end - start) / 2000)))
+  if (end - start < 100) return [Math.round(start)]
+  return Array.from({ length: count }, (_, index) => Math.round(start + ((end - start) * index) / (count - 1)))
+}
+
+/** 画像に添える説明(依頼文の最後に足す)。 */
+export function visionNote(vision: CohostVision, shownTimes: number[]): string {
+  if (shownTimes.length === 0) return ''
+  if (vision.kind === 'frame') {
+    return `## 画面
+添付の画像は、動画の ${formatMs(shownTimes[0]!)} のゲーム画面です。画面で起きていることも踏まえて返答してください(画面の説明をそのまま読み上げるのではなく、実況の会話として自然に触れる)。`
+  }
+  return `## 画面(区間の映像)
+添付の ${shownTimes.length} 枚の画像は、動画の ${formatMs(shownTimes[0]!)}〜${formatMs(shownTimes.at(-1)!)} の映像を時間順にコマで分けたものです。この間に画面で起きた出来事(動き・変化)も踏まえて返答してください。`
 }
 
 export interface CohostLine {

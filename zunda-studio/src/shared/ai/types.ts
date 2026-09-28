@@ -55,10 +55,21 @@ export interface ChatTurn {
   content: string
 }
 
+/** AI に見せる画像(ゲーム画面のコマなど)。最後の発話に添えて送る。 */
+export interface AiImage {
+  mediaType: 'image/jpeg' | 'image/png'
+  /** base64 */
+  data: string
+  /** 何の画像か(「0:12.3 の画面」など)。画像の直前に文字で添える。 */
+  caption: string
+}
+
 export interface GenerateRequest {
   system: string
   /** 最後の要素がこれから答えるべき発話。 */
   turns: ChatTurn[]
+  /** 最後の発話に添える画像。画像を読めないモデル・接続方法では、画像を外して文字だけで生成する。 */
+  images?: AiImage[]
   /** 指定すると構造化出力を求める。検証は呼び出し側で必ず行う。 */
   jsonSchema?: Record<string, unknown>
 }
@@ -69,6 +80,8 @@ export interface GenerateResult {
   structured?: unknown
   generatedBy: GeneratedBy
   durationMs: number
+  /** 画像を添えたが、モデル・接続方法が画像を読めなかったので外して生成した。 */
+  imagesDropped?: boolean
 }
 
 const MODEL_ID_PATTERN = /^[A-Za-z0-9._:/@[\]-]{1,200}$/

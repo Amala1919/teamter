@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 
 import { z } from 'zod'
 
-import { buildCohostPrompt, cohostResponseSchema, interpretCohostResponse } from '@shared/ai/cohost'
+import { buildCohostPrompt, cohostResponseSchema, interpretCohostResponse, visionNote, visionTimes } from '@shared/ai/cohost'
 import { editorResponseSchema, toCommands } from '@shared/ai/edit-commands'
 import { buildDraftPrompt, liveMomentsFor, wrapDraftCommands } from '@shared/ai/draft'
 import { buildEditorPrompt } from '@shared/ai/editor'
@@ -17,6 +17,7 @@ import type { SettingsPatch } from '@shared/settings/schema'
 import { SECRET_NAMES } from '@shared/settings/secrets'
 
 import { PROJECT_FILE_EXTENSION } from '../services/project/store'
+import { grabFrames } from '../services/media/frame-grabber'
 import { writeFileAtomic } from './fs'
 import { AppError, toErrorShape } from './errors'
 import type { Services } from './services'
@@ -129,7 +130,13 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
       candidates: z.number().int().min(1).max(5),
       rounds: z.number().int().min(1).max(6),
       characterId: z.string().max(100).optional(),
-      instruction: z.string().max(2000).optional()
+      instruction: z.string().max(2000).optional(),
+      vision: z
+        .discriminatedUnion('kind', [
+          z.object({ kind: z.literal('frame'), atMs: z.number().min(0) }),
+          z.object({ kind: z.literal('clip'), startMs: z.number().min(0), endMs: z.number().min(0) })
+        ])
+        .optional()
     })
   ]) as unknown as z.ZodType<ChannelArgs<'ai:cohost'>>,
   'ai:edit': z.tuple([
@@ -256,10 +263,23 @@ export function createHandlers(services: Services): HandlerTable {
       if (!Object.values(project.characters).some((character) => character.authorRole === 'ai') && !request.characterId) {
         throw new AppError('INVALID_ARGUMENT', '相方(AIの役)のキャラクターがいません。キャラクター画面で「AI(相方)」にしてください')
       }
-      const { value, result } = await services.ai.generateStructured('conversation', buildCohostPrompt(project, request), cohostResponseSchema, {
+      const prompt = buildCohostPrompt(project, request)
+      // 画面を見せるなら、録画からその時刻のコマを取り出して添える。
+      let vision: { shownFrames: number; imagesDropped: boolean } | undefined
+      if (request.vision) {
+        const { images, shownTimes } = await grabFrames(project, visionTimes(request.vision), services.ffmpeg, (path) => requireAllowed(services, path))
+        if (images.length > 0) {
+          const note = visionNote(request.vision, shownTimes)
+          const turns = prompt.turns.map((turn, index) => (index === prompt.turns.length - 1 ? { ...turn, content: `${turn.content}\n\n${note}` } : turn))
+          Object.assign(prompt, { turns, images })
+        }
+        vision = { shownFrames: images.length, imagesDropped: false }
+      }
+      const { value, result } = await services.ai.generateStructured('conversation', prompt, cohostResponseSchema, {
         projectConversation: project.ai.conversation
       })
-      return { candidates: interpretCohostResponse(project, request, value), generatedBy: result.generatedBy }
+      if (vision) vision.imagesDropped = result.imagesDropped === true
+      return { candidates: interpretCohostResponse(project, request, value), generatedBy: result.generatedBy, ...(vision ? { vision } : {}) }
     },
     'ai:draft': async (project, request) => {
       const asset = project.assets[request.recordingAssetId]

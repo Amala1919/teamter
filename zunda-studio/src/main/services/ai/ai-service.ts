@@ -72,7 +72,15 @@ export class AiService {
     signal?: AbortSignal
   ): Promise<GenerateResult> {
     const ref = this.resolve(role, options)
-    return this.provider(ref.providerId).generate(ref.model, request, signal)
+    const provider = this.provider(ref.providerId)
+    try {
+      return await provider.generate(ref.model, request, signal)
+    } catch (error) {
+      // 画像を読めないモデルなら、画像を外して文字だけでやり直す。
+      if (!request.images?.length || !isImageRejection(error)) throw error
+      const { images: _images, ...textOnly } = request
+      return { ...(await provider.generate(ref.model, textOnly, signal)), imagesDropped: true }
+    }
   }
 
   /**
@@ -118,4 +126,11 @@ function describeIssues(value: unknown, error: z.ZodError): string {
     .slice(0, 8)
     .map((issue) => `- ${issue.path.join('.') || '(全体)'}: ${issue.message}`)
     .join('\n')
+}
+
+/** 画像を受け付けないことによる失敗か(モデルが画像に対応していない、など)。 */
+export function isImageRejection(error: unknown): boolean {
+  if (!(error instanceof AppError)) return false
+  if (error.code !== 'CLI_FAILED' && error.code !== 'INVALID_ARGUMENT') return false
+  return /image|vision|multimodal|modalit|画像/i.test(`${error.message}\n${error.detail ?? ''}`)
 }

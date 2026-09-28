@@ -78,7 +78,11 @@ export interface IpcContract {
   'ai:models': { args: [providerId: ProviderId]; result: ModelInfo[] }
   'ai:test': { args: [providerId: ProviderId, model: string]; result: { text: string; durationMs: number } }
   /** 相方の返答(候補)を作る。台本には入れず、採用は利用者が決める。 */
-  'ai:cohost': { args: [project: Project, request: CohostRequest]; result: { candidates: CohostCandidate[]; generatedBy: GeneratedBy } }
+  'ai:cohost': {
+    args: [project: Project, request: CohostRequest]
+    /** vision: 画面を見せたときの結果(見せたコマの数、モデルが画像を読めず文字だけで作ったか)。 */
+    result: { candidates: CohostCandidate[]; generatedBy: GeneratedBy; vision?: { shownFrames: number; imagesDropped: boolean } }
+  }
   /** 録画とライブの記録から、台本とタイムラインの下書き(コマンドの提案)を作る。 */
   'ai:draft': { args: [project: Project, request: DraftRequest]; result: { reply: string; commands: Command[]; generatedBy: GeneratedBy; candidates: number } }
   /** 立ち絵(表情・出し入れ・位置・話し手の強調)をまとめて調整する提案を作る。適用は差分を確かめてから。 */

@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 
-import type { CohostCandidate, CohostLine } from '@shared/ai/cohost'
+import { MAX_CLIP_MS, visionTimes, type CohostCandidate, type CohostLine } from '@shared/ai/cohost'
 import { formatModelRef } from '@shared/ai/types'
 import type { Character, Project } from '@shared/project/types'
 
 import { useCohostStore } from '../../state/ai'
 import { useSettingsStore } from '../../state/settings'
 import { useEditorStore } from '../../state/store'
+import { formatMs } from '../../lib/time'
 import { Modal } from '../../ui/Modal'
+import { NumberField } from '../../ui/NumberField'
 
 /**
  * 相方(AI)に返答を書かせる操作と、返ってきた候補の確認(REQUIREMENTS.md B-3〜B-10)。
@@ -22,6 +24,11 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
   const [rounds, setRounds] = useState(1)
   const [instruction, setInstruction] = useState('')
   const [synopsisOpen, setSynopsisOpen] = useState(false)
+  // 画面を見せるか: none / frame(再生位置の画面) / clip(区間の映像)
+  const [visionMode, setVisionMode] = useState<'none' | 'frame' | 'clip'>('none')
+  const [clip, setClip] = useState({ startMs: 0, endMs: 5000 })
+  const playheadMs = useEditorStore((state) => state.playheadMs)
+  const hasVideo = project.items.some((item) => item.type === 'video')
 
   const characters = Object.values(project.characters)
   const aiCharacter = characters.find((character) => character.authorRole === 'ai')
@@ -39,7 +46,9 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
       candidates,
       rounds: characterId ? 1 : rounds,
       ...(characterId ? { characterId } : {}),
-      ...(instruction.trim() ? { instruction: instruction.trim() } : {})
+      ...(instruction.trim() ? { instruction: instruction.trim() } : {}),
+      ...(visionMode === 'frame' ? { vision: { kind: 'frame' as const, atMs: playheadMs } } : {}),
+      ...(visionMode === 'clip' ? { vision: { kind: 'clip' as const, startMs: clip.startMs, endMs: clip.endMs } } : {})
     })
   }
 
@@ -102,6 +111,42 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
           企画メモ
         </button>
       </div>
+      {hasVideo && (
+        <div className="cohost-controls__row cohost-controls__vision">
+          <label className="field--inline">
+            画面
+            <select
+              value={visionMode}
+              onChange={(event) => {
+                const mode = event.target.value as typeof visionMode
+                setVisionMode(mode)
+                // 区間の既定は、再生位置の5秒前から再生位置まで。
+                if (mode === 'clip') setClip({ startMs: Math.max(0, playheadMs - 5000), endMs: Math.max(playheadMs, 1000) })
+              }}
+              title="相方にゲーム画面を見せて、画面の出来事も踏まえた返答を作らせます(画像を読めるモデルが必要)"
+              data-testid="cohost-vision"
+            >
+              <option value="none">見せない</option>
+              <option value="frame">再生位置の画面を見せる</option>
+              <option value="clip">区間の映像を見せる</option>
+            </select>
+          </label>
+          {visionMode === 'frame' && <span className="note">{formatMs(playheadMs)} の画面</span>}
+          {visionMode === 'clip' && (
+            <>
+              <NumberField label="開始(秒)" value={clip.startMs} displayScale={0.001} step={0.5} min={0} onCommit={(startMs) => setClip({ ...clip, startMs })} testId="cohost-clip-start" />
+              <NumberField label="終了(秒)" value={clip.endMs} displayScale={0.001} step={0.5} min={0} onCommit={(endMs) => setClip({ ...clip, endMs })} testId="cohost-clip-end" />
+              <button type="button" className="button--small" onClick={() => setClip({ ...clip, startMs: playheadMs })} title="開始を再生位置にする">
+                開始=再生位置
+              </button>
+              <button type="button" className="button--small" onClick={() => setClip({ ...clip, endMs: playheadMs })} title="終了を再生位置にする" data-testid="cohost-clip-end-here">
+                終了=再生位置
+              </button>
+              <span className="note">{visionTimes({ kind: 'clip', ...clip }).length} コマに分けて見せます(最長{MAX_CLIP_MS / 1000}秒)</span>
+            </>
+          )}
+        </div>
+      )}
       {disabledReason && <p className="status status--warn">{disabledReason}</p>}
       {session && <CohostCandidates project={project} onError={onError} />}
       {synopsisOpen && <SynopsisDialog onClose={() => setSynopsisOpen(false)} />}
@@ -133,6 +178,15 @@ function CohostCandidates({ project, onError }: { project: Project; onError: (me
         </span>
       </div>
       {session.loading && <p className="status">相方が返答を考えています…</p>}
+      {session.vision && !session.loading && (
+        <p className={`status ${session.vision.imagesDropped || session.vision.shownFrames === 0 ? 'status--warn' : ''}`} data-testid="cohost-vision-status">
+          {session.vision.shownFrames === 0
+            ? 'その時刻に映っている動画が無いため、画面は見せずに作りました'
+            : session.vision.imagesDropped
+              ? 'このモデル・接続方法は画像を読めないため、画面は見せずに文字だけで作りました(画像を読めるモデルを選んでください)'
+              : `画面を ${session.vision.shownFrames} コマ見せて作りました`}
+        </p>
+      )}
       {session.error && (
         <p className="status status--error" role="alert" data-testid="cohost-error">
           {session.error}

@@ -29,6 +29,8 @@ export interface CohostSession {
   generatedBy: GeneratedBy | null
   loading: boolean
   error: string | null
+  /** 画面を見せたときの結果。 */
+  vision?: { shownFrames: number; imagesDropped: boolean } | undefined
 }
 
 interface CohostState {
@@ -58,7 +60,11 @@ export const useCohostStore = create<CohostState>((set, get) => ({
     try {
       const { project } = useEditorStore.getState()
       const result = await api.invoke('ai:cohost', project, request)
-      set((state) => (state.session?.request === request ? { session: { ...state.session, candidates: result.candidates, generatedBy: result.generatedBy, loading: false } } : state))
+      set((state) =>
+        state.session?.request === request
+          ? { session: { ...state.session, candidates: result.candidates, generatedBy: result.generatedBy, loading: false, vision: result.vision } }
+          : state
+      )
     } catch (error) {
       const appError = toAppError(error)
       set((state) =>
