@@ -70,10 +70,13 @@ test.describe('AIの選択', () => {
       await expect(conversation.locator('optgroup[label="OpenCode Zen(従量課金)"] option', { hasText: 'Gemini 3.8 Flash' })).toHaveCount(1)
       expect(await conversation.locator('option').count()).toBeGreaterThan(100)
 
-      // 間違ったキーでは接続テストで原因が分かる
+      // 間違ったキーでは、保存したときの接続テストで原因が分かる(サーバーの理由も出す)
       await page.getByTestId('opencode-key-input').fill('sk-wrong-0000')
       await page.getByTestId('opencode-key-save').click()
       await expect(page.getByTestId('opencode-key-status')).toContainText('…0000')
+      await expect(page.getByTestId('opencode-key-test-result')).toContainText('無効なAPIキーです')
+      // まだ選んでいなかった編集AIは、キーを入れたときに OpenCode になる
+      await expect(page.getByTestId('role-editor-provider')).toHaveValue('opencode')
       await page.getByTestId('role-editor-provider').selectOption('opencode')
       await page.getByTestId('role-editor-test').click()
       await expect(page.getByTestId('role-editor-status')).toContainText('API キーを入力してください')
@@ -83,6 +86,7 @@ test.describe('AIの選択', () => {
       await page.getByTestId('opencode-key-save').click()
       await expect(page.getByTestId('provider-opencode-status')).toContainText('利用可能')
       await expect(page.getByTestId('opencode-key-input')).toHaveValue('')
+      await expect(page.getByTestId('opencode-key-test-result')).toContainText('つながりました')
       await page.getByTestId('role-editor-provider').selectOption('claude-code')
       await page.getByTestId('role-editor-provider').selectOption('opencode')
       const model = page.getByTestId('role-editor-model')
@@ -98,6 +102,41 @@ test.describe('AIの選択', () => {
       // キーを消すと未入力に戻る
       await page.getByTestId('opencode-key-clear').click()
       await expect(page.getByTestId('provider-opencode-status')).toContainText('APIキーが未入力')
+    } finally {
+      await mock.close()
+    }
+  })
+
+  test('Claude を選んだままキーを入れると、OpenCode に切り替える案内が出る', async ({ page, request }) => {
+    const mock = await startMockOpenCodeApi()
+    try {
+      await updateSettings(request, {
+        ai: {
+          roles: { conversation: { providerId: 'claude-code', model: 'sonnet' }, editor: null },
+          providers: { opencode: { connection: 'api-key', baseUrl: mock.baseUrl } }
+        }
+      })
+      await openFresh(page)
+      await page.getByTestId('open-settings').click()
+      // 前後の空白や「Bearer」付きで貼っても通る
+      await page.getByTestId('opencode-key-input').fill(`  Bearer ${GOOD_KEY}  `)
+      await page.getByTestId('opencode-key-save').click()
+      await expect(page.getByTestId('opencode-key-test-result')).toContainText('つながりました')
+      await expect(page.getByTestId('opencode-key-status')).toContainText('…1234')
+
+      // Claude を選んでいる会話AIはそのまま(勝手に変えない)で、案内を出す
+      await expect(page.getByTestId('role-conversation-provider')).toHaveValue('claude-code')
+      await expect(page.getByTestId('role-editor-provider')).toHaveValue('opencode')
+      const notice = page.getByTestId('opencode-role-notice')
+      await expect(notice).toContainText('会話AI(相方): Claude')
+      await page.getByTestId('opencode-use-for-roles').click()
+      await expect(page.getByTestId('role-conversation-provider')).toHaveValue('opencode')
+      await expect(page.getByTestId('role-conversation-model')).toHaveValue(/^opencode-go\//)
+      await expect(notice).toHaveCount(0)
+
+      // 接続テストのボタンでいつでも確かめられる
+      await page.getByTestId('opencode-key-test').click()
+      await expect(page.getByTestId('opencode-key-test-result')).toContainText('つながりました')
     } finally {
       await mock.close()
     }

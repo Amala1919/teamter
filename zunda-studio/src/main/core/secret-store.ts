@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 
-import { SECRET_NAMES, type SecretName, type SecretStatus } from '@shared/settings/secrets'
+import { normalizeApiKey, SECRET_NAMES, type SecretName, type SecretStatus } from '@shared/settings/secrets'
 
 import { AppError } from './errors'
 import { writeFileAtomic } from './fs'
@@ -65,9 +65,9 @@ export class SecretStore {
   }
 
   async set(name: SecretName, value: string | null): Promise<SecretStatus> {
-    const trimmed = value?.trim() ?? ''
-    if (trimmed.length > MAX_SECRET_LENGTH || /[\r\n]/.test(trimmed)) {
-      throw new AppError('INVALID_ARGUMENT', 'キーの形式が正しくありません')
+    const trimmed = value === null ? '' : normalizeApiKey(value)
+    if (trimmed.length > MAX_SECRET_LENGTH || /[\s]/.test(trimmed)) {
+      throw new AppError('INVALID_ARGUMENT', 'キーの形式が正しくありません(途中に空白や改行が入っていないか確かめてください)')
     }
     if (trimmed === '') delete this.sealed[name]
     else this.sealed[name] = this.cipher.encrypt(trimmed)

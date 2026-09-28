@@ -2,6 +2,8 @@ import type { AiImage, ChatTurn, GenerateRequest } from '@shared/ai/types'
 import { catalogEntry, opencodePlan, type OpenCodeApiFormat } from '@shared/ai/opencode-catalog'
 import { OPENCODE_GO_BASE_URL, OPENCODE_ZEN_BASE_URL } from '@shared/settings/schema'
 
+import { normalizeApiKey } from '@shared/settings/secrets'
+
 import { AppError } from '../../core/errors'
 import { classifyCliFailure } from './cli-errors'
 
@@ -57,6 +59,21 @@ export function apiModelName(model: string): string {
   return slash >= 0 ? model.slice(slash + 1) : model
 }
 
+/**
+ * 形式ごとの、キーを渡すヘッダー。OpenCode のサーバーは形式ごとに決まったヘッダーからしかキーを読まない
+ * (messages は x-api-key、Gemini は x-goog-api-key、それ以外は Authorization)。
+ */
+export function authHeaders(format: ApiFormat | 'list', apiKey: string): Record<string, string> {
+  switch (format) {
+    case 'messages':
+      return { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' }
+    case 'gemini':
+      return { 'x-goog-api-key': apiKey }
+    default:
+      return { authorization: `Bearer ${apiKey}` }
+  }
+}
+
 function formatPath(format: ApiFormat, name: string): string {
   switch (format) {
     case 'chat':
@@ -86,7 +103,7 @@ export class OpenCodeApi {
   constructor(private readonly fetchImpl: FetchLike = (input, init) => fetch(input, init)) {}
 
   async listModels(options: Omit<OpenCodeApiOptions, 'fetch'>): Promise<string[]> {
-    const response = await this.request(options, '/models', { method: 'GET' })
+    const response = await this.request(options, '/models', 'list', { method: 'GET' })
     const body = (await response.json()) as { data?: { id?: unknown }[] }
     const prefix = modelPrefix(options.baseUrl)
     return (body.data ?? [])
@@ -107,7 +124,7 @@ export class OpenCodeApi {
     const formats = learned ? [learned, ...formatsFor(model).filter((format) => format !== learned)] : formatsFor(model)
     let lastError: AppError | null = null
     for (const format of formats) {
-      const response = await this.request(target, formatPath(format, name), {
+      const response = await this.request(target, formatPath(format, name), format, {
         method: 'POST',
         body: JSON.stringify(buildBody(format, name, request.system, request.turns, request.images ?? [])),
         ...(signal ? { signal } : {})
@@ -119,7 +136,7 @@ export class OpenCodeApi {
         return text
       }
       const detail = await response.text().catch(() => '')
-      lastError = httpFailure(response.status, detail)
+      lastError = httpFailure(response.status, detail, model)
       // 形式違いで断られたときだけ、別の形式で試す。キーや上限の問題は試し直しても変わらない。
       if (!isFormatRejection(response.status, detail)) throw lastError
     }
@@ -129,10 +146,12 @@ export class OpenCodeApi {
   private async request(
     options: Omit<OpenCodeApiOptions, 'fetch'>,
     path: string,
+    format: ApiFormat | 'list',
     init: RequestInit,
     allowFailure = false
   ): Promise<Response> {
-    if (options.apiKey.trim() === '') {
+    const apiKey = normalizeApiKey(options.apiKey)
+    if (apiKey === '') {
       throw new AppError('AI_KEY_REQUIRED', 'OpenCode の API キーが入力されていません')
     }
     const timeout = AbortSignal.timeout(options.timeoutMs)
@@ -144,11 +163,10 @@ export class OpenCodeApi {
         signal,
         headers: {
           'content-type': 'application/json',
-          authorization: `Bearer ${options.apiKey}`,
-          // messages 形式(Anthropic 互換)と Gemini 形式は、それぞれこちらのヘッダーでキーを受け取る。
-          'x-api-key': options.apiKey,
-          'x-goog-api-key': options.apiKey,
-          'anthropic-version': '2023-06-01'
+          // エラーの文を日本語で返してもらう。
+          'accept-language': 'ja',
+          'user-agent': 'zunda-studio',
+          ...authHeaders(format, apiKey)
         }
       })
     } catch (error) {
@@ -292,21 +310,72 @@ export function extractText(format: ApiFormat, body: unknown): string {
   }
 }
 
+/** OpenCode のサーバーが返すエラーの形: { type: "error", error: { type, message } }。 */
+export interface GatewayError {
+  type: string
+  message: string
+}
+
+export function parseGatewayError(detail: string): GatewayError | null {
+  try {
+    const body = JSON.parse(detail) as { error?: unknown; message?: unknown }
+    const error = body.error
+    if (error && typeof error === 'object') {
+      const typed = error as { type?: unknown; message?: unknown }
+      if (typeof typed.message === 'string') return { type: typeof typed.type === 'string' ? typed.type : '', message: typed.message }
+    }
+    if (typeof error === 'string') return { type: '', message: error }
+    if (typeof body.message === 'string') return { type: '', message: body.message }
+  } catch {
+    // JSON でなければ文そのものを使う
+  }
+  const text = detail.trim()
+  return text === '' ? null : { type: '', message: text.slice(0, 300) }
+}
+
+const FORMAT_MISMATCH = /endpoint|not supported for format|フォーマット|unsupported format|use the .* (api|endpoint)|unknown (url|route)/i
+
 function isFormatRejection(status: number, detail: string): boolean {
   if (status === 404 || status === 405 || status === 415) return true
-  if (status === 400 || status === 422 || status === 501 || status === 503) {
-    return /endpoint|not supported|unsupported|format|unknown (url|route)|use the .* (api|endpoint)/i.test(detail)
-  }
+  const error = parseGatewayError(detail)
+  // 「このモデルはこの形式では使えない」は、別の形式なら通ることがある。
+  if (error?.type === 'ModelError') return /not supported for format|フォーマット/i.test(error.message)
+  if (status === 400 || status === 422 || status === 501 || status === 503) return FORMAT_MISMATCH.test(detail)
   return false
 }
 
-export function httpFailure(status: number, detail: string): AppError {
+/** キーそのものが間違っている・無いときの文。 */
+const INVALID_KEY = /invalid api key|missing api key|無効なAPIキー|APIキーがありません|unauthorized|incorrect api key/i
+
+/**
+ * サーバーの応答をエラーにする。OpenCode は「残高不足」「プランに無いモデル」「データ利用への同意が必要」なども
+ * 401/403 で返すので、状態コードだけでキーの誤りと決めつけず、中身の種類で分ける。サーバーの文は必ず見せる。
+ */
+export function httpFailure(status: number, detail: string, model?: string): AppError {
   const summary = detail.trim().slice(0, 2000)
-  if (status === 401 || status === 403) {
-    return new AppError('AI_KEY_REQUIRED', 'OpenCode の API キーが正しくないか、使えない状態です', summary)
+  const error = parseGatewayError(detail)
+  const said = error ? `: ${error.message}` : ''
+  const type = error?.type ?? ''
+  if (/RateLimit|UsageLimit/.test(type)) return new AppError('AI_RATE_LIMITED', `OpenCode: AIの利用上限に達しました${said}`, summary)
+  if (type === 'CreditsError') {
+    // Go のモデルでこうなるのは、キーのアカウントに Go の契約が無く、残高払いにも回せなかったとき。
+    const advice =
+      model !== undefined && opencodePlan(model) === 'go'
+        ? 'OpenCode Go を契約しているアカウント(ワークスペース)で発行したキーか確かめてください'
+        : 'OpenCode Go の契約だけなら「OpenCode Go(月額プラン)」のモデルを選んでください'
+    return new AppError('AI_MODEL_UNAVAILABLE', `OpenCode: 残高か支払い方法が必要です${said}。${advice}`, summary)
+  }
+  if (type === 'ModelError' || type === 'RegionError' || type === 'DataPolicyError' || type === 'MonthlyLimitError' || type === 'UserLimitError') {
+    return new AppError('AI_MODEL_UNAVAILABLE', `OpenCode: このモデルは今は使えません${said}`, summary)
+  }
+  if (type === 'AuthError' && !INVALID_KEY.test(error?.message ?? '')) {
+    return new AppError('AI_MODEL_UNAVAILABLE', `OpenCode: このモデルは今は使えません${said}`, summary)
   }
   if (status === 429 || classifyCliFailure(summary) === 'AI_RATE_LIMITED') {
-    return new AppError('AI_RATE_LIMITED', 'OpenCode: AIの利用上限に達しました', summary)
+    return new AppError('AI_RATE_LIMITED', `OpenCode: AIの利用上限に達しました${said}`, summary)
   }
-  return new AppError('CLI_FAILED', `OpenCode がエラーを返しました(${status})`, summary)
+  if (status === 401 || status === 403) {
+    return new AppError('AI_KEY_REQUIRED', `OpenCode: API キーが受け付けられませんでした${said}`, summary)
+  }
+  return new AppError('CLI_FAILED', `OpenCode がエラーを返しました(${status})${said}`, summary)
 }

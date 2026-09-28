@@ -2,7 +2,7 @@ export const GOOD_KEY: string
 
 export interface MockOpenCodeApi {
   baseUrl: string
-  calls: { path: string; model: string; body: Record<string, unknown> }[]
+  calls: { path: string; model: string; body: Record<string, unknown>; headers: Record<string, string | string[] | undefined> }[]
   close: () => Promise<void>
 }
 
