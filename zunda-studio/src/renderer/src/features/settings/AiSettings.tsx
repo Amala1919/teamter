@@ -178,7 +178,8 @@ export function AiSettings({ settings, onError }: AiSettingsProps): React.JSX.El
               入れたキーはこの PC の中だけに暗号化して保存し、OpenCode 以外には送りません。
               モデルの一覧には OpenCode Go と OpenCode Zen(Claude・GPT・Gemini なども使える従量課金)の両方が出ます。
               おすすめは契約しているプランから選びます。Zen のモデルは使った分だけ料金がかかります。
-              契約も残高も無い(無料枠の)アカウントのキーは、OpenCode の決まりで API から使えません。無料で使うなら「opencode コマンドを使う」にしてください。
+              無料のモデル(Big Pickle など名前に「無料」とあるもの)と、契約も残高も無いアカウントのキーは、OpenCode の決まりで API からは使えません(Go を契約していても無料のモデルは同じです)。
+              Go を契約しているなら、Go の無料ではないモデルを選んでください(月額に含まれます)。無料のモデルを使うなら「opencode コマンドを使う」にしてください。
             </p>
           </>
         ) : (
@@ -359,7 +360,8 @@ function OpenCodeKeyField({ settings, onError }: { settings: AppSettings; onErro
       )}
       {test.kind === 'error' && test.freeTierOnly && (
         <div className="note" data-testid="opencode-free-tier-notice">
-          無料枠のまま使うなら、OpenCode(opencode コマンド)をインストールして、そちら経由で生成します。{' '}
+          Go を契約しているなら、モデルを「OpenCode Go(月額プラン)」の無料ではないものに変えれば、このまま API キーで使えます。
+          無料のモデル・無料枠のまま使うなら、OpenCode(opencode コマンド)をインストールして、そちら経由で生成します。{' '}
           <button
             type="button"
             onClick={() => {

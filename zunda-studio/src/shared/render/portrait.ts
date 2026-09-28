@@ -1,4 +1,4 @@
-import type { Character, PartGroupId, PartId, PortraitConfig, PortraitPartGroup, PortraitTransform } from '../project/types'
+import { NO_PART, type Character, type PartGroupId, type PartId, type PortraitConfig, type PortraitPartGroup, type PortraitTransform } from '../project/types'
 import { layerKey, type PsdLayerNode, type PsdManifest } from '../psd/types'
 import type { CanvasLike, Ctx2D, RenderResources } from './types'
 
@@ -33,6 +33,11 @@ export function visibilityResolver(
   for (const group of Object.values(portrait.partGroups) as PortraitPartGroup[]) {
     if (group.selection !== 'exclusive') continue
     const partId = selections[group.id]
+    // 「なし」は、どの子とも一致しない値を入れてグループの中身を全て隠す。
+    if (partId === NO_PART) {
+      selectedChild.set(layerKey(group.layerPath), NO_PART)
+      continue
+    }
     const part = group.items.find((item) => item.id === partId)
     if (part) selectedChild.set(layerKey(group.layerPath), layerKey(part.layerPath))
   }

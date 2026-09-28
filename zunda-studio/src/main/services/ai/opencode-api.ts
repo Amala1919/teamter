@@ -373,6 +373,11 @@ function isFormatRejection(status: number, detail: string): boolean {
   return false
 }
 
+/** 無料のモデル(内蔵の一覧で無料のもの、または名前が -free で終わるもの)。 */
+export function isFreeModel(model: string): boolean {
+  return catalogEntry(model)?.free === true || /-free$/i.test(apiModelName(model))
+}
+
 /** 無料枠を OpenCode 本体の外から使おうとしたときの文。 */
 const FREE_TIER_ONLY = /free tier.*(within|inside|only).*opencode|無料(枠|プラン).*OpenCode.*(内|中)/i
 
@@ -389,6 +394,14 @@ export function httpFailure(status: number, detail: string, model?: string): App
   const said = error ? `: ${error.message}` : ''
   const type = error?.type ?? ''
   if (FREE_TIER_ONLY.test(error?.message ?? '')) {
+    // 無料のモデルは、Go を契約していても常に無料枠として扱われる(契約の確認より先に無料枠と決まる)。
+    if (model !== undefined && isFreeModel(model)) {
+      return new AppError(
+        'AI_SUBSCRIPTION_REQUIRED',
+        `OpenCode: 無料のモデルは、Go を契約していても OpenCode のアプリの中からしか使えません(キーの誤りではありません)${said}。Go を契約しているなら「OpenCode Go(月額プラン)」の無料ではないモデル(月額に含まれ、追加の料金はかかりません)を選んでください`,
+        summary
+      )
+    }
     return new AppError(
       'AI_SUBSCRIPTION_REQUIRED',
       `OpenCode: このキーのアカウントは無料枠として扱われました。無料枠は OpenCode のアプリの中からしか使えません(キーの誤りではありません)${said}`,
