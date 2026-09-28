@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
-import { MAX_CLIP_MS, visionTimes, type CohostCandidate, type CohostLine } from '@shared/ai/cohost'
+import { frameList, MAX_CLIP_FRAMES, MAX_CLIP_MS, visionTimes, type CohostCandidate, type CohostLine } from '@shared/ai/cohost'
 import { formatModelRef } from '@shared/ai/types'
 import type { Character, Project } from '@shared/project/types'
 
@@ -31,6 +31,9 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
   // 画面を見せるか: none / frame(再生位置の画面) / clip(区間の映像)
   const [visionMode, setVisionMode] = useState<'none' | 'frame' | 'clip'>('none')
   const [clip, setClip] = useState({ startMs: 0, endMs: 5000 })
+  // 「再生位置の画面」で見せる時刻。空なら今の再生位置の1コマ、追加すれば選んだ時刻をまとめて見せる。
+  const [frames, setFrames] = useState<number[]>([])
+  const setPlayhead = useEditorStore((state) => state.setPlayhead)
   const playheadMs = useEditorStore((state) => state.playheadMs)
   const hasVideo = project.items.some((item) => item.type === 'video')
 
@@ -52,7 +55,9 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
       rounds: characterId ? 1 : rounds,
       ...(characterId ? { characterId } : {}),
       ...(instruction.trim() ? { instruction: instruction.trim() } : {}),
-      ...(visionMode === 'frame' ? { vision: { kind: 'frame' as const, atMs: playheadMs } } : {}),
+      ...(visionMode === 'frame'
+        ? { vision: frames.length > 0 ? { kind: 'frames' as const, times: frames } : { kind: 'frame' as const, atMs: playheadMs } }
+        : {}),
       ...(visionMode === 'clip' ? { vision: { kind: 'clip' as const, startMs: clip.startMs, endMs: clip.endMs } } : {})
     })
   }
@@ -177,7 +182,47 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
               <option value="clip">区間の映像を見せる</option>
             </select>
           </label>
-          {visionMode === 'frame' && <span className="note">{formatMs(playheadMs)} の画面</span>}
+          {visionMode === 'frame' && (
+            <>
+              {frames.length === 0 ? (
+                <span className="note">{formatMs(playheadMs)} の画面(複数見せるなら追加)</span>
+              ) : (
+                <span className="cohost-frames" data-testid="cohost-frames">
+                  {frames.map((time) => (
+                    <span key={time} className="chip cohost-frames__chip" data-testid="cohost-frame">
+                      <button type="button" className="cohost-frames__seek" onClick={() => setPlayhead(time)} title="この時刻へ移動">
+                        {formatMs(time)}
+                      </button>
+                      <button
+                        type="button"
+                        className="cohost-frames__remove"
+                        onClick={() => setFrames(frames.filter((other) => other !== time))}
+                        aria-label={`${formatMs(time)} を外す`}
+                        data-testid="cohost-frame-remove"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </span>
+              )}
+              <button
+                type="button"
+                className="button--small"
+                disabled={frames.length >= MAX_CLIP_FRAMES || frames.includes(Math.round(playheadMs))}
+                onClick={() => setFrames(frameList([...frames, playheadMs]))}
+                title={`今の再生位置の画面を、見せる画面に加えます(最大${MAX_CLIP_FRAMES}枚)`}
+                data-testid="cohost-frame-add"
+              >
+                ＋ 今の再生位置を追加
+              </button>
+              {frames.length > 0 && (
+                <button type="button" className="button--small" onClick={() => setFrames([])} data-testid="cohost-frame-clear">
+                  すべて外す
+                </button>
+              )}
+            </>
+          )}
           {visionMode === 'clip' && (
             <>
               <NumberField label="開始(秒)" value={clip.startMs} displayScale={0.001} step={0.5} min={0} onCommit={(startMs) => setClip({ ...clip, startMs })} testId="cohost-clip-start" />

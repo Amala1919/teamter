@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 
 import { z } from 'zod'
 
-import { buildCohostPrompt, cohostResponseSchema, interpretCohostResponse, visionNote, visionTimes } from '@shared/ai/cohost'
+import { buildCohostPrompt, cohostResponseSchema, interpretCohostResponse, MAX_CLIP_FRAMES, visionNote, visionTimes } from '@shared/ai/cohost'
 import { editorResponseSchema, toCommands } from '@shared/ai/edit-commands'
 import {
   applyCheckResults,
@@ -145,6 +145,7 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
       vision: z
         .discriminatedUnion('kind', [
           z.object({ kind: z.literal('frame'), atMs: z.number().min(0) }),
+          z.object({ kind: z.literal('frames'), times: z.array(z.number().min(0)).min(1).max(MAX_CLIP_FRAMES) }),
           z.object({ kind: z.literal('clip'), startMs: z.number().min(0), endMs: z.number().min(0) })
         ])
         .optional()

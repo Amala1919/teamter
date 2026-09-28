@@ -2194,3 +2194,31 @@ input[type='url'] {
   margin-left: 4px;
   padding: 0 5px;
 }
+
+/* 相方に見せる画面の時刻(複数) */
+.cohost-frames {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.cohost-frames__chip {
+  align-items: center;
+  display: inline-flex;
+  gap: 2px;
+  padding: 0 2px 0 6px;
+}
+
+.cohost-frames__seek,
+.cohost-frames__remove {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0 2px;
+}
+
+.cohost-frames__remove {
+  color: var(--text-dim);
+}
