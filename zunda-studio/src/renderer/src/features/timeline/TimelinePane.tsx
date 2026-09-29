@@ -10,6 +10,7 @@ import { ZOOM_METHOD_LABELS } from '@shared/render/zoom'
 import { pickColor } from '../../lib/pick-color'
 import { formatMs } from '../../lib/time'
 import { usePlaybackStore } from '../../playback/player'
+import { withGroups } from '../../state/edit-actions'
 import { assetName, importMediaFiles, parsePreview } from '../../state/media'
 import { useSettingsStore } from '../../state/settings'
 import { useEditorStore } from '../../state/store'
@@ -43,6 +44,8 @@ interface DragState {
   layerOffset: number
   /** 一緒に動かすアイテム(複数選んでいるときに、そのうちの1つをつかんだら全部を時間方向に動かす)。 */
   group: string[]
+  /** 選んでいた複数の中の1つをつかんだか(動かさずに離したら、それ(とそのグループ)だけを選び直す)。 */
+  reselectOnClick: boolean
 }
 
 export function TimelinePane({ onError }: { onError: (message: string) => void }): React.JSX.Element {
@@ -164,16 +167,24 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
     if (event.button !== 0) return
     event.stopPropagation()
     const layer = project.layers.find((candidate) => candidate.id === item.layerId)
+    // グループに入っているものは、グループごと選ぶ。
+    const own = withGroups(project.items, [item.id])
     // 複数選んでいる中の1つをつかんだら、選んだものをまとめて動かす(離すまで選択はそのまま)。
     const keepGroup = !event.shiftKey && mode === 'move' && selectedItemIds.length > 1 && selectedItemIds.includes(item.id)
-    if (event.shiftKey) setSelection(selectedItemIds.includes(item.id) ? selectedItemIds : [...selectedItemIds, item.id])
-    else if (!keepGroup) setSelection([item.id])
+    const selection = event.shiftKey
+      ? selectedItemIds.includes(item.id)
+        ? selectedItemIds
+        : [...selectedItemIds, ...own.filter((id) => !selectedItemIds.includes(id))]
+      : keepGroup
+        ? selectedItemIds
+        : own
+    if (selection !== selectedItemIds) setSelection(selection)
     if (item.locked || layer?.locked) return
     const lockedLayers = new Set(project.layers.filter((candidate) => candidate.locked).map((candidate) => candidate.id))
-    const group = keepGroup
-      ? project.items.filter((candidate) => selectedItemIds.includes(candidate.id) && !candidate.locked && !lockedLayers.has(candidate.layerId)).map((candidate) => candidate.id)
-      : [item.id]
-    setDrag({ itemId: item.id, mode, originX: event.clientX, originY: event.clientY, moved: false, deltaMs: 0, layerOffset: 0, group })
+    // 動かすもの: 選んだもの(グループの仲間を含む)。端をつまんで長さを変えるときは、つかんだものだけ。
+    const moving = mode === 'move' ? withGroups(project.items, selection) : [item.id]
+    const group = project.items.filter((candidate) => moving.includes(candidate.id) && !candidate.locked && !lockedLayers.has(candidate.layerId)).map((candidate) => candidate.id)
+    setDrag({ itemId: item.id, mode, originX: event.clientX, originY: event.clientY, moved: false, deltaMs: 0, layerOffset: 0, group, reselectOnClick: keepGroup })
   }
 
   useEffect(() => {
@@ -203,8 +214,8 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
     const onUp = (): void => {
       setDrag(null)
       if (!drag.moved) {
-        // まとめてつかんで動かさなかったら、クリックしたものだけを選び直す。
-        if (drag.group.length > 1) setSelection([item.id])
+        // まとめてつかんで動かさなかったら、クリックしたもの(とそのグループ)だけを選び直す。
+        if (drag.reselectOnClick) setSelection(withGroups(project.items, [item.id]))
         setPlayhead(item.startMs)
         return
       }
@@ -251,8 +262,8 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
     ((event.clientX - event.currentTarget.getBoundingClientRect().left) / pxPerSecond) * 1000
 
   const onItemContextMenu = (event: React.MouseEvent, item: Item): void => {
-    // 選んでいないアイテムを右クリックしたら、それだけを選び直す。
-    if (!selectedItemIds.includes(item.id)) setSelection([item.id])
+    // 選んでいないアイテムを右クリックしたら、それ(とそのグループ)だけを選び直す。
+    if (!selectedItemIds.includes(item.id)) setSelection(withGroups(project.items, [item.id]))
     openContextMenu(event, itemMenu(project, item, menuContext))
   }
 
@@ -533,6 +544,7 @@ function TimelineItem(props: TimelineItemProps): React.JSX.Element {
   if (item.type === 'portrait') classes.push(`timeline__item--portrait-${item.kind ?? 'show'}`)
   // 「最後まで」の立ち絵の区間は、同じレーンに重ねて置く場面ごとの区間の下に描く(場面の区間を選べるように)。
   if (item.type === 'portrait' && item.untilEnd) classes.push('timeline__item--portrait-base')
+  if (item.groupId !== undefined) classes.push('timeline__item--grouped')
   // 素材・レイヤーに色が付いていれば、種類ごとの色の代わりにその色で描く。
   const color = timelineColor(project, item)
   if (color) classes.push('timeline__item--colored')
@@ -551,7 +563,8 @@ function TimelineItem(props: TimelineItemProps): React.JSX.Element {
         } as React.CSSProperties
       }
       data-color={color ?? undefined}
-      title={`${itemLabel(project, item)}\n${formatMs(item.startMs)} – ${formatMs(itemEndMs(item))}`}
+      title={`${itemLabel(project, item)}\n${formatMs(item.startMs)} – ${formatMs(itemEndMs(item))}${item.groupId !== undefined ? '\nグループ(一緒に動く)' : ''}`}
+      data-group-id={item.groupId}
       onPointerDown={(event) => props.onPointerDown(event, item, 'move')}
       onContextMenu={(event) => props.onContextMenu(event, item)}
       data-testid="timeline-item"
@@ -562,6 +575,7 @@ function TimelineItem(props: TimelineItemProps): React.JSX.Element {
       aria-pressed={props.selected}
     >
       {waveform && (item.type === 'audio' || item.type === 'video') && <Waveform item={item} path={asset.path.absolute} />}
+      {item.groupId !== undefined && <span className="timeline__groupMark" aria-label="グループ" />}
       <span className="timeline__itemLabel">{itemLabel(project, item)}</span>
       {trimmable && (
         <>

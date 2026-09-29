@@ -6,6 +6,7 @@ import { PREVIEW_RESOLUTIONS, ZOOM_METHODS, type AssetLicense, type AudioItem, t
 import { defaultEffect, EFFECT_LABELS } from '@shared/render/effects'
 import { defaultZoomTiming, ZOOM_METHOD_LABELS } from '@shared/render/zoom'
 
+import { moveCommands } from '../../state/edit-actions'
 import { assetName, parsePreview, PREVIEW_LABELS, useMediaStore } from '../../state/media'
 import { NumberField } from '../../ui/NumberField'
 import { CREDIT_LABELS } from '../media/FreeSourcesDialog'
@@ -32,7 +33,13 @@ export function TimingInspector({ project, item, run }: { project: Project; item
           displayScale={0.001}
           step={0.1}
           min={0}
-          onCommit={(value) => run([{ op: 'item.setTimeRange', itemId: item.id, startMs: value }], '開始時刻の変更')}
+          // グループに入っていれば、仲間も同じだけ動かす
+          onCommit={(value) =>
+            run(
+              item.groupId !== undefined ? moveCommands(project.items, item, value) : [{ op: 'item.setTimeRange', itemId: item.id, startMs: value }],
+              '開始時刻の変更'
+            )
+          }
           testId="inspector-start"
         />
         {item.type !== 'voice' && (

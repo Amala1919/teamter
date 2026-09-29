@@ -28,6 +28,7 @@ export const SHORTCUT_GROUPS: { title: string; items: [keys: string, action: str
       ['Ctrl+C・X・V・D', 'コピー・切り取り・貼り付け・複製'],
       ['Ctrl+A', 'すべて選択'],
       ['Shift+クリック', '選ぶものを足す(選んだものの1つをドラッグすると、まとめて動く)'],
+      ['Ctrl+G / Ctrl+Shift+G', '選んだものをグループにする / グループを解く(グループは一緒に選ばれ、一緒に動く)'],
       ['← / →', '1コマ送り(Shift で1秒)'],
       ['↑ / ↓', '前後の編集点へ'],
       ['Home / End', '先頭 / 末尾へ'],

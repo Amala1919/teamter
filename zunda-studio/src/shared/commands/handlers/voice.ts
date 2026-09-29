@@ -100,7 +100,8 @@ export const voiceHandlers: VoiceHandlers = {
       generatedBy: command.generatedBy ?? null,
       synthesis: null,
       subtitleLines: [],
-      subtitleLinesManual: false
+      subtitleLinesManual: false,
+      durationEstimated: true
     }
     item.subtitleLines = autoSubtitleLines(draft, item)
     if (draft.editing.rippleOnVoiceChange) openGap(draft, atMs, item.durationMs + gap, id)
@@ -262,10 +263,17 @@ export const voiceHandlers: VoiceHandlers = {
     const oldEnd = itemEnd(item)
     const newDuration = Math.max(1, Math.round(command.synthesis.audioDurationMs))
     const delta = newDuration - item.durationMs
+    const estimated = item.durationEstimated === true
     item.synthesis = command.synthesis
     item.durationMs = newDuration
-    if (draft.editing.rippleOnVoiceChange && delta !== 0) {
-      shiftItemsFrom(draft, oldEnd, delta, new Set([item.id]), isLine)
-    }
+    delete item.durationEstimated
+    if (delta === 0) return
+    // 素材は独立が基本。編集で尺が変わっても、ほかのセリフ・素材は動かさない。
+    // - 足したばかりのセリフの最初の合成(見積もり→本当の尺)だけは、見積もりで並べた後ろのセリフを合わせる
+    // - 同じグループの、このセリフより後ろのものは一緒にずらす(グループは動きを合わせるためのもの)
+    const groupId = item.groupId
+    const follows = (other: Item): boolean =>
+      (groupId !== undefined && other.groupId === groupId) || (estimated && draft.editing.rippleOnVoiceChange && isLine(other))
+    shiftItemsFrom(draft, oldEnd, delta, new Set([item.id]), follows)
   }
 }

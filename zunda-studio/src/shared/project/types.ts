@@ -342,6 +342,11 @@ interface ItemBase {
   locked: boolean
   /** タイムラインでの色(#rrggbb)。見分けるための印で、動画には出ない。無ければレイヤーの色、それも無ければ種類ごとの色。 */
   color?: string
+  /**
+   * グループ。同じ値のアイテムは一緒に動く(ドラッグで一緒に動き、グループのセリフの尺が変わると後ろのものが合わせてずれる)。
+   * 無ければ独立していて、ほかのアイテムの変化では動かない。
+   */
+  groupId?: string
 }
 
 /** VOICEVOX の Mora。docs/ARCHITECTURE.md の音声合成の項を参照。 */
@@ -397,6 +402,11 @@ export interface VoiceItem extends ItemBase {
   subtitleLines: string[]
   /** 字幕の改行を手で決めたか。テキストを書き換えると自動に戻る。 */
   subtitleLinesManual: boolean
+  /**
+   * 尺がまだ見積もり(足したばかりで、一度も合成していない)。最初の合成で尺が決まったときだけ、
+   * 見積もりに合わせて並べた後ろのセリフを本当の尺に合わせてずらす。編集で尺が変わったときはずらさない。
+   */
+  durationEstimated?: boolean
   /**
    * 読み方の上書き(AquesTalk 風のカタカナ表記。例: コンニチワ'/ズンダモン'デス)。
    * null ならテキストから自動で読む。テキストを書き換えると外れる(V-6)。

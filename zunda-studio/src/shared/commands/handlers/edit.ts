@@ -20,6 +20,8 @@ type EditHandlers = Pick<
   | 'timeline.arrangeOverlaps'
   | 'layer.removeEmpty'
   | 'item.setColor'
+  | 'item.group'
+  | 'item.ungroup'
 >
 
 /** 分けたときに両側に残す最短の尺。 */
@@ -188,10 +190,17 @@ export const editHandlers: EditHandlers = {
     requireFinite(command.atMs, command.op, '貼り付ける位置')
     if (command.atMs < 0) fail(command.op, '貼り付ける位置は負の値にできません')
     const earliest = Math.min(...command.items.map((item) => item.startMs))
+    // 貼り付けたものは元のグループには入れない。一緒に貼り付けた仲間どうしで、新しいグループにする。
+    const groups = new Map<string, string>()
     command.items.forEach((source, index) => {
       const item = clone(source)
       validatePasted(draft, item, command.op)
       item.id = env.ctx.newId('itm')
+      if (item.groupId !== undefined) {
+        const next = groups.get(item.groupId) ?? env.ctx.newId('grp')
+        groups.set(item.groupId, next)
+        item.groupId = next
+      }
       item.locked = false
       item.startMs = Math.round(command.atMs + (source.startMs - earliest))
       const layerExists = draft.layers.some((layer) => layer.id === item.layerId)
@@ -288,7 +297,39 @@ export const editHandlers: EditHandlers = {
       if (command.color === null) delete item.color
       else item.color = command.color.toLowerCase()
     }
+  },
+
+  'item.group': (draft, command, env) => {
+    const ids = new Set(command.itemIds.map((id) => env.resolve(id)))
+    const items = [...ids].map((id) => {
+      const item = draft.items.find((candidate) => candidate.id === id)
+      if (!item) fail(command.op, `アイテムが見つかりません: ${id}`)
+      return item
+    })
+    // 既にグループに入っているものは、そのグループの仲間ごとまとめる(グループが入れ子にならないように)。
+    const absorbed = new Set(items.map((item) => item.groupId).filter((id): id is string => id !== undefined))
+    const members = draft.items.filter((item) => ids.has(item.id) || (item.groupId !== undefined && absorbed.has(item.groupId)))
+    if (members.length < 2) fail(command.op, 'グループにするには2つ以上選んでください')
+    const groupId = env.ctx.newId('grp')
+    for (const item of members) item.groupId = groupId
+    if (command.tempId) env.resolvedIds[command.tempId] = groupId
+  },
+
+  'item.ungroup': (draft, command, env) => {
+    for (const rawId of command.itemIds) {
+      const id = env.resolve(rawId)
+      const item = draft.items.find((candidate) => candidate.id === id)
+      if (!item) fail(command.op, `アイテムが見つかりません: ${id}`)
+      delete item.groupId
+    }
   }
+}
+
+/** 1つしか残っていないグループを解く(消したり外したりした後に、独りのグループが残らないように)。 */
+export function dissolveLoneGroups(draft: Project): void {
+  const counts = new Map<string, number>()
+  for (const item of draft.items) if (item.groupId !== undefined) counts.set(item.groupId, (counts.get(item.groupId) ?? 0) + 1)
+  for (const item of draft.items) if (item.groupId !== undefined && (counts.get(item.groupId) ?? 0) < 2) delete item.groupId
 }
 
 function mergeRanges(ranges: [Ms, Ms][]): [Ms, Ms][] {

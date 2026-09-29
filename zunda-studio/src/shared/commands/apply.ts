@@ -6,7 +6,7 @@ import { changedItems, resolveOverlaps } from './arrange'
 import type { ApplyEnv, CommandContext, HandlerTable } from './env'
 import { assetHandlers } from './handlers/asset'
 import { characterHandlers } from './handlers/character'
-import { editHandlers } from './handlers/edit'
+import { dissolveLoneGroups, editHandlers } from './handlers/edit'
 import { itemHandlers } from './handlers/item'
 import { liveHandlers } from './handlers/live'
 import { mediaHandlers } from './handlers/media'
@@ -56,10 +56,13 @@ export function applyCommands(
       if (!handler) throw new Error(`未対応のコマンド: ${JSON.stringify(command)}`)
       handler(draft, command, env)
     }
+    dissolveLoneGroups(draft)
     // 足した・動かした素材が同じレイヤーの素材と重なったら、空いている同じ種類のレイヤーへ移す。
+    // 合成で尺が変わっただけのセリフは、置いた場所・レイヤーのままにする(重なっても別のレイヤーへ飛ばさない)。
     if (draft.editing.avoidOverlap !== false) {
       const before = new Map<ItemId, Item>(project.items.map((item) => [item.id, item]))
-      resolveOverlaps(draft, changedItems(before, draft.items), env, before)
+      const moved = changedItems(before, draft.items).filter((id) => !onlyResized(before.get(id), draft.items.find((item) => item.id === id)))
+      resolveOverlaps(draft, moved, env, before)
     }
     // 「動画の最後まで」の立ち絵の区間を、今の動画の長さに合わせる。
     extendPortraitTracks(draft)
@@ -67,4 +70,9 @@ export function applyCommands(
   })
 
   return { project: next, resolvedIds }
+}
+
+/** セリフの尺だけが変わった(置いた時刻とレイヤーはそのまま)。 */
+function onlyResized(before: Item | undefined, after: Item | undefined): boolean {
+  return before !== undefined && after !== undefined && after.type === 'voice' && before.startMs === after.startMs && before.layerId === after.layerId
 }
