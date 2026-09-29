@@ -135,6 +135,11 @@ switch (mode) {
     )
     process.exit(1)
     break
+  case 'credit':
+    // API(Console)のアカウントでログインしていて、残高が無いときの応答
+    process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', is_error: true, result: 'Credit balance is too low' }) + '\n')
+    process.exit(1)
+    break
   case 'outdated':
     process.stderr.write("error: unknown option '--output-format'\n")
     process.exit(1)

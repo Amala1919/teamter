@@ -25,6 +25,12 @@ const RATE_LIMIT_PATTERNS = [
   /overloaded/i
 ]
 
+/**
+ * API(従量課金)の残高が足りない。サブスクではなく Console のアカウント(API キー)で
+ * ログインしているときに出る(サブスクなら出ない)。
+ */
+const CREDIT_PATTERNS = [/credit balance (is )?too low/i, /insufficient (credit|balance|funds)/i]
+
 /** 選んだモデルが今のプラン・契約では使えない(Fable の使用量クレジットなど)。 */
 const MODEL_UNAVAILABLE_PATTERNS = [
   /requires? (usage )?credits/i,
@@ -39,6 +45,7 @@ const MODEL_UNAVAILABLE_PATTERNS = [
 const OUTDATED_PATTERNS = [/unknown option/i, /unrecognized (option|argument)/i, /error: unknown/i, /invalid option/i]
 
 export function classifyCliFailure(text: string): ErrorCode {
+  if (CREDIT_PATTERNS.some((pattern) => pattern.test(text))) return 'AI_CREDIT_LOW'
   if (RATE_LIMIT_PATTERNS.some((pattern) => pattern.test(text))) return 'AI_RATE_LIMITED'
   if (MODEL_UNAVAILABLE_PATTERNS.some((pattern) => pattern.test(text))) return 'AI_MODEL_UNAVAILABLE'
   if (LOGIN_PATTERNS.some((pattern) => pattern.test(text))) return 'AI_NOT_LOGGED_IN'
@@ -48,6 +55,7 @@ export function classifyCliFailure(text: string): ErrorCode {
 
 const MESSAGES: Record<string, string> = {
   AI_RATE_LIMITED: 'AIの利用上限に達しました',
+  AI_CREDIT_LOW: 'API(従量課金)の残高が足りません',
   AI_MODEL_UNAVAILABLE: '選んだモデルは今のプラン・契約では使えません',
   AI_NOT_LOGGED_IN: 'AIのCLIにログインしていません',
   CLI_OUTDATED: 'CLIが古く、必要な機能に対応していません',
