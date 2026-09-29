@@ -14,6 +14,7 @@ import { player, togglePlayback, usePlaybackStore } from '../../playback/player'
 import { browserResources, useResourceStore } from '../../render/browser-resources'
 import { useMediaStore } from '../../state/media'
 import { hasClipboard, pasteAt, splitAtPlayhead } from '../../state/edit-actions'
+import { saveFrameImage } from '../../state/snapshot'
 import { deleteSelection, useEditorStore } from '../../state/store'
 import { openContextMenu, type MenuEntry } from '../../ui/ContextMenu'
 import { insertZoom } from '../timeline/timeline-menus'
@@ -201,6 +202,22 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
     setPortraitTarget(hit ? hit.scene.character.id : null)
   }
 
+  // 画像の保存などの短いお知らせ。しばらくしたら消す。
+  const [notice, setNotice] = useState<string | null>(null)
+  useEffect(() => {
+    if (!notice) return
+    const timer = window.setTimeout(() => setNotice(null), 5000)
+    return () => window.clearTimeout(timer)
+  }, [notice])
+
+  const saveImage = (subtitles: boolean): void => {
+    saveFrameImage(project, playheadMs, { subtitles })
+      .then((path) => {
+        if (path) setNotice(`画像を保存しました: ${path}`)
+      })
+      .catch((error: unknown) => onError(`画像を保存できませんでした: ${error instanceof Error ? error.message : String(error)}`))
+  }
+
   const onCanvasContextMenu = (event: React.MouseEvent): void => {
     const point = toCanvasPoint(event)
     const entries: MenuEntry[] = [
@@ -214,6 +231,14 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
           setCheckZoom(false)
         },
         testId: 'menu-preview-zoom'
+      },
+      {
+        label: 'この画面を画像で保存(PNG)',
+        submenu: [
+          { label: '字幕あり', onSelect: () => saveImage(true), testId: 'menu-preview-image' },
+          { label: '字幕なし(サムネイル用)', onSelect: () => saveImage(false), testId: 'menu-preview-image-plain' }
+        ],
+        testId: 'menu-preview-image-parent'
       },
       { label: '再生位置で分割', shortcut: 'S', onSelect: () => report(splitAtPlayhead()) },
       { label: '再生位置に貼り付け', shortcut: 'Ctrl+V', disabled: !hasClipboard(), onSelect: () => report(pasteAt()) }
@@ -338,6 +363,11 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
           }}
           aria-label="再生位置"
         />
+        {notice && (
+          <span className="preview__notice" role="status" data-testid="preview-notice">
+            {notice}
+          </span>
+        )}
       </div>
     </section>
   )

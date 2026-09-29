@@ -14,9 +14,12 @@ export function itemEndMs(item: Item): Ms {
   return item.startMs + item.durationMs
 }
 
-/** プロジェクト全体の尺。アイテムが無ければ 0。 */
+/**
+ * プロジェクト全体の尺。アイテムが無ければ 0。
+ * 「動画の最後まで」の立ち絵の区間は動画の長さに合わせて伸びるだけなので、尺には数えない。
+ */
 export function projectDurationMs(project: Project): Ms {
-  return project.items.reduce((max, item) => Math.max(max, itemEndMs(item)), 0)
+  return project.items.reduce((max, item) => (item.type === 'portrait' && item.untilEnd ? max : Math.max(max, itemEndMs(item))), 0)
 }
 
 export function isVoiceItem(item: Item): item is VoiceItem {

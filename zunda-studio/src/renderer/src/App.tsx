@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { SidePane } from './features/chat/SidePane'
-import { InspectorPane } from './features/inspector/InspectorPane'
 import { PreviewPane } from './features/preview/PreviewPane'
 import { ScriptPane } from './features/script/ScriptPane'
 import { SettingsDialog } from './features/settings/SettingsDialog'
@@ -27,7 +26,8 @@ import {
   selectAll,
   splitAtPlayhead
 } from './state/edit-actions'
-import { deleteSelection, startAutosave, useEditorStore } from './state/store'
+import { api } from './api'
+import { deleteSelection, guardUnsavedClose, startAutosave, useEditorStore } from './state/store'
 import { ContextMenuHost } from './ui/ContextMenu'
 import { useLayoutStore } from './state/layout'
 import { Splitter } from './ui/Splitter'
@@ -39,7 +39,6 @@ export function App(): React.JSX.Element {
   const layout = useLayoutStore((state) => state.layout)
   const appRef = useRef<HTMLDivElement>(null)
   const workspaceRef = useRef<HTMLDivElement>(null)
-  const centerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     loadSettings()
@@ -59,6 +58,8 @@ export function App(): React.JSX.Element {
     }
     return startAutosave(interval)
   }, [])
+  // 閉じるときの確認は Electron だけ(テスト用ホストのブラウザでは、開き直しを止めないように)。
+  useEffect(() => (api.runtime === 'electron' ? guardUnsavedClose() : undefined), [])
   const undo = useEditorStore((state) => state.undo)
   const redo = useEditorStore((state) => state.redo)
   const saveProject = useEditorStore((state) => state.saveProject)
@@ -117,8 +118,7 @@ export function App(): React.JSX.Element {
         {
           '--layout-left': layout.left,
           '--layout-right': layout.right,
-          '--layout-timeline': layout.timeline,
-          '--layout-inspector': layout.inspector
+          '--layout-timeline': layout.timeline
         } as React.CSSProperties
       }
     >
@@ -138,12 +138,11 @@ export function App(): React.JSX.Element {
       <div className="workspace" ref={workspaceRef}>
         <ScriptPane onError={setError} />
         <Splitter target="left" container={() => workspaceRef.current} orientation="vertical" label="台本の欄の幅" />
-        <div className="workspace__center" ref={centerRef}>
+        {/* インスペクタは右の欄のタブに移したので、中央はプレビューだけにして大きく見せる。 */}
+        <div className="workspace__center">
           <PreviewPane onError={setError} />
-          <Splitter target="inspector" container={() => centerRef.current} orientation="horizontal" after label="インスペクタの高さ" />
-          <InspectorPane onError={setError} />
         </div>
-        <Splitter target="right" container={() => workspaceRef.current} orientation="vertical" after label="チャットの欄の幅" />
+        <Splitter target="right" container={() => workspaceRef.current} orientation="vertical" after label="右の欄の幅" />
         <SidePane onError={setError} />
       </div>
       <Splitter target="timeline" container={() => appRef.current} orientation="horizontal" after label="タイムラインの高さ" />

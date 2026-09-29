@@ -1,8 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { toAppError } from '../../api'
+import { useSettingsStore } from '../../state/settings'
 import { useEditorStore } from '../../state/store'
+import { openMenuAt, type MenuEntry } from '../../ui/ContextMenu'
 import { ExportDialog } from '../export/ExportDialog'
+import { ShortcutsDialog } from '../help/ShortcutsDialog'
+
+/** 設定を読み込む前の空の一覧(毎回新しい配列を返すと、描画が止まらなくなるため同じものを使う)。 */
+const NO_RECENT: string[] = []
 
 interface ToolbarProps {
   onError: (message: string | null) => void
@@ -18,6 +24,18 @@ export function Toolbar({ onError, onOpenSettings }: ToolbarProps): React.JSX.El
   const undoLabel = useEditorStore((state) => state.undoStack.at(-1)?.label)
   const { newProject, openProject, saveProject, undo, redo, dispatch } = useEditorStore.getState()
   const [exportOpen, setExportOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  // F1: キーの操作の一覧
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'F1') return
+      event.preventDefault()
+      setShortcutsOpen(true)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+  const recentProjects = useSettingsStore((state) => state.settings?.recentProjects ?? NO_RECENT)
 
   /** 保存していない変更があれば、捨ててよいか確かめる。 */
   const confirmDiscard = (): boolean =>
@@ -45,8 +63,30 @@ export function Toolbar({ onError, onOpenSettings }: ToolbarProps): React.JSX.El
         <button type="button" onClick={() => confirmDiscard() && newProject()}>
           新規
         </button>
-        <button type="button" onClick={() => confirmDiscard() && run(openProject)}>
+        <button type="button" onClick={() => confirmDiscard() && run(() => openProject())}>
           開く
+        </button>
+        <button
+          type="button"
+          className="toolbar__recent"
+          disabled={recentProjects.length === 0}
+          title="最近開いたプロジェクト"
+          aria-label="最近開いたプロジェクト"
+          onClick={(event) => {
+            const entries: MenuEntry[] = recentProjects.map((path, index) => ({
+              label: recentLabel(path),
+              shortcut: parentFolder(path),
+              checked: path === filePath,
+              onSelect: () => confirmDiscard() && run(() => openProject(path)),
+              testId: `recent-project-${index}`
+            }))
+            const rect = event.currentTarget.getBoundingClientRect()
+            event.stopPropagation()
+            openMenuAt(rect.left, rect.bottom + 2, entries)
+          }}
+          data-testid="open-recent"
+        >
+          最近 ▾
         </button>
         <button type="button" onClick={() => run(() => saveProject())}>
           保存
@@ -72,6 +112,9 @@ export function Toolbar({ onError, onOpenSettings }: ToolbarProps): React.JSX.El
         <button type="button" onClick={onOpenSettings} data-testid="open-settings">
           設定
         </button>
+        <button type="button" onClick={() => setShortcutsOpen(true)} title="キーの操作の一覧(F1)" aria-label="キーの操作の一覧" data-testid="open-shortcuts">
+          ?
+        </button>
       </div>
 
       <div className="toolbar__title">
@@ -89,6 +132,19 @@ export function Toolbar({ onError, onOpenSettings }: ToolbarProps): React.JSX.El
         <span className="toolbar__path">{filePath ?? '未保存'}</span>
       </div>
       {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} />}
+      {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
     </header>
   )
+}
+
+/** ファイル名(拡張子なし)。 */
+function recentLabel(path: string): string {
+  const name = path.split(/[\\/]/).at(-1) ?? path
+  return name.replace(/\.zsproj$/i, '')
+}
+
+/** 置き場所のフォルダ名(同じ名前のプロジェクトを見分けるため)。 */
+function parentFolder(path: string): string {
+  const parts = path.split(/[\\/]/)
+  return parts.at(-2) ?? ''
 }

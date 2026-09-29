@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -84,6 +84,30 @@ describe('テスト用ホスト', () => {
 
     const settings = await invoke<{ recentProjects: string[] }>('settings:get')
     expect(settings.ok && settings.value.recentProjects[0]).toBe(path)
+  })
+
+  it('画像は保存ダイアログで選んだ場所に、PNG だけを書ける', async () => {
+    const png = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex').toString('base64')
+    const path = join(root, 'frame.png')
+    expect(await invoke('export:image', path, png)).toMatchObject({ ok: false, error: { code: 'ACCESS_DENIED' } })
+    await fetch(`${host.url}/__test/pick`, { method: 'POST', body: JSON.stringify({ response: [path] }) })
+    await invoke('dialog:pick', { kind: 'exportImage' })
+    expect(await invoke('export:image', path, Buffer.from('not png').toString('base64'))).toMatchObject({ ok: false, error: { code: 'INVALID_ARGUMENT' } })
+    expect(await invoke('export:image', path, png)).toEqual({ ok: true })
+    expect((await readFile(path)).subarray(1, 4).toString()).toBe('PNG')
+  })
+
+  it('開いたプロジェクトも最近の一覧に入り、見つからないものは外せる', async () => {
+    const path = join(root, 'ep2.zsproj')
+    await invoke('project:write', path, createEmptyProject({ title: 'A', renderSeed: 1 }))
+    await invoke('project:write', join(root, 'ep3.zsproj'), createEmptyProject({ title: 'B', renderSeed: 1 }))
+    await invoke('project:read', path)
+    let settings = await invoke<{ recentProjects: string[] }>('settings:get')
+    expect(settings.ok && settings.value.recentProjects.slice(0, 2)).toEqual([path, join(root, 'ep3.zsproj')])
+    expect(await invoke('project:read', join(root, 'missing.zsproj'))).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } })
+    await invoke('project:forgetRecent', path)
+    settings = await invoke<{ recentProjects: string[] }>('settings:get')
+    expect(settings.ok && settings.value.recentProjects).not.toContain(path)
   })
 
   it('許可されていないファイルは配信しない', async () => {

@@ -577,6 +577,8 @@ export interface PortraitUpdate {
   kind?: PortraitItemKind
   transform?: PortraitTransform | null
   expressionId?: ExpressionId | null
+  /** 動画の最後まで表示する(自動で伸ばす)か。 */
+  untilEnd?: boolean
 }
 
 // ------------------------------------------------------------------ ズーム

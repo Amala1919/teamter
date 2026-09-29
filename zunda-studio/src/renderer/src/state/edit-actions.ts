@@ -135,6 +135,14 @@ export function selectAll(): void {
   setSelection(project.items.map((item) => item.id))
 }
 
+/**
+ * atMs 以降に始まるものをすべて選ぶ(layerId を渡すとそのレイヤーだけ)。選んだものの1つをドラッグすると、まとめて後ろへずらせる。
+ */
+export function selectFrom(atMs: Ms, layerId?: string): void {
+  const { project, setSelection } = state()
+  setSelection(project.items.filter((item) => item.startMs >= atMs && (layerId === undefined || item.layerId === layerId)).map((item) => item.id))
+}
+
 export function selectLayer(layerId: string): void {
   const { project, setSelection } = state()
   setSelection(project.items.filter((item) => item.layerId === layerId).map((item) => item.id))

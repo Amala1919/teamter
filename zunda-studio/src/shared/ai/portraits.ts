@@ -90,7 +90,7 @@ export function buildPortraitPrompt(project: Project, request: PortraitRequest):
     '- 出力は指定の JSON だけ。reply に何をどう調整したかを短く書き、commands にコマンドを並べる',
     '- セリフの表情は voice.setExpression で付ける。使える表情は各キャラクターの表情 ID だけ(新しい表情は作れない)',
     '- 表情はセリフの感情(驚き・怒り・喜び・困惑など)がはっきりしているところにだけ付け、普通の会話は既定の表情のままでよい',
-    '- 場面ごとの立ち絵は portrait.insert で置く。kind は show(この区間だけ出す。1つでも置くとその区間の外では出なくなるので、使うならそのキャラクターが出る区間を全て置く)/ hide(この区間だけ隠す)/ adjust(この区間だけ位置・大きさ・表情を変える)',
+    '- 場面ごとの立ち絵は portrait.insert で置く。kind は show(この区間だけ出す。立ち絵は show の区間の中でだけ出る。立ち絵を付けたキャラクターには、動画の最後まで出す show の区間(最後まで)が既にある)/ hide(この区間だけ隠す)/ adjust(この区間だけ位置・大きさ・表情を変える)',
     `- 位置は画面 ${width}x${height} の座標。transform の x, y は anchor(基準点)の位置で、scale は立ち絵の拡大率。今の設定を土台に少しずつ変える`,
     '- ズームで画面の一部に寄っている区間は、立ち絵が大事な場面を隠さないよう、hide するか、端に寄せて小さくする(adjust)ことを考える',
     '- セリフの無い長い区間(ゲーム画面を見せる場面)では、立ち絵を小さくするか隠してもよい',
@@ -130,7 +130,7 @@ export function buildPortraitPrompt(project: Project, request: PortraitRequest):
       if (item.type !== 'portrait') return ''
       const name = project.characters[item.characterId]?.name ?? item.characterId
       const t = item.transformOverride
-      return `- ${item.id} ${name} ${item.kind ?? 'show'} ${formatMs(item.startMs)}-${formatMs(itemEndMs(item))}${item.expressionId ? ` 表情=${item.expressionId}` : ''}${t ? ` 配置 x=${Math.round(t.x)} y=${Math.round(t.y)} scale=${t.scale}` : ''}`
+      return `- ${item.id} ${name} ${item.kind ?? 'show'} ${formatMs(item.startMs)}-${item.untilEnd ? '最後まで' : formatMs(itemEndMs(item))}${item.expressionId ? ` 表情=${item.expressionId}` : ''}${t ? ` 配置 x=${Math.round(t.x)} y=${Math.round(t.y)} scale=${t.scale}` : ''}`
     })
 
   const content = [

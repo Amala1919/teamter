@@ -64,6 +64,8 @@ export const itemHandlers: ItemHandlers = {
       if (item.type === 'voice') fail(command.op, 'ボイスアイテムの尺は合成結果から決まるため直接変更できません')
       if (command.durationMs <= 0) fail(command.op, '尺は正の値でなければなりません')
       item.durationMs = Math.round(command.durationMs)
+      // 長さを決めたら、その長さに固定する(動画の最後まで伸ばすのをやめる)。
+      if (item.type === 'portrait') delete item.untilEnd
     }
     if (command.startMs !== undefined) {
       if (command.startMs < 0) fail(command.op, '開始時刻は負の値にできません')
@@ -112,6 +114,7 @@ export const itemHandlers: ItemHandlers = {
     }
     item.startMs = start
     item.durationMs = end - start
+    if (item.type === 'portrait' && command.endMs !== undefined) delete item.untilEnd
   },
 
   'item.setTransform': (draft, command, env) => {

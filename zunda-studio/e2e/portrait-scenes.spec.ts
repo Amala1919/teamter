@@ -108,7 +108,7 @@ test.describe('場面ごとの立ち絵', () => {
     await expect(page.getByTestId('portrait-scene-inspector')).toBeVisible()
     await expect(page.getByTestId('portrait-scene-kind')).toHaveValue('adjust')
     await expect(page.getByTestId('portrait-frame')).toContainText('この区間の配置')
-    await expect(page.locator('[data-item-type="portrait"]')).toContainText('調整')
+    await expect(page.locator('[data-item-type="portrait"]', { hasText: '調整' })).toHaveCount(1)
 
     // この区間だけ隠す → その間は立ち絵が出ない
     await page.getByTestId('portrait-scene-kind').selectOption('hide')
@@ -125,7 +125,16 @@ test.describe('場面ごとの立ち絵', () => {
     await menu.getByTestId('menu-portrait-show-fade').click()
     await expect(page.getByTestId('portrait-scene-transition')).toHaveValue('fade')
     await expect(page.locator('[data-item-type="portrait"]', { hasText: '登場' })).toHaveCount(1)
-    // 再生位置 0 秒(出す区間の外)では出ない
+    // 「最後まで」の区間を消すと、再生位置 0 秒(出す区間の外)では出ない
+    await expect.poll(() => colorBounds(canvas, COLORS.body)).not.toBeNull()
+    // 場面ごとの区間が上に重なっていない真ん中あたりを選ぶ
+    const base = page.locator('[data-item-type="portrait"]', { hasText: '立ち絵:' })
+    const baseBox = (await base.boundingBox())!
+    await base.click({ position: { x: baseBox.width / 2, y: baseBox.height / 2 } })
+    await page.getByTestId('side-tab-inspector').click()
+    await expect(page.getByTestId('portrait-scene-until-end')).toBeChecked()
+    await page.keyboard.press('Delete')
+    await expect(page.locator('[data-item-type="portrait"]', { hasText: '立ち絵:' })).toHaveCount(0)
     await expect.poll(() => colorBounds(canvas, COLORS.body)).toBeNull()
 
     // 話し手の強調(動画全体の設定)
@@ -133,5 +142,53 @@ test.describe('場面ごとの立ち絵', () => {
     await page.getByTestId('speaker-hop').check()
     await expect(page.getByTestId('speaker-dim')).toHaveValue('0.45')
     await expect(page.getByTestId('speaker-hop')).toBeChecked()
+  })
+
+  test('立ち絵を付けるとタイムラインに区間が置かれ、選ぶと位置・大きさ・長さを直せる', async ({ page, request }) => {
+    const psdPath = await writePortraitPsd(mkdtempSync(join(tmpdir(), 'zunda-psd-track-')))
+    await openFresh(page)
+    await page.getByRole('button', { name: /ずんだもん\(あなた\)/ }).click()
+    await page.getByTestId('open-characters').click()
+    await queuePick(request, [psdPath])
+    await page.getByTestId('portrait-pick').click()
+    await expect(page.getByTestId('portrait-section').getByTestId('portrait-open-manager')).toBeVisible()
+    await page.keyboard.press('Escape')
+
+    const track = page.locator('[data-item-type="portrait"]')
+    await expect(track).toHaveCount(1)
+    await expect(track).toContainText('立ち絵: ずんだもん')
+    await expect(page.getByTestId('lane-lyr_portrait').locator('[data-item-type="portrait"]')).toHaveCount(1)
+
+    const canvas = page.getByTestId('preview-canvas')
+    await expect.poll(() => colorBounds(canvas, COLORS.body)).not.toBeNull()
+    const before = (await colorBounds(canvas, COLORS.body))!
+
+    // 選ぶと右の欄がインスペクタになり、位置を数値で直せる(区間を分けていなければキャラクター全体の位置)
+    await track.click()
+    await expect(page.getByTestId('portrait-scene-inspector')).toBeVisible()
+    await expect(page.getByTestId('portrait-scene-until-end')).toBeChecked()
+    const x = page.getByTestId('portrait-scene-x')
+    const current = Number(await x.inputValue())
+    await x.fill(String(current + 100))
+    await x.press('Enter')
+    await expect.poll(async () => (await colorBounds(canvas, COLORS.body))!.x0).toBeGreaterThan(before.x0 + 50)
+    // プレビューの枠も「全体の配置」のまま
+    await expect(page.getByTestId('portrait-frame')).toContainText('全体の配置')
+
+    // セリフを足すと区間が伸びる
+    const width = async (): Promise<number> => (await track.boundingBox())!.width
+    const initial = await width()
+    await page.getByTestId('open-bulk').click()
+    await page.getByTestId('bulk-text').fill('ずんだもん:ながいセリフをたくさん話すのだ\nずんだもん:もうひとつ話すのだ\nずんだもん:さらに話すのだ')
+    await page.getByTestId('bulk-submit').click()
+    await expect(page.getByTestId('synthesis-status').filter({ hasText: '合成済み' })).toHaveCount(3, { timeout: 30_000 })
+    await expect.poll(width).toBeGreaterThan(initial)
+
+    // 「最後まで」を外すと、その長さに固定される
+    await track.click({ position: { x: 5, y: 5 } })
+    await page.getByTestId('side-tab-inspector').click()
+    await page.getByTestId('portrait-scene-until-end').uncheck()
+    await expect(page.getByTestId('portrait-scene-until-end')).not.toBeChecked()
+    await expect(track).toContainText('登場: ずんだもん')
   })
 })

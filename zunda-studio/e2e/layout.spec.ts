@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
-import { openFresh } from './helpers'
+import { openFresh, updateSettings, useFakeAi } from './helpers'
+import { MOCK_VOICEVOX_URL } from './ports'
 
 async function drag(page: Page, handle: Locator, dx: number, dy: number): Promise<void> {
   const box = (await handle.boundingBox())!
@@ -30,18 +31,21 @@ test('欄の境界をドラッグして大きさを変え、次に開いても�
   const script = page.locator('.pane--script')
   const side = page.locator('.pane--side')
   const timeline = page.getByTestId('timeline')
-  const inspector = page.getByTestId('inspector')
-  const before = { script: await width(script), side: await width(side), timeline: await height(timeline), inspector: await height(inspector) }
+  const preview = page.locator('.pane--preview')
+  const before = { script: await width(script), side: await width(side), timeline: await height(timeline), preview: await height(preview) }
+
+  // インスペクタは右の欄のタブにあるので、中央はプレビューが縦いっぱいに使う
+  await expect(page.getByTestId('splitter-inspector')).toHaveCount(0)
+  await expect(page.getByTestId('side-tab-inspector')).toBeVisible()
+  expect(before.preview).toBeGreaterThan(before.timeline)
 
   await drag(page, page.getByTestId('splitter-left'), 120, 0)
   await drag(page, page.getByTestId('splitter-right'), 80, 0)
   await drag(page, page.getByTestId('splitter-timeline'), 0, -90)
-  await drag(page, page.getByTestId('splitter-inspector'), 0, 60)
 
   await expect.poll(() => width(script)).toBeGreaterThan(before.script + 100)
   await expect.poll(() => width(side)).toBeLessThan(before.side - 60)
   await expect.poll(() => height(timeline)).toBeGreaterThan(before.timeline + 70)
-  await expect.poll(() => height(inspector)).toBeLessThan(before.inspector - 40)
 
   // 開き直しても保たれる
   const widened = await width(script)
@@ -67,4 +71,37 @@ test('欄の境界をドラッグして大きさを変え、次に開いても�
   await page.getByTestId('context-menu').getByTestId('menu-reset-layout').click()
   await expect.poll(() => height(timeline)).toBeLessThan(before.timeline + 3)
   await expect.poll(() => width(side)).toBeGreaterThan(before.side - 3)
+})
+
+test('インスペクタは右の欄のタブ。タイムラインで選ぶと切り替わり、台本の行を選んでも切り替わらない', async ({ page, request }) => {
+  await updateSettings(request, {
+    voice: { engines: [{ id: 'voicevox', label: 'VOICEVOX', url: MOCK_VOICEVOX_URL, executablePath: null, autoLaunch: false }] }
+  })
+  await useFakeAi(request)
+  await openFresh(page)
+  await page.getByRole('button', { name: /ずんだもん\(あなた\)/ }).click()
+  await page.getByTestId('add-line').click()
+  await expect(page.getByTestId('script-line')).toHaveCount(1)
+
+  // 最初はチャット。書きかけの指示を入れておく
+  await expect(page.getByTestId('side-tab-chat')).toHaveAttribute('aria-selected', 'true')
+  await page.getByTestId('chat-input').fill('テンポを上げたい')
+
+  // 台本の行を選んでも、右の欄はチャットのまま
+  await page.getByTestId('script-line').first().click({ position: { x: 6, y: 6 } })
+  await expect(page.getByTestId('side-tab-chat')).toHaveAttribute('aria-selected', 'true')
+
+  // タイムラインに素材を置いて選ぶと、インスペクタに切り替わる
+  await page.getByTestId('add-caption').click()
+  await expect(page.getByTestId('side-tab-inspector')).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByTestId('inspector-type')).toHaveText('テロップ')
+
+  // チャットに戻っても書きかけは残っている
+  await page.getByTestId('side-tab-chat').click()
+  await expect(page.getByTestId('chat-input')).toHaveValue('テンポを上げたい')
+
+  // タイムラインの素材をクリックすると、またインスペクタ
+  await page.locator('[data-item-type="text"]').click()
+  await expect(page.getByTestId('side-tab-inspector')).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByTestId('inspector-start')).toBeVisible()
 })

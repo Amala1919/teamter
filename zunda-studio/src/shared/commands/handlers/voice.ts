@@ -1,4 +1,4 @@
-import type { Project, VoiceItem, VoiceParams } from '../../project/types'
+import type { Item, Project, VoiceItem, VoiceParams } from '../../project/types'
 import {
   autoSubtitleLines,
   defaultVoiceLayerId,
@@ -42,18 +42,24 @@ const VOICE_PARAM_RANGES: Record<keyof VoiceParams, [number, number]> = {
 }
 
 /**
- * アイテムが占めていた場所を詰める。後ろに続くアイテムのうち最も早いものが、このアイテムの開始位置に来る。
+ * セリフの操作で自動でずらすのはセリフだけ。録画・BGM・効果音・画像・立ち絵・ズームは、利用者が置いた場所から動かさない
+ * (セリフを足しただけで、合わせて置いた素材がずれてしまうのを防ぐ)。
+ */
+const isLine = (item: Item): boolean => item.type === 'voice'
+
+/**
+ * セリフが占めていた場所を詰める。後ろに続くセリフのうち最も早いものが、このセリフの開始位置に来る。
  */
 function closeGap(draft: Project, item: VoiceItem): void {
   const exclude = new Set([item.id])
-  const next = earliestStartFrom(draft, itemEnd(item), exclude)
+  const next = earliestStartFrom(draft, itemEnd(item), exclude, isLine)
   if (next === null) return
-  shiftItemsFrom(draft, itemEnd(item), -(next - item.startMs), exclude)
+  shiftItemsFrom(draft, itemEnd(item), -(next - item.startMs), exclude, isLine)
 }
 
-/** 指定時刻に、尺 + 間 の分だけ場所を空ける。 */
+/** 指定時刻に、尺 + 間 の分だけ後ろのセリフをずらして場所を空ける。 */
 function openGap(draft: Project, atMs: number, lengthMs: number, excludeId: string): void {
-  shiftItemsFrom(draft, atMs, lengthMs, new Set([excludeId]))
+  shiftItemsFrom(draft, atMs, lengthMs, new Set([excludeId]), isLine)
 }
 
 export const voiceHandlers: VoiceHandlers = {
@@ -245,9 +251,9 @@ export const voiceHandlers: VoiceHandlers = {
     const item = findVoiceItem(draft, env.resolve(command.itemId), command.op)
     if (command.gapMs < 0) fail(command.op, '間は0以上にしてください')
     const exclude = new Set([item.id])
-    const next = earliestStartFrom(draft, itemEnd(item), exclude)
+    const next = earliestStartFrom(draft, itemEnd(item), exclude, isLine)
     if (next === null) return
-    shiftItemsFrom(draft, itemEnd(item), Math.round(command.gapMs) - (next - itemEnd(item)), exclude)
+    shiftItemsFrom(draft, itemEnd(item), Math.round(command.gapMs) - (next - itemEnd(item)), exclude, isLine)
   },
 
   'voice.applySynthesis': (draft, command, env) => {
@@ -259,7 +265,7 @@ export const voiceHandlers: VoiceHandlers = {
     item.synthesis = command.synthesis
     item.durationMs = newDuration
     if (draft.editing.rippleOnVoiceChange && delta !== 0) {
-      shiftItemsFrom(draft, oldEnd, delta, new Set([item.id]))
+      shiftItemsFrom(draft, oldEnd, delta, new Set([item.id]), isLine)
     }
   }
 }

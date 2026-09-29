@@ -48,6 +48,8 @@ export type PickKind =
   | 'persona'
   | 'exportVideo'
   | 'exportText'
+  /** 今の画面の画像(サムネイル用)。 */
+  | 'exportImage'
   | 'executable'
   | 'any'
 
@@ -73,6 +75,8 @@ export interface IpcContract {
 
   'project:read': { args: [path: string]; result: Project }
   'project:write': { args: [path: string, project: Project]; result: Project }
+  /** 最近開いたプロジェクトの一覧から外す(見つからなくなったものなど)。 */
+  'project:forgetRecent': { args: [path: string]; result: void }
 
   'ai:providers': { args: []; result: ProviderStatus[] }
   'ai:models': { args: [providerId: ProviderId]; result: ModelInfo[] }
@@ -131,6 +135,8 @@ export interface IpcContract {
   'export:cancel': { args: [jobId: string]; result: void }
   /** 概要欄などのテキストをファイルに書く。 */
   'export:text': { args: [path: string, text: string]; result: void }
+  /** PNG の画像(base64)を保存する。保存先は保存ダイアログで選んだ場所だけ。 */
+  'export:image': { args: [path: string, pngBase64: string]; result: void }
 
   /** ライブ(録画中の会話)。相方の設定は編集画面のプロジェクトから写して渡す。 */
   'live:setProfile': { args: [profile: LiveProfile]; result: LiveState }

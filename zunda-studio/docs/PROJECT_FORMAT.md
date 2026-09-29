@@ -278,6 +278,7 @@ PSDのレイヤーツリーに対する「役割の割り当て」を保存す�
 { "type": "shape", "shape": "rect", "fill": "#101820", "transform": { /* 同上 */ } }
 
 // 場面ごとの立ち絵。kind は show(この区間だけ出す。無ければ show)/ hide(この区間だけ隠す)/ adjust(位置・表情だけ変える)
+// untilEnd: true の show は「動画の最後まで」出す区間で、動画の長さに合わせて伸びる(尺には数えない)
 { "type": "portrait", "characterId": "chr_zundamon", "kind": "adjust",
   "transformOverride": { "x": 1500, "y": 1080, "scale": 0.8, "flipX": false, "anchor": "bottom-center" },
   "expressionId": "exp_angry", "effects": [] }
@@ -287,7 +288,7 @@ PSDのレイヤーツリーに対する「役割の割り当て」を保存す�
 
 音量の時間変化(音量 × フェード × ダッキング)は折れ線として求め、プレビューと書き出しで同じ折れ線を使う(`src/shared/audio/envelope.ts`)。
 
-立ち絵は既定ではキャラクター設定に基づいて動画全体で表示される。場面ごとに変えたいときは `portrait` アイテムを置く(`src/shared/portrait/scene.ts`)。
+立ち絵は `show` の区間の中でだけ表示される。キャラクターに立ち絵を付けると、動画の頭から最後までの `show` の区間(`untilEnd: true`)がタイムラインに置かれ、選んで位置・大きさ・表情・長さを直せる。この区間はセリフや素材が増えると自動で伸び、長さを変えるとその長さに固定される(`untilEnd` が外れる)。`show` の区間を持たない以前のプロジェクトは、開くときに同じ見た目になる区間を足す(`src/shared/portrait/tracks.ts`)。場面ごとに変えたいときは、さらに `portrait` アイテムを重ねて置く(`src/shared/portrait/scene.ts`)。
 - そのキャラクターに `show` を1つでも置くと、`show` の区間でだけ表示する(登場・退場。`effects` のフェードなどで動きを付ける)。
 - `hide` の区間では表示しない。
 - 位置・大きさ(`transformOverride`)と表情(`expressionId`)は、`adjust` > `show` > キャラクターの設定 の順に決まる。区間の表情は、セリフごとの表情より優先する。

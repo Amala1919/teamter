@@ -69,19 +69,30 @@ export function itemEnd(item: Item): Ms {
  * 基準時刻以降に始まるアイテムをまとめてずらす(リップル編集)。
  * ロックされたアイテムは動かさない。開始時刻は 0 未満にしない。
  */
-export function shiftItemsFrom(draft: Project, pivotMs: Ms, deltaMs: Ms, exclude: ReadonlySet<string>): void {
+export function shiftItemsFrom(
+  draft: Project,
+  pivotMs: Ms,
+  deltaMs: Ms,
+  exclude: ReadonlySet<string>,
+  only: (item: Item) => boolean = () => true
+): void {
   if (deltaMs === 0) return
   for (const item of draft.items) {
-    if (exclude.has(item.id) || item.locked || item.startMs < pivotMs) continue
+    if (exclude.has(item.id) || item.locked || item.startMs < pivotMs || !only(item)) continue
     item.startMs = Math.max(0, item.startMs + deltaMs)
   }
 }
 
 /** 基準時刻以降に始まるアイテムのうち最も早い開始時刻。無ければ null。 */
-export function earliestStartFrom(draft: Project, pivotMs: Ms, exclude: ReadonlySet<string>): Ms | null {
+export function earliestStartFrom(
+  draft: Project,
+  pivotMs: Ms,
+  exclude: ReadonlySet<string>,
+  only: (item: Item) => boolean = () => true
+): Ms | null {
   let earliest: Ms | null = null
   for (const item of draft.items) {
-    if (exclude.has(item.id) || item.locked || item.startMs < pivotMs) continue
+    if (exclude.has(item.id) || item.locked || item.startMs < pivotMs || !only(item)) continue
     if (earliest === null || item.startMs < earliest) earliest = item.startMs
   }
   return earliest

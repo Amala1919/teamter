@@ -31,6 +31,10 @@ export function PortraitSceneInspector({ project, item, run }: { project: Projec
   const transform = item.transformOverride
   const setTransform = (next: PortraitTransform | null, label: string): void => run([{ op: 'portrait.update', itemId: item.id, transform: next }], label)
   const transition = currentTransition(item)
+  /** キャラクター全体の配置を変える(区間だけの位置を持たない「最後まで」の区間から)。 */
+  const setBase = (next: PortraitTransform): void => {
+    if (character && portrait) run([{ op: 'character.setPortrait', characterId: character.id, portrait: { ...portrait, transform: next } }], '立ち絵の配置')
+  }
 
   return (
     <section data-testid="portrait-scene-inspector">
@@ -46,7 +50,18 @@ export function PortraitSceneInspector({ project, item, run }: { project: Projec
         </select>
       </label>
       {kind === 'show' && (
-        <p className="note">この区間を置くと、{character?.name ?? 'このキャラクター'} は「出す」区間の中でだけ表示されます(区間の外では出ません)。</p>
+        <p className="note">{character?.name ?? 'このキャラクター'} は「出す」区間の中でだけ表示されます(区間の外では出ません)。</p>
+      )}
+      {kind === 'show' && (
+        <label className="field__row">
+          <input
+            type="checkbox"
+            checked={item.untilEnd === true}
+            onChange={(event) => run([{ op: 'portrait.update', itemId: item.id, untilEnd: event.target.checked }], '立ち絵を最後まで出す')}
+            data-testid="portrait-scene-until-end"
+          />
+          動画の最後まで出す(セリフや素材が増えると自動で伸びます。長さを変えるとその長さに固定されます)
+        </label>
       )}
       {kind === 'show' && (
         <label className="field">
@@ -96,6 +111,18 @@ export function PortraitSceneInspector({ project, item, run }: { project: Projec
             />
             この区間だけの位置・大きさにする(プレビューで枠をドラッグしても変えられます)
           </label>
+          {!transform && item.untilEnd && kind === 'show' && (
+            <>
+              <p className="note">区間だけの位置にしていないので、キャラクター全体の位置・大きさを変えます。</p>
+              <NumberField label="X" value={portrait.transform.x} onCommit={(x) => setBase({ ...portrait.transform, x })} testId="portrait-scene-x" />
+              <NumberField label="Y" value={portrait.transform.y} onCommit={(y) => setBase({ ...portrait.transform, y })} />
+              <NumberField label="大きさ(%)" value={portrait.transform.scale} displayScale={100} min={5} max={2000} step={5} onCommit={(scale) => setBase({ ...portrait.transform, scale })} testId="portrait-scene-scale" />
+              <label className="field__row">
+                <input type="checkbox" checked={portrait.transform.flipX} onChange={(event) => setBase({ ...portrait.transform, flipX: event.target.checked })} />
+                左右反転
+              </label>
+            </>
+          )}
           {transform && (
             <>
               <NumberField label="X" value={transform.x} onCommit={(x) => setTransform({ ...transform, x }, '立ち絵の位置')} testId="portrait-scene-x" />

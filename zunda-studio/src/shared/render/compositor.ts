@@ -30,6 +30,8 @@ export interface RenderOptions {
    * ズームを適用するか。枠を編集している間は拡大前の画面を見せるため false にする(REQUIREMENTS.md Z-6)。
    */
   applyZoom?: boolean
+  /** セリフの字幕を描くか(既定は描く)。サムネイル用の画像を字幕なしで作るときに false にする。 */
+  subtitles?: boolean
 }
 
 /** 描画順を決めるための1要素。アイテムに加え、常時表示の立ち絵もここに並ぶ。 */
@@ -61,6 +63,7 @@ export function renderFrame(
   for (const item of itemsAt(project, timeMs)) {
     // 立ち絵は、場面ごとの立ち絵をまとめて portraitScenes で決める。
     if (item.type === 'portrait') continue
+    if (item.type === 'voice' && options.subtitles === false) continue
     if (item.type === 'zoom') {
       if (options.applyZoom !== false) drawables.push({ kind: 'zoom', layerId: item.layerId, item })
     } else {
