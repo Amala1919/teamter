@@ -84,6 +84,57 @@ describe('voice.insert', () => {
   })
 })
 
+describe('セリフの操作で動くのはセリフだけ', () => {
+  it('間にセリフを足す・消す・尺が変わっても、録画・BGM・テロップ・ズームは置いた場所から動かない', () => {
+    const { project, characterId } = projectWithCharacter()
+    let next = apply(project, [
+      {
+        op: 'asset.add',
+        asset: { type: 'video', path: { absolute: '/rec/game.mp4', relative: null }, license: { source: '自分で録画', creditRequired: false }, durationMs: 60_000, width: 1280, height: 720, fps: 30, hasAudio: true },
+        tempId: 'v'
+      },
+      {
+        op: 'asset.add',
+        asset: { type: 'audio', path: { absolute: '/bgm/a.mp3', relative: null }, license: { source: 'x', creditRequired: false }, durationMs: 60_000 },
+        tempId: 'a'
+      },
+      { op: 'voice.insert', characterId, text: 'ひとつめ', atMs: 0, tempId: 'l1' },
+      { op: 'voice.insert', characterId, text: 'ふたつめ', afterItemId: 'l1', tempId: 'l2' },
+      { op: 'media.placeVideo', assetId: 'v', atMs: 5000, inMs: 0, outMs: 20_000 },
+      { op: 'media.placeAudio', assetId: 'a', atMs: 3000, durationMs: 30_000 },
+      { op: 'media.placeText', text: 'テロップ', atMs: 4000, durationMs: 2000 },
+      { op: 'zoom.insert', atMs: 6000, durationMs: 2000, region: { x: 0, y: 0, width: 960 } }
+    ])
+    const others = (p: Project): number[] =>
+      p.items.filter((item) => item.type !== 'voice').sort((a, b) => a.type.localeCompare(b.type)).map((item) => item.startMs)
+    const before = others(next)
+    const [first, second] = voiceItemsInOrder(next)
+
+    // 1つめの後ろに足す → 2つめのセリフは後ろへずれるが、ほかの素材はそのまま
+    next = apply(next, [{ op: 'voice.insert', characterId, text: '間に足したセリフなのだ', afterItemId: first!.id }])
+    expect(others(next)).toEqual(before)
+    const lines = voiceItemsInOrder(next)
+    expect(lines.map((line) => line.text)).toEqual(['ひとつめ', '間に足したセリフなのだ', 'ふたつめ'])
+    expect(lines[2]!.startMs).toBeGreaterThan(second!.startMs)
+
+    // 消して詰めても、ほかの素材はそのまま
+    next = apply(next, [{ op: 'voice.delete', itemId: lines[1]!.id }])
+    expect(others(next)).toEqual(before)
+    expect(voiceItemsInOrder(next)[1]!.startMs).toBe(second!.startMs)
+
+    // 合成で尺が伸びても、ほかの素材はそのまま
+    next = apply(next, [
+      {
+        op: 'voice.applySynthesis',
+        itemId: first!.id,
+        expectedText: 'ひとつめ',
+        synthesis: { cacheKey: 'k', audioDurationMs: 4000, accentPhrases: [], lipSync: [] }
+      }
+    ])
+    expect(others(next)).toEqual(before)
+  })
+})
+
 describe('voice.setText', () => {
   it('テキストを変えると合成結果が無効化されるが、尺は新しい合成結果が届くまで変えない', () => {
     const { project, characterId } = projectWithCharacter()
