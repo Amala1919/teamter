@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 
+import { migratePortraitTracks } from '@shared/portrait/tracks'
 import { createEmptyProject } from '@shared/project/factory'
 import { PROJECT_FORMAT_VERSION, type Project } from '@shared/project/types'
 
@@ -35,7 +36,8 @@ export function migrateProject(raw: unknown): Project {
       `このプロジェクトは新しいバージョン(${version})で作られています。アプリを更新してください`
     )
   }
-  return fillMissingContainers(raw as Partial<Project>)
+  // 以前は表示の区間を置かずに立ち絵を動画全体で出していた。同じ見た目になる区間を足す(何度読んでも同じ結果)。
+  return migratePortraitTracks(fillMissingContainers(raw as Partial<Project>))
 }
 
 /**

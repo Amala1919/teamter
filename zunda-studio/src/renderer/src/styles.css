@@ -2009,6 +2009,11 @@ input[type='url'] {
   border-color: #a8872f;
 }
 
+/* 「最後まで」の立ち絵の区間は、重ねて置いた場面ごとの区間より下に描く。 */
+.timeline__item--portrait:not(.timeline__item--portrait-base) {
+  z-index: 2;
+}
+
 /* 字幕(ボイステロップ)の設定 */
 .subtitle-editor {
   display: flex;

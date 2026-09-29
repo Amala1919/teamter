@@ -478,6 +478,8 @@ export interface PortraitItem extends ItemBase {
   kind?: PortraitItemKind
   /** この区間の表情。null か無ければ、セリフごとの表情に従う。 */
   expressionId?: ExpressionId | null
+  /** 動画の最後まで表示する(セリフや素材が増えると自動で伸びる)。立ち絵を付けたときに置く区間がこれ。 */
+  untilEnd?: boolean
 }
 
 export type Item =

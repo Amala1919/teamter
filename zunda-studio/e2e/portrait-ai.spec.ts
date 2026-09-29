@@ -61,16 +61,19 @@ test.describe('立ち絵を AI でまとめて調整', () => {
     expect(call.stdin).toContain('exp_normal=')
     expect(call.stdin).toContain('驚く場面ははっきり')
 
-    await page.getByTestId('proposal-apply').click()
+    // 立ち絵を付けたときに置かれた「最後まで」の区間に、AI の「隠す」区間が加わる
+    const hidden = page.locator('[data-item-type="portrait"]', { hasText: '隠す' })
     await expect(page.locator('[data-item-type="portrait"]')).toHaveCount(1)
-    await expect(page.locator('[data-item-type="portrait"]')).toContainText('隠す')
+    await page.getByTestId('proposal-apply').click()
+    await expect(page.locator('[data-item-type="portrait"]')).toHaveCount(2)
+    await expect(hidden).toHaveCount(1)
     await expect(page.locator('[data-item-type="voice"]')).toHaveCount(2)
 
     // 1回の取り消しで全部戻る
     await page.keyboard.press('Control+z')
-    await expect(page.locator('[data-item-type="portrait"]')).toHaveCount(0)
+    await expect(hidden).toHaveCount(0)
     await page.keyboard.press('Control+y')
-    await expect(page.locator('[data-item-type="portrait"]')).toHaveCount(1)
+    await expect(hidden).toHaveCount(1)
     await page.getByTestId('lane-lyr_bgm').click({ position: { x: 900, y: 10 } })
     // 話し手の強調の設定は、右の欄のインスペクタのタブにある
     await page.getByTestId('side-tab-inspector').click()

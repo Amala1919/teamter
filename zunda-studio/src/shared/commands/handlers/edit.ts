@@ -120,6 +120,8 @@ export const editHandlers: EditHandlers = {
       fail(command.op, '分ける位置がアイテムの中にありません')
     }
     const second = splitItem(draft, item, at, env.ctx.newId('itm'))
+    // 動画の最後まで伸びるのは後半だけ(前半は分けた位置で終わる)。
+    if (item.type === 'portrait') delete item.untilEnd
     if (command.tempId) env.resolvedIds[command.tempId] = second.id
   },
 

@@ -468,7 +468,7 @@ function itemLabel(project: Project, item: Item): string {
       const name = project.characters[item.characterId]?.name ?? ''
       const kind = item.kind ?? 'show'
       const expression = item.expressionId ? project.characters[item.characterId]?.portrait?.expressions[item.expressionId]?.name : undefined
-      const label = kind === 'hide' ? `隠す: ${name}` : kind === 'adjust' ? `調整: ${name}` : `登場: ${name}`
+      const label = kind === 'hide' ? `隠す: ${name}` : kind === 'adjust' ? `調整: ${name}` : item.untilEnd ? `立ち絵: ${name}` : `登場: ${name}`
       return expression ? `${label}(${expression})` : label
     }
   }
@@ -496,6 +496,8 @@ function TimelineItem(props: TimelineItemProps): React.JSX.Element {
   if (props.locked) classes.push('timeline__item--locked')
   if (item.type === 'video' && item.freeze) classes.push('timeline__item--freeze')
   if (item.type === 'portrait') classes.push(`timeline__item--portrait-${item.kind ?? 'show'}`)
+  // 「最後まで」の立ち絵の区間は、同じレーンに重ねて置く場面ごとの区間の下に描く(場面の区間を選べるように)。
+  if (item.type === 'portrait' && item.untilEnd) classes.push('timeline__item--portrait-base')
   // 素材・レイヤーに色が付いていれば、種類ごとの色の代わりにその色で描く。
   const color = timelineColor(project, item)
   if (color) classes.push('timeline__item--colored')

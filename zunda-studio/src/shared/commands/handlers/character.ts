@@ -1,4 +1,5 @@
 import { fail, invalidateSynthesis, refreshSubtitleLines, type HandlerTable } from '../env'
+import { ensurePortraitTrack, removeAutoPortraitTracks } from '../../portrait/tracks'
 
 type CharacterHandlers = Pick<
   HandlerTable,
@@ -100,6 +101,8 @@ export const characterHandlers: CharacterHandlers = {
     const portrait = command.portrait
     if (portrait === null) {
       character.portrait = null
+      // 自動で置いた区間は立ち絵が無いと意味が無いので片付ける(利用者が長さを決めた区間は残す)。
+      removeAutoPortraitTracks(draft, characterId)
       return
     }
     const asset = draft.assets[env.resolve(portrait.assetId)]
@@ -112,6 +115,8 @@ export const characterHandlers: CharacterHandlers = {
       fail(command.op, '既定の表情が見つかりません')
     }
     character.portrait = { ...portrait, assetId: env.resolve(portrait.assetId) }
+    // 立ち絵を付けたら、タイムラインに動画全体の表示の区間を置く(選んで位置などを直せるように)。
+    ensurePortraitTrack(draft, characterId, env.ctx.newId('itm'))
     // 消えた表情を指しているセリフは既定の表情に戻す。
     for (const item of draft.items) {
       if (item.type === 'voice' && item.characterId === characterId && item.expressionId && !portrait.expressions[item.expressionId]) {
@@ -123,6 +128,8 @@ export const characterHandlers: CharacterHandlers = {
   'character.delete': (draft, command, env) => {
     const characterId = env.resolve(command.characterId)
     if (!draft.characters[characterId]) fail(command.op, `キャラクターが見つかりません: ${characterId}`)
+    // 立ち絵を付けたときに自動で置いた区間は、キャラクターと一緒に消す。
+    removeAutoPortraitTracks(draft, characterId)
     const used = draft.items.some(
       (item) => (item.type === 'voice' || item.type === 'portrait') && item.characterId === characterId
     )

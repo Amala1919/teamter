@@ -1,6 +1,7 @@
 import { produce } from 'immer'
 
 import type { Item, ItemId, Project } from '../project/types'
+import { extendPortraitTracks } from '../portrait/tracks'
 import { changedItems, resolveOverlaps } from './arrange'
 import type { ApplyEnv, CommandContext, HandlerTable } from './env'
 import { assetHandlers } from './handlers/asset'
@@ -60,6 +61,8 @@ export function applyCommands(
       const before = new Map<ItemId, Item>(project.items.map((item) => [item.id, item]))
       resolveOverlaps(draft, changedItems(before, draft.items), env, before)
     }
+    // 「動画の最後まで」の立ち絵の区間を、今の動画の長さに合わせる。
+    extendPortraitTracks(draft)
     draft.meta.updatedAt = ctx.now().toISOString()
   })
 

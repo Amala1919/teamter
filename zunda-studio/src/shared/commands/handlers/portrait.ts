@@ -94,5 +94,9 @@ export const portraitHandlers: PortraitHandlers = {
       validateExpression(draft, item.characterId, expressionId, command.op)
       item.expressionId = expressionId
     }
+    if (command.untilEnd !== undefined) {
+      if (command.untilEnd) item.untilEnd = true
+      else delete item.untilEnd
+    }
   }
 }

@@ -309,11 +309,14 @@ describe('立ち絵の描画', () => {
       return [0, 2, 4].map((index) => parseInt(hex.slice(index, index + 2), 16))
     }
 
-    it('show の区間を置くと、その区間でだけ出る(置かなければ今まで通りずっと出る)', async () => {
+    it('show の区間でだけ出る(立ち絵を付けると動画全体の区間が置かれ、消すと出ない)', async () => {
       const { project, characterId, config } = projectWithPortrait()
       const t = openEyeTime(project, config, characterId, 6000)
       expect((await render(project, 2000))(POINTS.body)).toEqual([...COLORS.body])
-      const shown = apply(project, [{ op: 'portrait.insert', characterId, atMs: 5000, durationMs: 5000 }])
+      const track = project.items.find((item) => item.type === 'portrait')!
+      const removed = apply(project, [{ op: 'item.delete', itemId: track.id }])
+      expect((await render(removed, 2000))(POINTS.body)).toEqual(background(removed))
+      const shown = apply(removed, [{ op: 'portrait.insert', characterId, atMs: 5000, durationMs: 5000 }])
       expect((await render(shown, 2000))(POINTS.body)).toEqual(background(shown))
       expect((await render(shown, t))(POINTS.body)).toEqual([...COLORS.body])
     })
@@ -357,7 +360,7 @@ describe('立ち絵の描画', () => {
     it('登場の動き(ふわっと)を付けると、区間の頭は透けていて、途中からはっきり出る', async () => {
       const { project, characterId, config } = projectWithPortrait()
       const next = apply(project, [{ op: 'portrait.insert', characterId, atMs: 5000, durationMs: 3000, transition: 'fade' }])
-      expect(next.items.find((item) => item.type === 'portrait')!.effects).toEqual([{ type: 'fade', inMs: 300, outMs: 300 }])
+      expect(next.items.find((item) => item.type === 'portrait' && item.startMs === 5000)!.effects).toEqual([{ type: 'fade', inMs: 300, outMs: 300 }])
       expect((await render(next, 5000))(POINTS.body)).toEqual(background(next))
       expect((await render(next, openEyeTime(next, config, characterId, 6000)))(POINTS.body)).toEqual([...COLORS.body])
     })
