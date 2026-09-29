@@ -229,22 +229,27 @@ function ReadingEditor({ item, run }: { item: VoiceItem; run: (commands: Command
   useEffect(() => setDraft(current), [current])
   return (
     <section data-testid="reading-editor">
-      <label className="field">
+      <label className="field field--stacked">
         <span className="field__label">
           読み方{item.reading ? '(手で直した読み)' : '(自動)'}
         </span>
-        <input
-          type="text"
+        {/* 長い読みも折り返して全体が見えるよう、複数行のテキストボックスにする(読みに改行は無いので Enter で反映) */}
+        <textarea
+          className="reading-input"
+          rows={4}
           value={draft}
           placeholder="合成が終わると、今の読みが出ます"
-          onChange={(event) => setDraft(event.target.value)}
+          spellCheck={false}
+          onChange={(event) => setDraft(event.target.value.replace(/[\r\n]+/g, ''))}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && draft.trim() !== '' && draft !== current) run([{ op: 'voice.setReading', itemId: item.id, reading: draft }], '読み方の変更')
+            if (event.key !== 'Enter' || event.nativeEvent.isComposing) return
+            event.preventDefault()
+            if (draft.trim() !== '' && draft !== current) run([{ op: 'voice.setReading', itemId: item.id, reading: draft }], '読み方の変更')
           }}
           data-testid="reading-input"
         />
       </label>
-      <p className="note">カタカナで書き、アクセントの山の後に「'」、言葉の区切りに「/」、息継ぎに「、」を入れます。例: ズンダモ'ン/ナノ'ダ</p>
+      <p className="note">カタカナで書き、アクセントの山の後に「'」、言葉の区切りに「/」、息継ぎに「、」を入れます。例: ズンダモ'ン/ナノ'ダ(Enter で反映)</p>
       <span className="field__row">
         <button
           type="button"

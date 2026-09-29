@@ -2505,3 +2505,18 @@ input[type='url'] {
   background: var(--accent-dim);
   border-color: var(--accent);
 }
+
+/* 読み方の修正: 折り返して全体が見える、縦に広げられるテキストボックス */
+.reading-input {
+  font-family: inherit;
+  line-height: 1.6;
+  min-height: 4.5em;
+  resize: vertical;
+  width: 100%;
+  word-break: break-all;
+}
+
+/* ラベルを上に、入力欄を下に幅いっぱいで置く(長い文を入れる欄用) */
+.field--stacked {
+  grid-template-columns: 1fr;
+}
