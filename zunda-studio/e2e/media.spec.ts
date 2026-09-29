@@ -88,6 +88,52 @@ test.describe('素材・タイムライン・ズーム', () => {
     await page.getByTestId('play-toggle').click()
   })
 
+  test('倍速にした区間の前から再生しても、プレビューが点滅しない', async ({ page, request }) => {
+    await openFresh(page)
+    await importFile(page, request, video)
+    const stage = page.getByTestId('preview-canvas')
+    await expect.poll(() => countColor(stage, RED), { timeout: 30_000 }).toBeGreaterThan(QUARTER * 1.6)
+
+    // 1秒で分割し、後ろ側を2倍速にする
+    const ruler = page.getByTestId('timeline-ruler')
+    await ruler.click({ position: { x: 60, y: 5 } })
+    await page.keyboard.press('s')
+    const videos = page.locator('[data-item-type="video"]')
+    await expect(videos).toHaveCount(2)
+    await videos.nth(1).click({ button: 'right' })
+    await page.getByTestId('context-menu').getByTestId('menu-speed').hover()
+    await page.getByTestId('menu-speed-2').click()
+
+    // 頭から再生し、描いたコマごとに映像が映っているか調べる(映像が消えたコマ = 点滅)
+    await ruler.click({ position: { x: 1, y: 5 } })
+    await expect.poll(() => countColor(stage, RED)).toBeGreaterThan(QUARTER * 1.6)
+    await page.getByTestId('play-toggle').click()
+    const blank = await stage.evaluate(async (element) => {
+      // このファイルは DOM の型を読み込まないので、使う分だけ形を書く。
+      const canvas = element as unknown as {
+        width: number
+        height: number
+        getContext(type: '2d'): { getImageData(x: number, y: number, w: number, h: number): { data: Uint8ClampedArray } }
+      }
+      const nextFrame = (globalThis as unknown as { requestAnimationFrame(callback: () => void): number }).requestAnimationFrame
+      const context = canvas.getContext('2d')
+      let missing = 0
+      let frames = 0
+      const started = performance.now()
+      while (performance.now() - started < 2200) {
+        await new Promise<void>((resolve) => nextFrame(() => resolve()))
+        frames++
+        // 左の1/4あたりは、映像があれば赤
+        const [r, g, b] = context.getImageData(Math.floor(canvas.width / 4), Math.floor(canvas.height / 2), 1, 1).data
+        if (!(r! > 200 && g! < 60 && b! < 60)) missing++
+      }
+      return { missing, frames }
+    })
+    await page.getByTestId('play-toggle').click()
+    expect(blank.frames).toBeGreaterThan(20)
+    expect(blank.missing).toBe(0)
+  })
+
   test('タイムラインでドラッグして動かし、端をつまんで縮め、元に戻せる', async ({ page, request }) => {
     await openFresh(page)
     await importFile(page, request, image)
