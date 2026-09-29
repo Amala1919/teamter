@@ -6,7 +6,7 @@ import { CommandError, type Command } from '@shared/commands/types'
 import { createEmptyProject, DEFAULT_SUBTITLE_STYLE_ID } from '@shared/project/factory'
 import type { ItemId, Ms, Project } from '@shared/project/types'
 
-import { api } from '../api'
+import { api, AppError } from '../api'
 import { projectLook } from './subtitle-defaults'
 
 /**
@@ -57,7 +57,8 @@ interface EditorState {
   setSelection: (itemIds: ItemId[], source?: 'script' | 'other') => void
 
   newProject: () => void
-  openProject: () => Promise<void>
+  /** path を渡すとそのファイルを開く(最近開いたプロジェクトから)。無ければファイルを選ばせる。 */
+  openProject: (path?: string) => Promise<void>
   /** 自動保存から復元する。保存されていない変更として開く。 */
   restoreProject: (project: Project, filePath: string | null, sessionKey: string) => void
   saveProject: (options?: { saveAs?: boolean }) => Promise<void>
@@ -146,11 +147,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     })
   },
 
-  openProject: async () => {
-    const picked = await api.invoke('dialog:pick', { kind: 'openProject' })
-    const path = picked?.[0]
+  openProject: async (recentPath) => {
+    const path = recentPath ?? (await api.invoke('dialog:pick', { kind: 'openProject' }))?.[0]
     if (!path) return
-    const project = await api.invoke('project:read', path)
+    let project: Project
+    try {
+      project = await api.invoke('project:read', path)
+    } catch (error) {
+      // 最近開いたプロジェクトが消されたり動かされたりしていたら、一覧から外す。
+      if (recentPath && error instanceof AppError && error.code === 'NOT_FOUND') void api.invoke('project:forgetRecent', recentPath).catch(() => {})
+      throw error
+    }
     discardAutosave(get().sessionKey)
     set({
       project,
@@ -232,6 +239,20 @@ export function startAutosave(intervalMs = AUTOSAVE_INTERVAL_MS): () => void {
     })
   }, intervalMs)
   return () => window.clearInterval(timer)
+}
+
+/**
+ * 保存していない変更があるときは、ウィンドウを閉じる前に止める。Electron では main 側が閉じてよいか確かめる
+ * (will-prevent-unload)。止める関数を返す。
+ */
+export function guardUnsavedClose(): () => void {
+  const onBeforeUnload = (event: BeforeUnloadEvent): void => {
+    if (!useEditorStore.getState().dirty) return
+    event.preventDefault()
+    event.returnValue = ''
+  }
+  window.addEventListener('beforeunload', onBeforeUnload)
+  return () => window.removeEventListener('beforeunload', onBeforeUnload)
 }
 
 function sanitizeFileName(name: string): string {

@@ -13,6 +13,8 @@ interface ScriptLineProps {
   characters: Character[]
   status: LineStatus | undefined
   selected: boolean
+  /** 台本の検索で見つかったセリフ。 */
+  matched?: boolean
   focusRequested: boolean
   isFirst: boolean
   isLast: boolean
@@ -56,7 +58,8 @@ export function ScriptLine(props: ScriptLineProps): React.JSX.Element {
 
   return (
     <li
-      className={props.selected ? 'script__line script__line--selected' : 'script__line'}
+      className={['script__line', props.selected ? 'script__line--selected' : '', props.matched ? 'script__line--matched' : ''].filter(Boolean).join(' ')}
+      data-line-id={line.id}
       onClick={props.onSelect}
       onContextMenu={(event) => {
         // セリフの入力欄では、文字の切り取り・貼り付けのメニュー(OS 標準)を使う。

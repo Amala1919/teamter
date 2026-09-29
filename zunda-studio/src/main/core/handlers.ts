@@ -109,6 +109,7 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
         'persona',
         'exportVideo',
         'exportText',
+        'exportImage',
         'executable',
         'any'
       ]),
@@ -118,6 +119,7 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
   ]) as unknown as z.ZodType<ChannelArgs<'dialog:pick'>>,
   'project:read': z.tuple([pathArg]),
   'project:write': z.tuple([pathArg, projectArg]) as unknown as z.ZodType<[string, Project]>,
+  'project:forgetRecent': z.tuple([pathArg]),
   'ai:providers': z.tuple([]),
   'ai:models': z.tuple([z.enum(PROVIDER_IDS)]),
   'ai:test': z.tuple([z.enum(PROVIDER_IDS), z.string().min(1).max(200)]),
@@ -225,10 +227,17 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
   'persona:read': z.tuple([pathArg]),
   'autosave:read': z.tuple([z.string().min(1).max(40)]),
   'autosave:clear': z.tuple([z.string().min(1).max(40)]),
-  'export:text': z.tuple([pathArg, z.string().max(1_000_000)])
+  'export:text': z.tuple([pathArg, z.string().max(1_000_000)]),
+  // 4K の PNG でも収まる大きさ(base64)。
+  'export:image': z.tuple([pathArg, z.string().max(80_000_000).regex(/^[A-Za-z0-9+/=]*$/)])
 }
 
 export function createHandlers(services: Services): HandlerTable {
+  /** 開いた・保存したプロジェクトを「最近開いたプロジェクト」の先頭に置く(10件まで)。 */
+  const rememberRecent = async (path: string): Promise<void> => {
+    const recent = [path, ...services.settings.get().recentProjects.filter((item) => item !== path)]
+    await services.settings.update({ recentProjects: recent.slice(0, 10) })
+  }
   return {
     'app:info': () =>
       Promise.resolve({
@@ -258,18 +267,24 @@ export function createHandlers(services: Services): HandlerTable {
         for (const path of picked) services.readableFiles.add(resolve(path))
       }
       // 書き出し先は、保存ダイアログで選ばれた場所だけを受け付ける。
-      if (picked && ['exportVideo', 'exportText'].includes(request.kind)) {
+      if (picked && ['exportVideo', 'exportText', 'exportImage'].includes(request.kind)) {
         for (const path of picked) services.saveTargets.add(resolve(path))
       }
       return picked
     },
 
-    'project:read': (path) => services.projects.read(path),
+    'project:read': async (path) => {
+      const project = await services.projects.read(path)
+      await rememberRecent(path)
+      return project
+    },
     'project:write': async (path, project) => {
       const written = await services.projects.write(path, project)
-      const recent = [path, ...services.settings.get().recentProjects.filter((item) => item !== path)]
-      await services.settings.update({ recentProjects: recent.slice(0, 10) })
+      await rememberRecent(path)
       return written
+    },
+    'project:forgetRecent': async (path) => {
+      await services.settings.update({ recentProjects: services.settings.get().recentProjects.filter((item) => item !== path) })
     },
 
     'ai:providers': () => services.ai.statuses(),
@@ -503,6 +518,13 @@ export function createHandlers(services: Services): HandlerTable {
     'export:text': async (path, text) => {
       if (!services.saveTargets.has(resolve(path))) throw new AppError('ACCESS_DENIED', '保存先は保存ダイアログで選んでください')
       await writeFileAtomic(path, text)
+    },
+    'export:image': async (path, pngBase64) => {
+      if (!services.saveTargets.has(resolve(path))) throw new AppError('ACCESS_DENIED', '保存先は保存ダイアログで選んでください')
+      const bytes = Buffer.from(pngBase64, 'base64')
+      // PNG の署名で中身を確かめる(画像以外を書かせない)。
+      if (bytes.length < 8 || bytes.readUInt32BE(0) !== 0x89504e47) throw new AppError('INVALID_ARGUMENT', 'PNG の画像ではありません')
+      await writeFileAtomic(path, bytes)
     }
   }
 }

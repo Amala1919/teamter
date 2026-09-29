@@ -26,7 +26,8 @@ import {
   selectAll,
   splitAtPlayhead
 } from './state/edit-actions'
-import { deleteSelection, startAutosave, useEditorStore } from './state/store'
+import { api } from './api'
+import { deleteSelection, guardUnsavedClose, startAutosave, useEditorStore } from './state/store'
 import { ContextMenuHost } from './ui/ContextMenu'
 import { useLayoutStore } from './state/layout'
 import { Splitter } from './ui/Splitter'
@@ -57,6 +58,8 @@ export function App(): React.JSX.Element {
     }
     return startAutosave(interval)
   }, [])
+  // 閉じるときの確認は Electron だけ(テスト用ホストのブラウザでは、開き直しを止めないように)。
+  useEffect(() => (api.runtime === 'electron' ? guardUnsavedClose() : undefined), [])
   const undo = useEditorStore((state) => state.undo)
   const redo = useEditorStore((state) => state.redo)
   const saveProject = useEditorStore((state) => state.saveProject)

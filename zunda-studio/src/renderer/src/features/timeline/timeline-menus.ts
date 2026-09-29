@@ -19,6 +19,7 @@ import {
   pasteAt,
   rippleDeleteSelection,
   selectAll,
+  selectFrom,
   selectLayer,
   setLocked,
   setSpeed,
@@ -281,7 +282,9 @@ export function laneMenu(project: Project, layer: Layer, atMs: Ms, context: Menu
     },
     'separator',
     { label: 'すべて選択', shortcut: 'Ctrl+A', onSelect: selectAll },
+    { label: 'ここから後ろをすべて選択', onSelect: () => selectFrom(at), testId: 'menu-select-from' },
     { label: `「${layer.name}」をすべて選択`, onSelect: () => selectLayer(layer.id) },
+    { label: `「${layer.name}」のここから後ろを選択`, onSelect: () => selectFrom(at, layer.id) },
     'separator',
     ...overlapMenu(project, context)
   ]
@@ -319,6 +322,7 @@ export function rulerMenu(atMs: Ms, context: MenuContext): MenuEntry[] {
   const at = Math.max(0, Math.round(atMs))
   return [
     { label: '再生位置をここへ', onSelect: () => state().setPlayhead(at) },
+    { label: 'ここから後ろをすべて選択', onSelect: () => selectFrom(at), testId: 'menu-ruler-select-from' },
     {
       label: 'ここで分割',
       onSelect: report(context, () => {

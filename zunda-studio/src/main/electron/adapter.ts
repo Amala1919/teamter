@@ -59,7 +59,7 @@ export class ElectronFilePicker implements FilePicker {
   async pick(request: PickRequest): Promise<string[] | null> {
     const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
     const filters = PICK_FILTERS[request.kind]
-    if (request.kind === 'saveProject' || request.kind === 'exportVideo' || request.kind === 'exportText') {
+    if (request.kind === 'saveProject' || request.kind === 'exportVideo' || request.kind === 'exportText' || request.kind === 'exportImage') {
       const options = {
         filters,
         ...(request.defaultName ? { defaultPath: request.defaultName } : {})

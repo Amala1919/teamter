@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 
-import { app, BrowserWindow, globalShortcut, Menu, safeStorage, shell, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, dialog, globalShortcut, Menu, safeStorage, shell, type MenuItemConstructorOptions } from 'electron'
 
 import { createHandlers } from './core/handlers'
 import { PLAIN_CIPHER, type SecretCipher } from './core/secret-store'
@@ -126,6 +126,20 @@ function createMainWindow(): BrowserWindow {
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://')) void shell.openExternal(url)
     return { action: 'deny' }
+  })
+
+  // 保存していない変更があると、画面側が閉じるのを止める(beforeunload)。そのときに閉じてよいか確かめる。
+  window.webContents.on('will-prevent-unload', (event) => {
+    const choice = dialog.showMessageBoxSync(window, {
+      type: 'question',
+      buttons: ['保存せずに閉じる', 'キャンセル'],
+      defaultId: 1,
+      cancelId: 1,
+      title: 'zunda-studio',
+      message: '保存していない変更があります。',
+      detail: '閉じると、保存していない変更は失われます(少し前までの自動保存の写しは、次に開いたときに復元できます)。'
+    })
+    if (choice === 0) event.preventDefault()
   })
 
   loadRenderer(window)

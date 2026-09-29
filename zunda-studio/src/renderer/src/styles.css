@@ -299,6 +299,37 @@ body.resizing-y * {
   border-color: var(--accent);
 }
 
+/* 台本の検索で見つかったセリフ */
+.script__line--matched {
+  box-shadow: inset 3px 0 0 #d9b44a;
+}
+
+.script__find {
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+}
+
+.script__findRow {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+}
+
+.script__findRow input {
+  flex: 1;
+  min-width: 0;
+}
+
+.script__findCount {
+  color: var(--text-dim);
+  font-size: 11px;
+  min-width: 48px;
+  text-align: right;
+}
+
 .script__lineHeader {
   align-items: center;
   display: flex;
@@ -2282,4 +2313,45 @@ input[type='url'] {
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
   pointer-events: none;
   position: absolute;
+}
+
+/* プレビューの下の短いお知らせ(画像を保存した など) */
+.preview__notice {
+  color: var(--text-dim);
+  font-size: 12px;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* キーの操作の一覧 */
+.shortcuts h3 {
+  font-size: 13px;
+  margin: 12px 0 6px;
+}
+
+.shortcuts__list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.shortcuts__row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(160px, 38%) 1fr;
+}
+
+.shortcuts__row dd {
+  margin: 0;
+}
+
+.shortcuts kbd {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 1px 6px;
 }

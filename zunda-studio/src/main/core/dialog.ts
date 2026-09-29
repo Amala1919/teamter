@@ -23,6 +23,7 @@ export const PICK_FILTERS: Record<PickRequest['kind'], { name: string; extension
   persona: [{ name: '相方の設定', extensions: ['json'] }],
   exportVideo: [{ name: 'MP4 動画', extensions: ['mp4'] }],
   exportText: [{ name: 'テキスト', extensions: ['txt', 'srt', 'json'] }],
+  exportImage: [{ name: 'PNG 画像', extensions: ['png'] }],
   executable: [{ name: 'すべてのファイル', extensions: ['*'] }],
   any: [{ name: 'すべてのファイル', extensions: ['*'] }]
 }

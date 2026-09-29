@@ -42,6 +42,13 @@ export function openContextMenu(event: React.MouseEvent | MouseEvent, entries: M
   useMenuStore.getState().open(event.clientX, event.clientY, visible)
 }
 
+/** ボタンの下などの決まった位置にメニューを出す(ドロップダウン)。 */
+export function openMenuAt(x: number, y: number, entries: MenuEntry[]): void {
+  const visible = trimSeparators(entries)
+  if (visible.length === 0) return
+  useMenuStore.getState().open(x, y, visible)
+}
+
 export function closeContextMenu(): void {
   useMenuStore.getState().close()
 }

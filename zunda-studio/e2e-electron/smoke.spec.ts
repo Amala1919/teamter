@@ -117,7 +117,38 @@ test('実物の Electron で、合成・動画のプレビュー・ライブの�
     await page.getByTestId('export-start').click()
     await expect(page.getByTestId('export-done')).toBeVisible({ timeout: 180_000 })
     expect(existsSync(output)).toBe(true)
+
+    // 今の画面を PNG で保存できる(別オリジンの素材を描いても canvas が汚れない)
+    const image = join(home, 'frame.png')
+    await stubDialogs(app, [], image)
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await page.getByTestId('preview-canvas').click({ button: 'right' })
+    await page.getByTestId('menu-preview-image-parent').hover()
+    await page.getByTestId('menu-preview-image-plain').click()
+    await expect(page.getByTestId('preview-notice')).toContainText('frame.png')
+    expect(readFileSync(image).subarray(1, 4).toString()).toBe('PNG')
+
+    // 保存していない変更があるので、閉じる前に確かめる。キャンセルすると閉じない。
+    // (Playwright が beforeunload を自分で閉じようとしないよう、受け取るだけのリスナーを置く。確認は main 側のダイアログが行う)
+    page.on('dialog', () => {})
+    await app.evaluate(({ dialog }) => {
+      const state = globalThis as { unloadAsked?: number }
+      state.unloadAsked = 0
+      dialog.showMessageBoxSync = (() => {
+        state.unloadAsked! += 1
+        return 1
+      }) as typeof dialog.showMessageBoxSync
+    })
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach((window) => window.close()))
+    await expect.poll(() => app.evaluate(() => (globalThis as { unloadAsked?: number }).unloadAsked)).toBe(1)
+    expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1)
+    await expect(page.getByTestId('open-export')).toBeVisible()
   } finally {
+    // 「保存せずに閉じる」を選んだことにして終える。
+    await app.evaluate(({ dialog }) => {
+      dialog.showMessageBoxSync = (() => 0) as typeof dialog.showMessageBoxSync
+    })
     await app.close()
   }
 })

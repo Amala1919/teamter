@@ -40,6 +40,8 @@ interface DragState {
   moved: boolean
   deltaMs: Ms
   layerOffset: number
+  /** 一緒に動かすアイテム(複数選んでいるときに、そのうちの1つをつかんだら全部を時間方向に動かす)。 */
+  group: string[]
 }
 
 export function TimelinePane({ onError }: { onError: (message: string) => void }): React.JSX.Element {
@@ -161,10 +163,16 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
     if (event.button !== 0) return
     event.stopPropagation()
     const layer = project.layers.find((candidate) => candidate.id === item.layerId)
-    if (!event.shiftKey) setSelection([item.id])
-    else setSelection(selectedItemIds.includes(item.id) ? selectedItemIds : [...selectedItemIds, item.id])
+    // 複数選んでいる中の1つをつかんだら、選んだものをまとめて動かす(離すまで選択はそのまま)。
+    const keepGroup = !event.shiftKey && mode === 'move' && selectedItemIds.length > 1 && selectedItemIds.includes(item.id)
+    if (event.shiftKey) setSelection(selectedItemIds.includes(item.id) ? selectedItemIds : [...selectedItemIds, item.id])
+    else if (!keepGroup) setSelection([item.id])
     if (item.locked || layer?.locked) return
-    setDrag({ itemId: item.id, mode, originX: event.clientX, originY: event.clientY, moved: false, deltaMs: 0, layerOffset: 0 })
+    const lockedLayers = new Set(project.layers.filter((candidate) => candidate.locked).map((candidate) => candidate.id))
+    const group = keepGroup
+      ? project.items.filter((candidate) => selectedItemIds.includes(candidate.id) && !candidate.locked && !lockedLayers.has(candidate.layerId)).map((candidate) => candidate.id)
+      : [item.id]
+    setDrag({ itemId: item.id, mode, originX: event.clientX, originY: event.clientY, moved: false, deltaMs: 0, layerOffset: 0, group })
   }
 
   useEffect(() => {
@@ -178,7 +186,9 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
       let deltaMs = (dx / pxPerSecond) * 1000
       if (drag.mode === 'move') {
         deltaMs = snapDelta([item.startMs, itemEndMs(item)], deltaMs, item.id)
-        deltaMs = Math.max(-item.startMs, deltaMs)
+        // まとめて動かすときは、いちばん前のものが 0 秒より前に出ないようにする。
+        const earliest = Math.min(...project.items.filter((candidate) => drag.group.includes(candidate.id)).map((candidate) => candidate.startMs), item.startMs)
+        deltaMs = Math.max(-earliest, deltaMs)
       } else if (drag.mode === 'start') {
         deltaMs = snapDelta([item.startMs], deltaMs, item.id)
         deltaMs = Math.min(Math.max(-item.startMs, deltaMs), item.durationMs - 10)
@@ -186,16 +196,18 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
         deltaMs = snapDelta([itemEndMs(item)], deltaMs, item.id)
         deltaMs = Math.max(10 - item.durationMs, deltaMs)
       }
-      const layerOffset = drag.mode === 'move' ? Math.round(dy / ROW_HEIGHT) : 0
+      const layerOffset = drag.mode === 'move' && drag.group.length <= 1 ? Math.round(dy / ROW_HEIGHT) : 0
       setDrag({ ...drag, moved, deltaMs, layerOffset })
     }
     const onUp = (): void => {
       setDrag(null)
       if (!drag.moved) {
+        // まとめてつかんで動かさなかったら、クリックしたものだけを選び直す。
+        if (drag.group.length > 1) setSelection([item.id])
         setPlayhead(item.startMs)
         return
       }
-      commitDrag(item, drag, layersFrontFirst, run)
+      commitDrag(project, item, drag, layersFrontFirst, run)
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp, { once: true })
@@ -319,7 +331,7 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
                 data-testid={`lane-${layer.id}`}
               >
                 {(itemsByLayer.get(layer.id) ?? []).map((item) => {
-                  const dragging = drag?.itemId === item.id && drag.moved ? drag : null
+                  const dragging = drag?.moved && (drag.itemId === item.id || (drag.mode === 'move' && drag.group.includes(item.id))) ? drag : null
                   const start = item.startMs + (dragging && dragging.mode !== 'end' ? dragging.deltaMs : 0)
                   const end = itemEndMs(item) + (dragging && dragging.mode !== 'start' ? dragging.deltaMs : 0)
                   const offsetRows = dragging?.layerOffset ?? 0
@@ -357,6 +369,7 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
 
 /** ドラッグの結果をコマンドにする。移動とレイヤーの移動は1回の取り消しで戻るよう、まとめて送る。 */
 function commitDrag(
+  project: Project,
   item: Item,
   drag: DragState,
   layersFrontFirst: Layer[],
@@ -369,6 +382,11 @@ function commitDrag(
   }
   if (drag.mode === 'end') {
     run([{ op: 'item.trim', itemId: item.id, endMs: itemEndMs(item) + deltaMs }], '長さの変更')
+    return
+  }
+  if (drag.group.length > 1) {
+    const moving = project.items.filter((candidate) => drag.group.includes(candidate.id))
+    if (deltaMs !== 0) run(moving.map((candidate) => ({ op: 'item.setTimeRange', itemId: candidate.id, startMs: candidate.startMs + deltaMs })), `まとめて移動(${moving.length}個)`)
     return
   }
   const commands: Command[] = []

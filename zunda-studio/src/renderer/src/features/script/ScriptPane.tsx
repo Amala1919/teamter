@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import type { Command } from '@shared/commands/types'
 import { itemEndMs, voiceItemsInOrder } from '@shared/project/queries'
@@ -15,6 +15,7 @@ import { CharacterDialog } from '../characters/CharacterDialog'
 import { BulkInputDialog, type BulkLine } from './BulkInputDialog'
 import { CohostAiBar } from './CohostAiBar'
 import { CohostControls } from './CohostPanel'
+import { ScriptFindBar } from './ScriptFindBar'
 import { ScriptLine } from './ScriptLine'
 
 interface ScriptPaneProps {
@@ -36,8 +37,24 @@ export function ScriptPane({ onError }: ScriptPaneProps): React.JSX.Element {
   const [speakerId, setSpeakerId] = useState<CharacterId | null>(null)
   const [focusItemId, setFocusItemId] = useState<ItemId | null>(null)
   const [dialog, setDialog] = useState<'characters' | 'bulk' | null>(null)
+  const [findOpen, setFindOpen] = useState(false)
+  const [matchedIds, setMatchedIds] = useState<ItemId[]>([])
   const activeSpeaker =
     speakerId && project.characters[speakerId] ? speakerId : (characters[0]?.id ?? null)
+
+  // Ctrl+F: 台本の検索を開く(ダイアログを開いている間は効かせない)。
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key.toLowerCase() !== 'f') return
+      if (document.querySelector('[role="dialog"]')) return
+      event.preventDefault()
+      setFindOpen(true)
+      // 既に開いていれば検索欄へ戻す。
+      document.querySelector<HTMLInputElement>('[data-testid="script-find-query"]')?.focus()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   const run = (commands: Command[], label: string): Record<string, string> | null => {
     const result = dispatch(commands, label)
@@ -155,8 +172,14 @@ export function ScriptPane({ onError }: ScriptPaneProps): React.JSX.Element {
         <button type="button" className="button--small" onClick={() => setDialog('characters')} data-testid="open-characters">
           キャラクター
         </button>
+        <button type="button" className="button--small" onClick={() => setFindOpen((open) => !open)} disabled={lines.length === 0} title="台本の検索・置換(Ctrl+F)" data-testid="open-script-find">
+          検索
+        </button>
         <span className="pane__count">{lines.length}行</span>
       </header>
+      {findOpen && lines.length > 0 && (
+        <ScriptFindBar lines={lines} characters={characters} onClose={() => setFindOpen(false)} onMatches={setMatchedIds} onError={onError} />
+      )}
 
       {characters.length === 0 ? (
         <div className="pane__empty">
@@ -212,6 +235,7 @@ export function ScriptPane({ onError }: ScriptPaneProps): React.JSX.Element {
                 characters={characters}
                 status={lineStatuses[line.id]}
                 selected={selectedItemIds.includes(line.id)}
+                matched={matchedIds.includes(line.id)}
                 focusRequested={focusItemId === line.id}
                 isFirst={index === 0}
                 isLast={index === lines.length - 1}

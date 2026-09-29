@@ -77,6 +77,8 @@ class BrowserResources implements RenderResources {
     const cached = this.images.get(path)
     if (cached !== undefined) return cached && cached.complete ? cached : null
     const image = new Image()
+    // 別のオリジン(zs-media://)の画像を描いても canvas を汚さない(画像として保存できるように)。
+    image.crossOrigin = 'anonymous'
     this.images.set(path, image)
     image.onload = bump
     image.onerror = () => this.images.set(path, null)
