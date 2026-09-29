@@ -22,8 +22,30 @@ export const TIMELINE_PALETTE: readonly { name: string; swatch: string; hex: str
   { name: '灰', swatch: '⬜', hex: '#7c8894' }
 ]
 
-/** 素材に付いている色(素材 > レイヤー)。どちらも無ければ null(種類ごとの色で描く)。 */
+/** キャラクターの色を自動で決めるときの並び(2人なら緑と桃。ずんだもんと四国めたんの組に合わせた)。 */
+const CHARACTER_COLORS = ['#3fa34d', '#d65a9e', '#3b6fd6', '#e07b28', '#8a55d6', '#2fa7c9', '#d4b21f', '#d64545', '#8f6a45', '#7c8894']
+
+/**
+ * キャラクターのセリフを描く色。設定した色、無ければキャラクターの並び(作った順)に応じた色。
+ * 同じプロジェクトの中で、キャラクターごとに違う色になる。
+ */
+export function characterTimelineColor(characters: Project['characters'], characterId: string): string | null {
+  const character = characters[characterId]
+  if (!character) return null
+  if (character.timelineColor) return character.timelineColor
+  const index = Object.keys(characters).indexOf(characterId)
+  return CHARACTER_COLORS[index % CHARACTER_COLORS.length] ?? null
+}
+
+/**
+ * 素材に付いている色。素材ごとの色 > (セリフは)キャラクターに設定した色 > レイヤーの色 >
+ * (セリフは)キャラクターの並びによる自動の色。どれも無ければ null(種類ごとの色で描く)。
+ */
 export function timelineColor(project: Project, item: Item): string | null {
   if (item.color) return item.color
-  return project.layers.find((layer) => layer.id === item.layerId)?.color ?? null
+  const explicit = item.type === 'voice' ? project.characters[item.characterId]?.timelineColor : undefined
+  if (explicit) return explicit
+  const layerColor = project.layers.find((layer) => layer.id === item.layerId)?.color
+  if (layerColor) return layerColor
+  return item.type === 'voice' ? characterTimelineColor(project.characters, item.characterId) : null
 }

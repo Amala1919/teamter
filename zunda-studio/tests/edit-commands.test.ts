@@ -4,6 +4,7 @@ import { atempoChain } from '@main/services/export/streams'
 import { aiCommandSchema } from '@shared/ai/edit-commands'
 import { applyCommands, type CommandContext } from '@shared/commands/apply'
 import type { Command } from '@shared/commands/types'
+import { zoomCommands } from '@shared/commands/zoom-still'
 import { createEmptyProject, DEFAULT_LAYER_IDS } from '@shared/project/factory'
 import type { AudioItem, Item, Project, TextItem, VideoItem } from '@shared/project/types'
 
@@ -49,8 +50,32 @@ describe('分割', () => {
     project = apply(project, [{ op: 'item.addEffect', itemId: clip.id, effect: { type: 'fade', inMs: 500, outMs: 800 } }])
     const result = run(project, [{ op: 'item.split', itemId: clip.id, atMs: 4000, tempId: 'rest' }])
     const [first, second] = byType<VideoItem>(result.project, 'video')
-    expect(first).toMatchObject({ id: clip.id, startMs: 0, durationMs: 4000, inMs: 1000, outMs: 5000, effects: [{ type: 'fade', inMs: 500, outMs: 0 }] })
-    expect(second).toMatchObject({ id: result.resolvedIds['rest'], startMs: 4000, durationMs: 6000, inMs: 5000, outMs: 11_000, effects: [{ type: 'fade', inMs: 0, outMs: 800 }] })
+    // 元のフェード(入り 500・出 800)は前後に分かれ、切った所には既定のフェード(300ms)が付く
+    expect(first).toMatchObject({ id: clip.id, startMs: 0, durationMs: 4000, inMs: 1000, outMs: 5000, effects: [{ type: 'fade', inMs: 500, outMs: 300 }] })
+    expect(second).toMatchObject({ id: result.resolvedIds['rest'], startMs: 4000, durationMs: 6000, inMs: 5000, outMs: 11_000, effects: [{ type: 'fade', inMs: 300, outMs: 800 }] })
+  })
+
+  it('動画を切った所のフェードは設定で長さを選べ、0 なら付けない。端を切ったときも付ける', () => {
+    let project = base()
+    const clip = byType<VideoItem>(project, 'video')[0]!
+    const [first, second] = byType<VideoItem>(apply(project, [{ op: 'item.split', itemId: clip.id, atMs: 4000 }]), 'video')
+    expect(first!.effects).toEqual([{ type: 'fade', inMs: 0, outMs: 300 }])
+    expect(second!.effects).toEqual([{ type: 'fade', inMs: 300, outMs: 0 }])
+
+    project = apply(project, [{ op: 'project.setEditing', cutFadeInMs: 0, cutFadeOutMs: 500 }])
+    const [a, b] = byType<VideoItem>(apply(project, [{ op: 'item.split', itemId: clip.id, atMs: 4000 }]), 'video')
+    expect(a!.effects).toEqual([{ type: 'fade', inMs: 0, outMs: 500 }])
+    expect(b!.effects).toEqual([])
+
+    // 端を切ると、切った側だけ
+    const fresh = base()
+    const freshClip = byType<VideoItem>(fresh, 'video')[0]!
+    const trimmed = byType<VideoItem>(apply(fresh, [{ op: 'item.trim', itemId: freshClip.id, startMs: 2000 }]), 'video')[0]!
+    expect(trimmed.effects).toEqual([{ type: 'fade', inMs: 300, outMs: 0 }])
+    // 音声には付けない
+    const bgm = byType<AudioItem>(fresh, 'audio')[0]!
+    const [audioFirst] = byType<AudioItem>(apply(fresh, [{ op: 'item.split', itemId: bgm.id, atMs: 5000 }]), 'audio')
+    expect(audioFirst!.effects).toEqual([])
   })
 
   it('速度を変えた動画は、速度に合わせて素材の位置を分ける', () => {
@@ -182,5 +207,58 @@ describe('速度を変えた動画の音を実際に読む', () => {
     // 出力の長さは約1秒(atempo の前後の揺らぎを見込む)
     expect(frames / SAMPLE_RATE).toBeGreaterThan(0.9)
     expect(frames / SAMPLE_RATE).toBeLessThan(1.1)
+  })
+})
+
+describe('ズームと静止画', () => {
+  const region = { x: 320, y: 180, width: 960 }
+
+  it('既定では、その時点の動画のコマを静止画にして置き換え、ズームとグループにする(ほかは動かない)', () => {
+    const project = base()
+    const text = byType<TextItem>(project, 'text')[0]!
+    const result = run(project, zoomCommands(project, 4000, 3000, region))
+    const still = result.project.items.find((item) => item.id === result.resolvedIds['still']) as VideoItem
+    const zoom = result.project.items.find((item) => item.id === result.resolvedIds['zoom'])!
+    expect(still).toMatchObject({ type: 'video', freeze: true, startMs: 4000, durationMs: 3000 })
+    expect(zoom).toMatchObject({ type: 'zoom', startMs: 4000, durationMs: 3000, method: 'smooth' })
+    expect(still.groupId).toBeDefined()
+    expect(zoom.groupId).toBe(still.groupId)
+    // 動画のその先は静止画の後ろから続き、テロップは動かない
+    const videos = byType<VideoItem>(result.project, 'video').filter((item) => !item.freeze)
+    expect(videos.map((item) => [item.startMs, item.startMs + item.durationMs])).toEqual([
+      [0, 4000],
+      [7000, 10_000]
+    ])
+    expect(byType<TextItem>(result.project, 'text')[0]!.startMs).toBe(text.startMs)
+  })
+
+  it('設定で「しない」ならズームだけ、「止めてずらす」なら後ろをずらす。既定の寄り方も設定に従う', () => {
+    let project = apply(base(), [{ op: 'project.setEditing', zoomOnStill: 'off', zoomMethod: 'punch' }])
+    expect(zoomCommands(project, 4000, 3000, region).map((command) => command.op)).toEqual(['zoom.insert'])
+    const zoomed = apply(project, zoomCommands(project, 4000, 3000, region))
+    expect(zoomed.items.find((item) => item.type === 'zoom')).toMatchObject({ method: 'punch' })
+
+    project = apply(base(), [{ op: 'project.setEditing', zoomOnStill: 'insert' }])
+    const text = byType<TextItem>(project, 'text')[0]!
+    const inserted = apply(project, zoomCommands(project, 4000, 3000, region))
+    expect(byType<TextItem>(inserted, 'text')[0]!.startMs).toBe(text.startMs + 3000)
+
+    // 動画が無い所ではズームだけ
+    expect(zoomCommands(base(), 30_000, 3000, region).map((command) => command.op)).toEqual(['zoom.insert'])
+  })
+})
+
+describe('動画のフェードと音', () => {
+  it('動画のフェード(エフェクト)に合わせて、動画の音も小さくなる', async () => {
+    const { gainAt, gainEnvelope } = await import('@shared/audio/envelope')
+    const project = base()
+    const clip = byType<VideoItem>(project, 'video')[0]!
+    const faded = apply(project, [{ op: 'item.addEffect', itemId: clip.id, effect: { type: 'fade', inMs: 1000, outMs: 1000 } }])
+    const video = byType<VideoItem>(faded, 'video')[0]!
+    const points = gainEnvelope(faded, video)
+    expect(gainAt(points, 0)).toBeCloseTo(0)
+    expect(gainAt(points, 500)).toBeCloseTo(video.volume * 0.5)
+    expect(gainAt(points, 5000)).toBeCloseTo(video.volume)
+    expect(gainAt(points, video.durationMs - 500)).toBeCloseTo(video.volume * 0.5)
   })
 })

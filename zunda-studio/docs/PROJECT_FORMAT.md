@@ -42,6 +42,10 @@
     "groupFollowsVoice": true,     // 省略可(既定 true)。グループのセリフの尺が変わったら、グループの後ろのものをずらす
     "autoPortraitTrack": true,     // 省略可(既定 true)。立ち絵を付けたら動画の最後までの表示の区間を置く
     "avoidOverlap": true,          // 省略可(既定 true)。同じレイヤーで重なったら空いているレイヤーへ振り分ける
+    "cutFadeInMs": 300,            // 省略可(既定 300)。動画を分けた・端を切ったとき、切った後の始まりをフェードイン(0 ならしない)
+    "cutFadeOutMs": 300,           // 省略可(既定 300)。切る前の終わりをフェードアウト。動画の音もフェードに合わせる
+    "zoomMethod": "smooth",        // 省略可。ズームを置くときの既定の寄り方
+    "zoomOnStill": "overwrite",    // 省略可(既定 overwrite)。ズームを置くとき、その時点のコマを静止画にしてズームとグループにする(off / overwrite / insert)
     "defaultGapMs": 200,           // セリフを続けて追加するときの間
     "duckVolume": 0.35,            // セリフの間、duckable な音声をこの倍率まで下げる
     "duckFadeMs": 200              // 下げる・戻すのにかける時間
@@ -85,7 +89,8 @@
       "blink": { "partGroupId": "grp_eye", "intervalMs": 4000, "jitterMs": 1500, "closeDurationMs": 120 }
     },
     "creditRequired": true,
-    "creditText": "VOICEVOX:ずんだもん"
+    "creditText": "VOICEVOX:ずんだもん",
+    "timelineColor": "#3fa34d"      // 省略可。タイムラインでこのキャラクターのセリフを描く色。無ければキャラクターごとに自動で色分け
   }
 }
 ```
@@ -101,13 +106,13 @@
     "speechStyle": "一人称は「わたくし」。丁寧語まじりで、語尾に「かしら」を使う",
     "banterRole": "tsukkomi",      // tsukkomi / boke / navigator / free
     "forbidden": ["下品な表現"],
-    "targetLengthChars": 40        // 1返答の目安。テンポの基準になる
+    "targetLengthChars": 40        // 以前の設定の名残。返答ごとの長さは返答作成の欄で決め(依頼の targetLengthChars)、これは指定が無いときの既定
   },
   // voice / subtitle / portrait は他のキャラクターと同じ
 }
 ```
 
-`targetLengthChars` を持つのは、掛け合いのテンポが1返答の長さでほぼ決まるためである。これを設定として持たせておくと、AIに毎回「短めに」と指示しなくてよい。
+掛け合いのテンポは1返答の長さでほぼ決まるため、長さの目安は返答を作るたびに、台本の「返答を作る」の欄で決める(数字か、一言・短め・ふつう・長め・長文のボタン)。ペルソナの `targetLengthChars` は、その指定が無い依頼(以前のプロジェクトなど)で使う既定であり、キャラクターの設定画面では変えない。
 
 ### 3.1 立ち絵のパーツ対応
 

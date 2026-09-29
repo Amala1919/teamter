@@ -8,6 +8,21 @@
   --accent: #5bc236;
   --accent-dim: #2f6b1f;
   --danger: #d9534f;
+  /*
+   * 欄ごとの背景と、上辺の色。どの欄か一目で分かるよう、色合いを変えてある
+   * (台本=青、プレビュー=黒、右の欄=紫、タイムライン=緑、ツールバー=灰)。
+   */
+  --section-toolbar: #232a33;
+  --section-script: #1a2635;
+  --section-preview: #0d1013;
+  --section-side: #261f35;
+  --section-timeline: #17291f;
+  --accent-toolbar: #7d8b99;
+  --accent-script: #4f8fd6;
+  --accent-preview: #59636e;
+  --accent-side: #9a72d6;
+  --accent-timeline: #3fa38d;
+  --border-strong: #3a4552;
   color-scheme: dark;
 }
 
@@ -73,6 +88,42 @@ input[type='text'] {
 
 /* ---------------------------------------------------------- 全体レイアウト */
 
+/* 欄ごとの背景。--pane-bg は、欄の中で背景を合わせたい部品(見出し・目盛りなど)が使う。 */
+.app__header {
+  --pane-bg: var(--section-toolbar);
+  background: var(--pane-bg);
+  border-bottom: 2px solid var(--border-strong);
+}
+
+.pane--script {
+  --pane-bg: var(--section-script);
+  --pane-accent: var(--accent-script);
+}
+
+.workspace__center,
+.pane--preview {
+  --pane-bg: var(--section-preview);
+  --pane-accent: var(--accent-preview);
+}
+
+.pane--side {
+  --pane-bg: var(--section-side);
+  --pane-accent: var(--accent-side);
+}
+
+.pane--timeline {
+  --pane-bg: var(--section-timeline);
+  --pane-accent: var(--accent-timeline);
+}
+
+.pane--script,
+.pane--preview,
+.pane--side,
+.pane--timeline {
+  background: var(--pane-bg);
+  border-top: 3px solid var(--pane-accent);
+}
+
 .app {
   display: grid;
   /*
@@ -99,7 +150,7 @@ input[type='text'] {
 }
 
 .splitter {
-  background: var(--border);
+  background: var(--border-strong);
   position: relative;
   z-index: 5;
   touch-action: none;
@@ -156,7 +207,7 @@ body.resizing-y * {
 }
 
 .pane--script > .pane__header {
-  background: var(--bg);
+  background: var(--pane-bg);
   position: sticky;
   top: 0;
   z-index: 2;
@@ -522,7 +573,7 @@ body.resizing-y * {
 
 .timeline__header {
   align-items: center;
-  background: var(--bg-raised);
+  background: color-mix(in srgb, var(--pane-bg) 80%, #fff);
   border-right: 1px solid var(--border);
   display: flex;
   flex: none;
@@ -536,7 +587,7 @@ body.resizing-y * {
 }
 
 .timeline__header--corner {
-  background: var(--bg);
+  background: var(--pane-bg);
 }
 
 .timeline__layerName {
@@ -574,7 +625,7 @@ body.resizing-y * {
 }
 
 .timeline__ruler {
-  background: var(--bg);
+  background: color-mix(in srgb, var(--pane-bg) 70%, #000);
   cursor: pointer;
   flex: 1;
   position: relative;
@@ -2086,7 +2137,7 @@ input[type='url'] {
  * 候補が長いときは欄の中だけでスクロールし、台本を覆い尽くさない。
  */
 .script__dock {
-  background: var(--bg);
+  background: var(--pane-bg);
   border-top: 1px solid var(--border);
   bottom: -8px;
   margin-top: auto;
@@ -2095,10 +2146,15 @@ input[type='url'] {
   z-index: 2;
 }
 
+/* 欄の半分より高くならない(小さい画面でも台本が見える)。長いときは欄の中でスクロールする。 */
+.script__dock {
+  flex: none;
+  max-height: 50%;
+  overflow-y: auto;
+}
+
 .script__dock .cohost-controls {
   margin-bottom: 0;
-  max-height: 55vh;
-  overflow-y: auto;
 }
 
 .cohost-controls__toggle {
@@ -2394,4 +2450,73 @@ input[type='url'] {
 .note--block {
   display: block;
   margin-top: 2px;
+}
+
+/* キャラクター設定の、タイムラインの色の見本 */
+.color-swatch {
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 3px;
+  cursor: pointer;
+  height: 20px;
+  padding: 0;
+  width: 20px;
+}
+
+.color-swatch--active {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* 欄の見出しは、その欄の色で。 */
+.pane__header h2 {
+  color: color-mix(in srgb, var(--pane-accent, var(--text-dim)) 65%, var(--text));
+}
+
+.pane__header {
+  border-bottom-color: color-mix(in srgb, var(--pane-accent, var(--border)) 45%, var(--border));
+}
+
+/* 返答作成欄の、長さ別のボタン */
+.cohost-controls__length {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cohost-controls__length {
+  gap: 4px;
+}
+
+.cohost-controls__length input[type='number'] {
+  width: 50px;
+}
+
+/* 長さ別のボタンは1行に収まるよう小さくする。 */
+.cohost-controls__length .button--small {
+  font-size: 11px;
+  padding: 2px 5px;
+}
+
+.cohost-controls__length .field {
+  gap: 4px;
+}
+
+.button--active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+/* 読み方の修正: 折り返して全体が見える、縦に広げられるテキストボックス */
+.reading-input {
+  font-family: inherit;
+  line-height: 1.6;
+  min-height: 4.5em;
+  resize: vertical;
+  width: 100%;
+  word-break: break-all;
+}
+
+/* ラベルを上に、入力欄を下に幅いっぱいで置く(長い文を入れる欄用) */
+.field--stacked {
+  grid-template-columns: 1fr;
 }

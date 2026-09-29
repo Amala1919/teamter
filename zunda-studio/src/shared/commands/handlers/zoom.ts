@@ -53,7 +53,7 @@ export const zoomHandlers: ZoomHandlers = {
     requireFinite(command.durationMs, command.op, '尺')
     if (command.atMs < 0) fail(command.op, '開始時刻は負の値にできません')
     if (command.durationMs <= 0) fail(command.op, '尺は正の値でなければなりません')
-    const method = command.method ?? 'smooth'
+    const method = command.method ?? draft.editing.zoomMethod ?? 'smooth'
     if (!ZOOM_METHODS.includes(method)) fail(command.op, `寄り方の指定が不正です: ${method}`)
     const timing = defaultZoomTiming(method)
     const layerId =

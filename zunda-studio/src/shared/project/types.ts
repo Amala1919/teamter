@@ -235,6 +235,11 @@ export interface Character {
   /** 音声ライブラリの規約上クレジットが必要か。 */
   creditRequired: boolean
   creditText: string
+  /**
+   * タイムラインでこのキャラクターのセリフを描く色(#rrggbb)。見分けるための印で、動画には出ない。
+   * 無ければ、キャラクターの並びに応じて自動で色分けする。
+   */
+  timelineColor?: string
 }
 
 // ---------------------------------------------------------------- 字幕スタイル
@@ -634,6 +639,16 @@ export interface EditingSettings {
   groupFollowsVoice?: boolean
   /** 立ち絵を付けたとき、動画の最後までの表示の区間をタイムラインに置くか。無いときは置く。 */
   autoPortraitTrack?: boolean
+  /** 動画を分けた・端を切ったとき、切った所をフェードさせる長さ(0 ならしない)。無いときは 300ms。 */
+  cutFadeInMs?: Ms
+  cutFadeOutMs?: Ms
+  /** ズームを置くときの既定の寄り方。無いときは smooth。 */
+  zoomMethod?: ZoomMethod
+  /**
+   * ズームを置くとき、その時点の動画のコマを静止画にして、ズームとグループにするか。無いときはする。
+   * overwrite は動画のその先を静止画で置き換え(ほかは動かない)、insert は動画を止めて後ろをずらす。
+   */
+  zoomOnStill?: 'off' | 'overwrite' | 'insert'
   /** セリフを続けて追加するときの間。 */
   defaultGapMs: Ms
   /** セリフの間、duckable な音声(BGM など)をこの倍率まで下げる(M-4)。 */

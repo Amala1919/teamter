@@ -70,6 +70,10 @@ export interface ProjectSetEditing {
   closeGapOnVoiceDelete?: boolean
   groupFollowsVoice?: boolean
   autoPortraitTrack?: boolean
+  cutFadeInMs?: Ms
+  cutFadeOutMs?: Ms
+  zoomMethod?: ZoomMethod
+  zoomOnStill?: 'off' | 'overwrite' | 'insert'
   defaultGapMs?: Ms
   duckVolume?: number
   duckFadeMs?: Ms
@@ -202,6 +206,8 @@ export interface CharacterUpdate {
   voice?: Partial<VoiceConfig>
   subtitleStyleId?: SubtitleStyleId
   creditText?: string
+  /** タイムラインでの色(#rrggbb)。null で自動の色分けに戻す。 */
+  timelineColor?: string | null
 }
 
 /** 立ち絵の設定を丸ごと置き換える(素材マネージャーで編集した結果を反映する)。null で立ち絵を外す。 */

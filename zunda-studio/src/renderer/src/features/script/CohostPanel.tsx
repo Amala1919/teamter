@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react'
 import {
   describeRegion,
   frameList,
+  LENGTH_PRESETS,
+  LENGTH_RANGE,
   MAX_CLIP_FRAMES,
   MAX_CLIP_MS,
   visionTimes,
@@ -36,6 +38,16 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
   const [candidates, setCandidates] = useState(2)
   const [rounds, setRounds] = useState(1)
   const [instruction, setInstruction] = useState('')
+  // 返答の長さの目安(文字)。セリフごとに変えられ、前回の値を覚えておく(無ければ相方の人物像に残っている値、それも無ければ40)。
+  const [length, setLength] = useState<number>(
+    () => readLength() ?? Object.values(project.characters).find((character) => character.authorRole === 'ai')?.persona?.targetLengthChars ?? 40
+  )
+  const changeLength = (value: number): void => {
+    if (!Number.isFinite(value)) return
+    const next = Math.round(Math.min(LENGTH_RANGE.max, Math.max(LENGTH_RANGE.min, value)))
+    setLength(next)
+    writeLength(next)
+  }
   const [synopsisOpen, setSynopsisOpen] = useState(false)
   // たたむと「生成」のボタンだけにして、台本を広く見せる(開き具合は覚えておく)。
   const [compact, setCompact] = useState(() => readCompact())
@@ -73,6 +85,7 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
     void generate({
       candidates,
       rounds: characterId ? 1 : rounds,
+      targetLengthChars: length,
       ...(characterId ? { characterId } : {}),
       ...(instruction.trim() ? { instruction: instruction.trim() } : {}),
       ...(visionMode === 'frame'
@@ -149,6 +162,23 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
           {compact ? '設定 ▴' : 'たたむ ▾'}
         </button>
       </div>
+      {!compact && (
+        <div className="cohost-controls__row cohost-controls__length" data-testid="cohost-length-row">
+          <NumberField label="長さ(字)" value={length} min={LENGTH_RANGE.min} max={LENGTH_RANGE.max} onCommit={changeLength} testId="cohost-length" />
+          {LENGTH_PRESETS.map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              className={length === preset.chars ? 'button--small button--active' : 'button--small'}
+              onClick={() => changeLength(preset.chars)}
+              title={`${preset.chars}文字前後`}
+              data-testid={`cohost-length-${preset.chars}`}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      )}
       {!compact && (
         <div className="cohost-controls__row">
         <input
@@ -299,7 +329,7 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
         />
       )}
       {disabledReason && <p className="status status--warn">{disabledReason}</p>}
-      {session && <CohostCandidates project={project} onError={onError} />}
+      {session && <CohostCandidates project={project} length={length} onError={onError} />}
       {synopsisOpen && <SynopsisDialog onClose={() => setSynopsisOpen(false)} />}
     </div>
   )
@@ -315,6 +345,25 @@ function readCompact(): boolean {
   }
 }
 
+const LENGTH_KEY = 'zunda.cohostLength'
+
+function readLength(): number | null {
+  try {
+    const value = Number(localStorage.getItem(LENGTH_KEY))
+    return Number.isInteger(value) && value >= 1 && value <= LENGTH_RANGE.max ? value : null
+  } catch {
+    return null
+  }
+}
+
+function writeLength(value: number): void {
+  try {
+    localStorage.setItem(LENGTH_KEY, String(value))
+  } catch {
+    // 覚えられなくても動作には関係ない
+  }
+}
+
 function writeCompact(value: boolean): void {
   try {
     localStorage.setItem(COMPACT_KEY, value ? '1' : '0')
@@ -323,7 +372,7 @@ function writeCompact(value: boolean): void {
   }
 }
 
-function CohostCandidates({ project, onError }: { project: Project; onError: (message: string | null) => void }): React.JSX.Element | null {
+function CohostCandidates({ project, length, onError }: { project: Project; length: number; onError: (message: string | null) => void }): React.JSX.Element | null {
   const session = useCohostStore((state) => state.session)
   const regenerate = useCohostStore((state) => state.regenerate)
   const discard = useCohostStore((state) => state.discard)
@@ -338,7 +387,7 @@ function CohostCandidates({ project, onError }: { project: Project; onError: (me
           {session.generatedBy && ` / ${formatModelRef(session.generatedBy)}`}
         </span>
         <span className="cohost-candidates__actions">
-          <button type="button" className="button--small" disabled={session.loading} onClick={() => void regenerate()} data-testid="cohost-regenerate">
+          <button type="button" className="button--small" disabled={session.loading} onClick={() => void regenerate({ targetLengthChars: length })} data-testid="cohost-regenerate">
             再生成
           </button>
           <button type="button" className="button--small" onClick={discard} data-testid="cohost-discard">

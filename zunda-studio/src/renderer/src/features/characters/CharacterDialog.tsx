@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import type { Command } from '@shared/commands/types'
 import { wrapSubtitle } from '@shared/project/subtitle'
+import { characterTimelineColor, TIMELINE_PALETTE } from '@shared/project/timeline-colors'
 import type { AiPersona, BanterRole, Character, CharacterId, VoiceParams } from '@shared/project/types'
 
 import { api, toAppError } from '../../api'
@@ -143,6 +144,7 @@ function CharacterEditor({ character, run, onDeleted }: CharacterEditorProps): R
   const speakers = useVoiceStore((state) => state.speakers[character.voice.engineId])
   const loadSpeakers = useVoiceStore((state) => state.loadSpeakers)
   const ensureEngine = useVoiceStore((state) => state.ensureEngine)
+  const characters = useEditorStore((state) => state.project.characters)
   const style = useEditorStore((state) => state.project.subtitleStyles[character.subtitleStyleId])
   const firstLine = useEditorStore((state) =>
     state.project.items.find((item) => item.type === 'voice' && item.characterId === character.id && item.text.trim() !== '')
@@ -210,6 +212,37 @@ function CharacterEditor({ character, run, onDeleted }: CharacterEditorProps): R
             data-testid="character-name"
           />
         </label>
+        <div className="field" data-testid="character-color-field">
+          <span className="field__label">タイムラインでの色(このキャラクターのセリフの色)</span>
+          <span className="field__row field__row--wrap">
+            <input
+              type="color"
+              value={characterTimelineColor(characters, character.id) ?? '#3fa34d'}
+              onChange={(event) => update({ timelineColor: event.target.value }, 'タイムラインの色の変更')}
+              aria-label="タイムラインでの色"
+              data-testid="character-color"
+            />
+            {TIMELINE_PALETTE.map((color) => (
+              <button
+                key={color.hex}
+                type="button"
+                className={character.timelineColor === color.hex ? 'color-swatch color-swatch--active' : 'color-swatch'}
+                style={{ background: color.hex }}
+                title={color.name}
+                aria-label={color.name}
+                onClick={() => update({ timelineColor: color.hex }, 'タイムラインの色の変更')}
+                data-testid={`character-color-${color.hex.slice(1)}`}
+              />
+            ))}
+            {character.timelineColor ? (
+              <button type="button" className="button--small" onClick={() => update({ timelineColor: null }, 'タイムラインの色の変更')} data-testid="character-color-reset">
+                自動に戻す
+              </button>
+            ) : (
+              <span className="note">自動(キャラクターごとに違う色)</span>
+            )}
+          </span>
+        </div>
         <div className="field">
           <span className="field__label">セリフを書く人</span>
           <span className="field__row">
@@ -349,19 +382,7 @@ function CharacterEditor({ character, run, onDeleted }: CharacterEditorProps): R
               ))}
             </select>
           </label>
-          <label className="field">
-            <span className="field__label">返答の目安の長さ(文字)</span>
-            <input
-              type="number"
-              min={5}
-              max={300}
-              defaultValue={persona.targetLengthChars}
-              onBlur={(event) => {
-                const value = Number(event.target.value)
-                if (Number.isInteger(value) && value > 0) commitPersona({ ...persona, targetLengthChars: value })
-              }}
-            />
-          </label>
+          <p className="note">返答の長さの目安は、セリフごとに台本の「返答を作る」の欄で決めます。</p>
           <label className="field">
             <span className="field__label">使わせない表現(1行に1つ)</span>
             <textarea

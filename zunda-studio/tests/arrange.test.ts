@@ -152,15 +152,18 @@ describe('重なりの自動振り分け', () => {
 })
 
 describe('タイムラインの色', () => {
-  it('素材の色 > レイヤーの色 > 種類ごとの色(null)の順に決まり、戻せる', async () => {
-    const { timelineColor } = await import('@shared/project/timeline-colors')
+  it('素材の色 > レイヤーの色 > (セリフは)キャラクターの自動の色の順に決まり、戻せる', async () => {
+    const { timelineColor, characterTimelineColor } = await import('@shared/project/timeline-colors')
     const { project, zunda } = base()
     let next = apply(project, [
       { op: 'voice.insert', characterId: zunda, text: 'A', atMs: 0 },
       { op: 'voice.insert', characterId: zunda, text: 'B', atMs: 5000 }
     ])
     const [a, b] = voices(next)
-    expect(timelineColor(next, a!)).toBeNull()
+    // セリフは、色を決めていなければキャラクターごとの自動の色
+    const auto = characterTimelineColor(next.characters, zunda)
+    expect(auto).not.toBeNull()
+    expect(timelineColor(next, a!)).toBe(auto)
 
     next = apply(next, [{ op: 'layer.update', layerId: DEFAULT_LAYER_IDS.voice, color: '#3B6FD6' }])
     expect(timelineColor(next, line(next, 'A'))).toBe('#3b6fd6')
@@ -173,7 +176,7 @@ describe('タイムラインの色', () => {
     expect(timelineColor(next, line(next, 'B'))).toBe('#3fa34d')
 
     next = apply(next, [{ op: 'item.setColor', itemIds: [a!.id], color: null }, { op: 'layer.update', layerId: DEFAULT_LAYER_IDS.voice, color: null }])
-    expect(timelineColor(next, line(next, 'A'))).toBeNull()
+    expect(timelineColor(next, line(next, 'A'))).toBe(auto)
     expect(line(next, 'A')).not.toHaveProperty('color')
 
     // 不正な色は断る

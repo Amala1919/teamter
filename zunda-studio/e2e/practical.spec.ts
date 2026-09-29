@@ -48,6 +48,22 @@ test.describe('実用の機能(読み方・辞書・自動保存・SRT・相方�
     await expect(page.getByTestId('reading-editor')).toContainText('手で直した読み')
     await expect(line.getByTestId('synthesis-status')).toContainText('合成済み', { timeout: 30_000 })
     await expect.poll(() => durationOf(line)).toBeLessThan(before)
+
+    // 読み方は複数行のテキストボックス。長い読みも折り返して全体が見え、Enter で反映する(改行は入らない)
+    const kind = await reading.evaluate((element) => (element as unknown as { tagName: string }).tagName)
+    expect(kind).toBe('TEXTAREA')
+    await reading.fill("ナ'ガイ/ヨミ'カタ/ヲ/ナ'ガク/カ'イテ/モ/ゼ'ンブ/ミ'エ'ル/ノ'ダ")
+    await reading.press('Enter')
+    await expect(reading).toHaveValue("ナ'ガイ/ヨミ'カタ/ヲ/ナ'ガク/カ'イテ/モ/ゼ'ンブ/ミ'エ'ル/ノ'ダ")
+    await expect(page.getByTestId('reading-editor')).toContainText('手で直した読み')
+    await expect(line.getByTestId('synthesis-status')).toContainText('合成済み', { timeout: 30_000 })
+    await expect.poll(() => durationOf(line)).toBeGreaterThan(0)
+    // 全体が見える(入力欄の中で横にはみ出さず、折り返している)
+    const overflow = await reading.evaluate((element) => {
+      const box = element as unknown as { scrollWidth: number; clientWidth: number }
+      return box.scrollWidth - box.clientWidth
+    })
+    expect(overflow).toBeLessThanOrEqual(1)
   })
 
   test('辞書に語を登録すると、その語を含むセリフが新しい読みで合成し直される', async ({ page }) => {
