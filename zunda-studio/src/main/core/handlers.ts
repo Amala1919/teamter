@@ -151,6 +151,7 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
       rounds: z.number().int().min(1).max(6),
       characterId: z.string().max(100).optional(),
       instruction: z.string().max(2000).optional(),
+      targetLengthChars: z.number().int().min(1).max(1000).optional(),
       vision: z
         .discriminatedUnion('kind', [
           z.object({ kind: z.literal('frame'), atMs: z.number().min(0), ...visionOptionsShape }),

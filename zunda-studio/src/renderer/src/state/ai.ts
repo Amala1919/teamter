@@ -42,7 +42,8 @@ interface CohostState {
   requestSeq: number
   requestGenerate: () => void
   generate: (request: Omit<CohostRequest, 'afterItemId'>) => Promise<void>
-  regenerate: () => Promise<void>
+  /** 前回と同じ依頼で作り直す。overrides を渡すと、その項目だけ差し替える(欄で長さを変えたときなど)。 */
+  regenerate: (overrides?: Partial<Omit<CohostRequest, 'afterItemId'>>) => Promise<void>
   discard: () => void
   /** 候補を台本に入れる。lines は利用者が手で直した後の内容。入れた最後のセリフのIDを返す。 */
   adopt: (lines: CohostLine[]) => { ok: true; lastItemId: string | null } | { ok: false; message: string }
@@ -83,11 +84,11 @@ export const useCohostStore = create<CohostState>((set, get) => ({
     }
   },
 
-  regenerate: async () => {
+  regenerate: async (overrides) => {
     const session = get().session
     if (!session) return
     const { afterItemId: _ignored, ...options } = session.request
-    await get().generate(options)
+    await get().generate({ ...options, ...overrides })
   },
 
   discard: () => set({ session: null }),

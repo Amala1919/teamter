@@ -83,7 +83,15 @@ export function TimingInspector({ project, item, run }: { project: Project; item
               レイヤー・種類の色に戻す
             </button>
           ) : (
-            <span className="note">{project.layers.find((layer) => layer.id === item.layerId)?.color ? 'レイヤーの色' : '種類ごとの色'}</span>
+            <span className="note">
+              {item.type === 'voice' && project.characters[item.characterId]?.timelineColor
+                ? 'キャラクターの色'
+                : project.layers.find((layer) => layer.id === item.layerId)?.color
+                  ? 'レイヤーの色'
+                  : item.type === 'voice'
+                    ? 'キャラクターごとの自動の色'
+                    : '種類ごとの色'}
+            </span>
           )}
         </span>
       </div>

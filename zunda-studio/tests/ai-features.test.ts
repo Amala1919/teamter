@@ -106,6 +106,40 @@ describe('相方の返答の依頼文', () => {
   })
 })
 
+describe('返答の長さの目安(セリフごと)', () => {
+  it('返答ごとに決めた長さを依頼文に入れ、人物像に残っている値より優先する', () => {
+    const { project, zunda } = banterProject()
+    const base = { afterItemId: null, candidates: 1, rounds: 1 }
+    // 指定が無ければ、人物像に残っている値(以前のプロジェクト)
+    expect(buildCohostPrompt(project, base).system).toContain('1回のセリフの長さの目安: 20文字前後')
+    // 指定すればそちらを使う(セリフごとに変えられる)
+    const long = buildCohostPrompt(project, { ...base, targetLengthChars: 120 }).system
+    expect(long).toContain('1回のセリフの長さの目安: 120文字前後')
+    expect(long).not.toContain('目安: 20文字前後')
+    // 人物像の無い役(自分のセリフの案)にも伝わる
+    expect(buildCohostPrompt(project, { ...base, characterId: zunda, targetLengthChars: 25 }).system).toContain('1つのセリフは25文字前後')
+    expect(buildCohostPrompt(project, { ...base, characterId: zunda }).system).not.toContain('文字前後')
+  })
+
+  it('長すぎる指摘も、返答ごとの長さを基準にする', () => {
+    const { project, metan } = banterProject()
+    const response = { candidates: [{ lines: [{ speaker: '四国めたん', text: 'あ'.repeat(60), expression: null }] }] }
+    const request = { afterItemId: null, candidates: 1, rounds: 1 }
+    // 目安 20 文字なら 60 文字は長すぎ、目安 120 文字なら問題ない
+    expect(interpretCohostResponse(project, request, response)[0]!.warnings.join()).toContain('目安(20文字)')
+    expect(interpretCohostResponse(project, { ...request, targetLengthChars: 120 }, response)[0]!.warnings).toEqual([])
+    void metan
+  })
+
+  it('長さ別の候補は、範囲の中で小さい順に並ぶ', async () => {
+    const { LENGTH_PRESETS, LENGTH_RANGE } = await import('@shared/ai/cohost')
+    const sizes = LENGTH_PRESETS.map((preset) => preset.chars)
+    expect(sizes).toEqual([...sizes].sort((a, b) => a - b))
+    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(LENGTH_RANGE.min)
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(LENGTH_RANGE.max)
+  })
+})
+
 describe('相方の返答の解釈', () => {
   it('表情の名前をIDにし、名前の飾りを外し、使わせない表現と長すぎる返答を指摘する', () => {
     const { project, metan } = banterProject()

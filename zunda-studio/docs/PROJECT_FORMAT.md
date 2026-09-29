@@ -89,7 +89,8 @@
       "blink": { "partGroupId": "grp_eye", "intervalMs": 4000, "jitterMs": 1500, "closeDurationMs": 120 }
     },
     "creditRequired": true,
-    "creditText": "VOICEVOX:ずんだもん"
+    "creditText": "VOICEVOX:ずんだもん",
+    "timelineColor": "#3fa34d"      // 省略可。タイムラインでこのキャラクターのセリフを描く色。無ければキャラクターごとに自動で色分け
   }
 }
 ```
@@ -105,13 +106,13 @@
     "speechStyle": "一人称は「わたくし」。丁寧語まじりで、語尾に「かしら」を使う",
     "banterRole": "tsukkomi",      // tsukkomi / boke / navigator / free
     "forbidden": ["下品な表現"],
-    "targetLengthChars": 40        // 1返答の目安。テンポの基準になる
+    "targetLengthChars": 40        // 以前の設定の名残。返答ごとの長さは返答作成の欄で決め(依頼の targetLengthChars)、これは指定が無いときの既定
   },
   // voice / subtitle / portrait は他のキャラクターと同じ
 }
 ```
 
-`targetLengthChars` を持つのは、掛け合いのテンポが1返答の長さでほぼ決まるためである。これを設定として持たせておくと、AIに毎回「短めに」と指示しなくてよい。
+掛け合いのテンポは1返答の長さでほぼ決まるため、長さの目安は返答を作るたびに、台本の「返答を作る」の欄で決める(数字か、一言・短め・ふつう・長め・長文のボタン)。ペルソナの `targetLengthChars` は、その指定が無い依頼(以前のプロジェクトなど)で使う既定であり、キャラクターの設定画面では変えない。
 
 ### 3.1 立ち絵のパーツ対応
 

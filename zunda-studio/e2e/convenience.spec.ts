@@ -256,4 +256,46 @@ test.describe('使い勝手の機能', () => {
       await updateSettings(request, { editing: { closeGapOnVoiceDelete: false }, ui: { autoInspectorTab: true } })
     }
   })
+
+  test('タイムラインのセリフはキャラクターごとに色分けされ、キャラクターの設定で色を変えられる。欄ごとに背景色が違う', async ({ page }) => {
+    await openFresh(page)
+    await addLines(page, 'ずんだもん:いちぎょうめ\n四国めたん:にぎょうめ\nずんだもん:さんぎょうめ', 3)
+    const colors = async (): Promise<string[]> =>
+      page.locator('[data-item-type="voice"]').evaluateAll((elements) => elements.map((element) => element.getAttribute('data-color') ?? ''))
+    // 色を決めていなくても、キャラクターごとに違う色
+    const [first, second, third] = await colors()
+    expect(first).toBeTruthy()
+    expect(second).toBeTruthy()
+    expect(first).not.toBe(second)
+    expect(third).toBe(first)
+
+    // キャラクターの設定で色を決めると、そのキャラクターのセリフだけ変わる
+    await page.getByTestId('open-characters').click()
+    await page.getByTestId('character-color-8a55d6').click()
+    await page.keyboard.press('Escape')
+    await expect.poll(async () => (await colors())[0]).toBe('#8a55d6')
+    expect((await colors())[2]).toBe('#8a55d6')
+    expect((await colors())[1]).toBe(second)
+
+    // 自動に戻せる
+    await page.getByTestId('open-characters').click()
+    await page.getByTestId('character-color-reset').click()
+    await page.keyboard.press('Escape')
+    await expect.poll(async () => (await colors())[0]).toBe(first)
+
+    // 台本・プレビュー・右の欄・タイムラインで背景色が違う
+    const backgrounds = await page.evaluate(() => {
+      // このファイルは DOM の型を読み込まないので、使う分だけ形を書く。
+      const dom = globalThis as unknown as {
+        document: { querySelector(selector: string): unknown }
+        getComputedStyle(element: unknown): { backgroundColor: string }
+      }
+      return ['.pane--script', '.pane--preview', '.pane--side', '.pane--timeline'].map((selector) => {
+        const element = dom.document.querySelector(selector)
+        return element ? dom.getComputedStyle(element).backgroundColor : ''
+      })
+    })
+    expect(new Set(backgrounds).size).toBe(4)
+    expect(backgrounds.every((color) => color !== '' && color !== 'rgba(0, 0, 0, 0)')).toBe(true)
+  })
 })

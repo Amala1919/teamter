@@ -1,5 +1,6 @@
 import { fail, invalidateSynthesis, refreshSubtitleLines, type HandlerTable } from '../env'
 import { ensurePortraitTrack, removeAutoPortraitTracks } from '../../portrait/tracks'
+import { TIMELINE_COLOR } from '../../project/timeline-colors'
 
 type CharacterHandlers = Pick<
   HandlerTable,
@@ -61,6 +62,11 @@ export const characterHandlers: CharacterHandlers = {
         fail(command.op, 'AIが演じる役にするには先に persona を設定してください')
       }
       character.authorRole = command.authorRole
+    }
+    if (command.timelineColor !== undefined) {
+      if (command.timelineColor === null) delete character.timelineColor
+      else if (!TIMELINE_COLOR.test(command.timelineColor)) fail(command.op, `色の指定が不正です: ${command.timelineColor}`)
+      else character.timelineColor = command.timelineColor.toLowerCase()
     }
     if (command.creditText !== undefined) {
       character.creditText = command.creditText

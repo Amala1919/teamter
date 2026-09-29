@@ -65,6 +65,35 @@ test.describe('相方の返答と編集チャット', () => {
     await expect(lines).toHaveCount(1)
   })
 
+  test('返答の長さの目安はセリフごとに決められ、数字でも長さ別のボタンでも入れられる(人物像には入れない)', async ({ page }) => {
+    await startWithLines(page, 'ずんだもん:ボスが強すぎるのだ！')
+    queueAiResponses([reply(['四国めたん:あら']), reply(['四国めたん:そう']), reply(['四国めたん:ええ'])])
+
+    // 既定は 40。長さ別のボタンで数字が入る
+    const length = page.getByTestId('cohost-length')
+    await expect(length).toHaveValue('40')
+    await page.getByTestId('cohost-length-70').click()
+    await expect(length).toHaveValue('70')
+    await page.getByTestId('cohost-candidates').selectOption('1')
+    await page.getByTestId('cohost-generate').click()
+    await expect(page.getByTestId('cohost-candidate')).toHaveCount(1)
+    expect(aiCalls().at(-1)!.system).toContain('1回のセリフの長さの目安: 70文字前後')
+
+    // 数字を直接入れても、次の返答からそれを使う
+    await length.fill('25')
+    await length.press('Enter')
+    await expect(page.getByTestId('cohost-length-25')).toHaveClass(/button--active/)
+    await page.getByTestId('cohost-regenerate').click()
+    await expect.poll(() => aiCalls().length).toBeGreaterThan(1)
+    expect(aiCalls().at(-1)!.system).toContain('1回のセリフの長さの目安: 25文字前後')
+
+    // キャラクターの設定には、長さの欄が無い
+    await page.getByTestId('open-characters').click()
+    await page.locator('.character-dialog__item', { hasText: '四国めたん' }).click()
+    await expect(page.getByTestId('persona-editor')).toBeVisible()
+    await expect(page.getByTestId('persona-editor')).not.toContainText('返答の目安の長さ')
+  })
+
   test('台本が長くても、返答の操作は下に固定され、セリフの右クリックやショートカットから返答を作れる', async ({ page }) => {
     const script = Array.from({ length: 24 }, (_, index) => `${index % 2 === 0 ? 'ずんだもん' : '四国めたん'}:${index + 1}番目のセリフなのだ`).join('\n')
     await startWithLines(page, script)

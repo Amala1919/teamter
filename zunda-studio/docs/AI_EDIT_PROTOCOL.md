@@ -52,7 +52,7 @@ voice.insert として台本に追加
 ### 2.3 守らせること
 
 - 生成するのは相方のセリフのみとする。投稿者の役のセリフは、明示的な指示がない限り書き換えない
-- ペルソナの `targetLengthChars` を目安の長さとして守る
+- 依頼の `targetLengthChars`(返答を作るたびに決める。無ければペルソナの `targetLengthChars`)を目安の長さとして守る
 - ペルソナの `forbidden` に挙げられた表現を使わない
 - 相方が自分のペルソナを書き換えること(`character.setPersona`)は許さない。ペルソナの変更はUIからのみ行う
 

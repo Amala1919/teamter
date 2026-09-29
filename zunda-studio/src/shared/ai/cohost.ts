@@ -22,6 +22,11 @@ export interface CohostRequest {
   characterId?: CharacterId
   /** その場の指示(「もっと辛口で」など)。 */
   instruction?: string
+  /**
+   * 1つのセリフの長さの目安(文字数)。セリフを作るたびに返答作成の欄で決める。
+   * 省略すると、演じるキャラクターの人物像に残っている値(以前のプロジェクト)を使い、それも無ければ目安を伝えない。
+   */
+  targetLengthChars?: number
   /** ゲーム画面を見せる。frame: その時刻の1コマ / frames: 選んだ複数の時刻のコマ / clip: 区間を数コマに分けて見せる。 */
   vision?: CohostVision
 }
@@ -183,7 +188,24 @@ function expressionNames(character: Character): string[] {
   return Object.values(character.portrait?.expressions ?? {}).map((expression) => expression.name)
 }
 
-function describePersona(character: Character): string {
+/** 返答の長さの目安を、ボタンひとつで入れるための長さ別の候補(文字数)。 */
+export const LENGTH_PRESETS: readonly { label: string; chars: number }[] = [
+  { label: '一言', chars: 15 },
+  { label: '短め', chars: 25 },
+  { label: 'ふつう', chars: 40 },
+  { label: '長め', chars: 70 },
+  { label: '長文', chars: 120 }
+]
+
+/** 返答の長さの目安として入れられる文字数の範囲。 */
+export const LENGTH_RANGE = { min: 5, max: 300 } as const
+
+/** セリフの長さの目安(文字数)。返答ごとの指定を優先し、無ければ人物像に残っている値。 */
+export function targetLength(request: Pick<CohostRequest, 'targetLengthChars'>, character: Character | undefined): number | null {
+  return request.targetLengthChars ?? character?.persona?.targetLengthChars ?? null
+}
+
+function describePersona(character: Character, targetLengthChars: number | null): string {
   const persona = character.persona
   if (!persona) return `${character.name}(性格の設定なし。自然な話し方で)`
   return [
@@ -191,7 +213,7 @@ function describePersona(character: Character): string {
     persona.personality ? `性格: ${persona.personality}` : null,
     persona.speechStyle ? `口調: ${persona.speechStyle}` : null,
     `掛け合いでの立ち位置: ${BANTER_ROLE_TEXT[persona.banterRole]}`,
-    `1回のセリフの長さの目安: ${persona.targetLengthChars}文字前後`,
+    targetLengthChars !== null ? `1回のセリフの長さの目安: ${targetLengthChars}文字前後` : null,
     persona.forbidden.length > 0 ? `使ってはいけない表現: ${persona.forbidden.join(' / ')}` : null
   ]
     .filter(Boolean)
@@ -206,6 +228,7 @@ export function buildCohostPrompt(project: Project, request: CohostRequest): Omi
   const rounds = Math.max(1, Math.min(6, request.rounds))
   const candidates = Math.max(1, Math.min(5, request.candidates))
   const suggestingForUser = actor.authorRole === 'user'
+  const target = targetLength(request, actor)
 
   const expressionHelp = [actor, ...(rounds > 1 ? others : [])]
     .map((character) => {
@@ -221,7 +244,7 @@ export function buildCohostPrompt(project: Project, request: CohostRequest): Omi
       : `あなたは相方の「${actor.name}」を演じます。人物像を最後まで崩さないでください。`,
     '',
     '## 演じる人物',
-    describePersona(actor),
+    describePersona(actor, target),
     others.length > 0 ? `\n## 掛け合いの相手\n${others.map((other) => `${other.name}${other.authorRole === 'user' ? '(投稿者本人が演じる)' : ''}`).join('\n')}` : '',
     project.meta.synopsis?.trim() ? `\n## 動画の企画メモ\n${project.meta.synopsis.trim()}` : '',
     `\n${briefingPromptSection(project)}`,
@@ -232,6 +255,8 @@ export function buildCohostPrompt(project: Project, request: CohostRequest): Omi
     rounds === 1
       ? `- ${actor.name}のセリフを1つだけ書く`
       : `- ${actor.name}と相手が交互に話す形で、合計${rounds}個のセリフを書く。最初は${actor.name}`,
+    // 人物像に長さの目安が無い役(自分の案など)にも、返答ごとに決めた長さは伝える
+    ...(target !== null && !actor.persona ? [`- 1つのセリフは${target}文字前後にする`] : []),
     `- 案を${candidates}通り出す。案ごとに違う切り口にする`,
     expressionHelp.length > 0 ? `- 各セリフに合う表情を次の中から選ぶ(合うものが無ければ null)\n  ${expressionHelp.join('\n  ')}` : '- 表情は null にする',
     '- 出力は指定のJSONだけ'
@@ -289,8 +314,9 @@ export function interpretCohostResponse(project: Project, request: CohostRequest
       if (persona) {
         const hit = persona.forbidden.filter((word) => word !== '' && text.includes(word))
         if (hit.length > 0) warnings.push(`使わせない表現を含んでいます: ${hit.join('、')}`)
-        if (text.length > persona.targetLengthChars * 2.5) warnings.push(`${character.name}のセリフが目安(${persona.targetLengthChars}文字)よりかなり長いです`)
       }
+      const target = targetLength(request, character)
+      if (target !== null && text.length > target * 2.5) warnings.push(`${character.name}のセリフが目安(${target}文字)よりかなり長いです`)
       return { characterId: character.id, text, expressionId: expression?.id ?? null }
     })
     return { lines: lines.slice(0, request.rounds > 1 ? request.rounds : 1), warnings }
