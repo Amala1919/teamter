@@ -114,7 +114,8 @@ export const useCohostStore = create<CohostState>((set, get) => ({
     const result = dispatch(commands, lines.length > 1 ? '相方の掛け合いを採用' : '相方の返答を採用')
     if (!result.ok) return { ok: false, message: result.message }
     const lastItemId = result.resolvedIds[`adopt${lines.length - 1}`] ?? null
-    if (lastItemId) setSelection([lastItemId])
+    // 台本の欄からの操作なので、右の欄はチャットなどのまま(インスペクタに切り替えない)。
+    if (lastItemId) setSelection([lastItemId], 'script')
     set({ session: null })
     return { ok: true, lastItemId }
   }

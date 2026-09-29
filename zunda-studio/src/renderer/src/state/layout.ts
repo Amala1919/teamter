@@ -7,24 +7,21 @@ import { create } from 'zustand'
 export interface LayoutRatios {
   /** 台本の欄の幅(ウィンドウの幅に対して)。 */
   left: number
-  /** チャット・ライブの欄の幅。 */
+  /** 右の欄(チャット・ライブの記録・インスペクタ)の幅。 */
   right: number
   /** タイムラインの高さ(ウィンドウの高さに対して)。 */
   timeline: number
-  /** インスペクタの高さ(中央の欄の高さに対して)。 */
-  inspector: number
 }
 
 export type LayoutKey = keyof LayoutRatios
 
-export const DEFAULT_LAYOUT: LayoutRatios = { left: 0.22, right: 0.22, timeline: 0.36, inspector: 0.34 }
+export const DEFAULT_LAYOUT: LayoutRatios = { left: 0.22, right: 0.24, timeline: 0.36 }
 
 /** それぞれの欄の最小・最大。中央のプレビューが潰れないよう、左右の合計も抑える。 */
 export const LAYOUT_LIMITS: Record<LayoutKey, [number, number]> = {
   left: [0.12, 0.45],
   right: [0.12, 0.45],
-  timeline: [0.12, 0.7],
-  inspector: [0.1, 0.75]
+  timeline: [0.12, 0.7]
 }
 const MIN_CENTER = 0.25
 
@@ -34,8 +31,10 @@ function load(): LayoutRatios {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     if (!raw) return DEFAULT_LAYOUT
-    const parsed = JSON.parse(raw) as Partial<LayoutRatios>
-    return normalize({ ...DEFAULT_LAYOUT, ...parsed })
+    const parsed = JSON.parse(raw) as Partial<Record<string, number>>
+    // 今は使わない項目(以前のインスペクタの高さなど)は読み捨てる。
+    const known = Object.fromEntries((Object.keys(DEFAULT_LAYOUT) as LayoutKey[]).filter((key) => key in parsed).map((key) => [key, parsed[key]]))
+    return normalize({ ...DEFAULT_LAYOUT, ...known })
   } catch {
     return DEFAULT_LAYOUT
   }

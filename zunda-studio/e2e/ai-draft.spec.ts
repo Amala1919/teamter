@@ -85,6 +85,8 @@ test.describe('投稿文と録画からの下書き', () => {
         ]
       }
     ])
+    // 録画を置いて選ぶとインスペクタに切り替わるので、チャットに戻る
+    await page.getByTestId('side-tab-chat').click()
     await page.getByTestId('open-draft').click()
     await page.getByTestId('draft-minutes').selectOption('3')
     await page.getByTestId('draft-start').click()

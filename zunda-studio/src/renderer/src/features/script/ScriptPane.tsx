@@ -47,7 +47,7 @@ export function ScriptPane({ onError }: ScriptPaneProps): React.JSX.Element {
 
   /** そのセリフを選んで、相方の返答を頼む(台本の下の操作欄が今の設定で作る)。 */
   const requestReply = (itemId: ItemId): void => {
-    setSelection([itemId])
+    setSelection([itemId], 'script')
     requestGenerate()
   }
 
@@ -216,7 +216,7 @@ export function ScriptPane({ onError }: ScriptPaneProps): React.JSX.Element {
                 isFirst={index === 0}
                 isLast={index === lines.length - 1}
                 onSelect={() => {
-                  setSelection([line.id])
+                  setSelection([line.id], 'script')
                   setPlayhead(line.startMs)
                 }}
                 onFocusHandled={() => setFocusItemId(null)}
@@ -233,11 +233,13 @@ export function ScriptPane({ onError }: ScriptPaneProps): React.JSX.Element {
                 onDelete={() => run([{ op: 'voice.delete', itemId: line.id }], 'セリフの削除')}
                 onRetry={() => retry(line.id)}
                 onContextMenu={(event) => {
-                  setSelection([line.id])
+                  setSelection([line.id], 'script')
                   const character = characters.find((candidate) => candidate.id === line.characterId)
                   const expressions = character?.portrait ? Object.values(character.portrait.expressions) : []
                   openContextMenu(event, [
                     { label: 'このセリフを再生', disabled: !line.synthesis, onSelect: () => void player.play(line.startMs, line.startMs + line.durationMs) },
+                    // 読み方・声の調整などは右の欄のインスペクタで直す
+                    { label: 'インスペクタで開く(読み方・声の調整)', onSelect: () => setSelection([line.id], 'other'), testId: 'menu-line-inspector' },
                     { label: '再生位置をここへ', onSelect: () => setPlayhead(line.startMs) },
                     'separator',
                     { label: 'このセリフへの返答を作る', shortcut: 'Ctrl+Shift+Enter', onSelect: () => requestReply(line.id), testId: 'menu-line-cohost' },

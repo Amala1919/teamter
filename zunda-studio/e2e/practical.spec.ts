@@ -37,7 +37,10 @@ test.describe('実用の機能(読み方・辞書・自動保存・SRT・相方�
     await expect(line.getByTestId('synthesis-status')).toContainText('合成済み', { timeout: 30_000 })
     const before = await durationOf(line)
 
-    await line.locator('.script__index').click()
+    // 台本の行を右クリック →「インスペクタで開く」で、読み方を直す欄を出す
+    await line.locator('.script__index').click({ button: 'right' })
+    await page.getByTestId('context-menu').getByTestId('menu-line-inspector').click()
+    await expect(page.getByTestId('side-tab-inspector')).toHaveAttribute('aria-selected', 'true')
     const reading = page.getByTestId('reading-input')
     await expect(reading).toHaveValue(/ナガイ/)
     await reading.fill("ズ'ン")

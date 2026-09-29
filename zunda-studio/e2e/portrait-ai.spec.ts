@@ -72,6 +72,8 @@ test.describe('立ち絵を AI でまとめて調整', () => {
     await page.keyboard.press('Control+y')
     await expect(page.locator('[data-item-type="portrait"]')).toHaveCount(1)
     await page.getByTestId('lane-lyr_bgm').click({ position: { x: 900, y: 10 } })
+    // 話し手の強調の設定は、右の欄のインスペクタのタブにある
+    await page.getByTestId('side-tab-inspector').click()
     await expect(page.getByTestId('speaker-dim')).toHaveValue('0.45')
     await expect(page.getByTestId('speaker-hop')).toBeChecked()
   })

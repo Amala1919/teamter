@@ -89,7 +89,8 @@ describe('録画からコマを取り出す(本物の ffmpeg)', () => {
     expect(red[1]).toBeLessThan(80)
     expect(green[1]).toBeGreaterThan(180)
     expect(green[0]).toBeLessThan(80)
-  })
+    // 本物の ffmpeg で動画を作って読むので、テストを並べて走らせると既定の5秒を超えることがある
+  }, 60_000)
 })
 
 describe('見せる画像の画質と範囲', () => {

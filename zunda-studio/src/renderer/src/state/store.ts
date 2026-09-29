@@ -39,6 +39,11 @@ interface EditorState {
   /** 自動保存の置き場所を分けるための、開いている間だけのキー。 */
   sessionKey: string
   selectedItemIds: ItemId[]
+  /**
+   * 選択がどこからされたか。台本の欄(script)で行を選んだときは、右の欄をインスペクタに切り替えない
+   * (チャットを見ながら台本を書くときに、欄が勝手に変わらないように)。
+   */
+  selectionSource: 'script' | 'other'
   playheadMs: Ms
   undoStack: HistoryEntry[]
   redoStack: HistoryEntry[]
@@ -49,7 +54,7 @@ interface EditorState {
   redo: () => void
 
   setPlayhead: (timeMs: Ms) => void
-  setSelection: (itemIds: ItemId[]) => void
+  setSelection: (itemIds: ItemId[], source?: 'script' | 'other') => void
 
   newProject: () => void
   openProject: () => Promise<void>
@@ -69,6 +74,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   dirty: false,
   sessionKey: newSessionKey(),
   selectedItemIds: [],
+  selectionSource: 'other',
   playheadMs: 0,
   undoStack: [],
   redoStack: [],
@@ -124,7 +130,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   setPlayhead: (timeMs) => set({ playheadMs: Math.max(0, Math.round(timeMs)) }),
-  setSelection: (itemIds) => set({ selectedItemIds: itemIds }),
+  setSelection: (itemIds, source = 'other') => set({ selectedItemIds: itemIds, selectionSource: source }),
 
   newProject: () => {
     discardAutosave(get().sessionKey)
