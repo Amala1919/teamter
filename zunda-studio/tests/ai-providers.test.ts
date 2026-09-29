@@ -137,6 +137,23 @@ describe('ClaudeCodeProvider', () => {
     )
   })
 
+  it('プランで使えないモデルは、CLI の理由を添えて別のモデルを選ぶよう案内する', async () => {
+    const error = await claude(fakeCliSettings(), envFor('credits'))
+      .generate('fable', { system: 's', turns: [{ role: 'user', content: 'u' }] })
+      .catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(AppError)
+    expect(error).toMatchObject({ code: 'AI_MODEL_UNAVAILABLE' })
+    expect((error as AppError).message).toContain('Fable 5.1 requires usage credits')
+  })
+
+  it('CLI が古くてオプションを知らなければ、更新を案内する', async () => {
+    const error = await claude(fakeCliSettings(), envFor('outdated'))
+      .generate('sonnet', { system: 's', turns: [{ role: 'user', content: 'u' }] })
+      .catch((caught: unknown) => caught)
+    expect(error).toMatchObject({ code: 'CLI_OUTDATED' })
+    expect((error as AppError).message).toContain("unknown option '--safe-mode'")
+  })
+
   it('時間内に応答しなければ打ち切る', async () => {
     const settings = fakeCliSettings({ ai: { providers: { 'claude-code': { timeoutMs: 500 } } } })
     const error = await expectAppError(

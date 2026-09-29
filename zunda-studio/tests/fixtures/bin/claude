@@ -121,6 +121,17 @@ switch (mode) {
     )
     process.exit(1)
     break
+  case 'credits':
+    // 本物の Claude Code が Fable を使用量クレジット無しで頼まれたときの応答
+    process.stdout.write(
+      JSON.stringify({ type: 'result', subtype: 'success', is_error: true, result: 'Fable 5.1 requires usage credits. Switch to another model to continue.' }) + '\n'
+    )
+    process.exit(1)
+    break
+  case 'outdated':
+    process.stderr.write("error: unknown option '--safe-mode'\n")
+    process.exit(1)
+    break
   case 'sleep':
     setTimeout(() => result({ result: reply }), 10_000)
     break
