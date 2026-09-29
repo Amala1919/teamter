@@ -36,7 +36,12 @@
   "chat":       { /* 10章 */ },
   "ai":         { /* 11章 */ },
   "editing": {
-    "rippleOnVoiceChange": true,   // セリフの挿入・削除で、後ろのセリフをずらす(合成で尺が変わってもずらさない)
+    // 編集の自動処理(設定の「編集」タブで選ぶ)。素材は独立が基本で、合成で尺が変わってもほかは動かさない
+    "rippleOnVoiceChange": true,   // セリフを間に足したら、後ろのセリフをずらして場所を空ける
+    "closeGapOnVoiceDelete": false,// 省略可(既定 false)。セリフを消したら後ろのセリフを詰める
+    "groupFollowsVoice": true,     // 省略可(既定 true)。グループのセリフの尺が変わったら、グループの後ろのものをずらす
+    "autoPortraitTrack": true,     // 省略可(既定 true)。立ち絵を付けたら動画の最後までの表示の区間を置く
+    "avoidOverlap": true,          // 省略可(既定 true)。同じレイヤーで重なったら空いているレイヤーへ振り分ける
     "defaultGapMs": 200,           // セリフを続けて追加するときの間
     "duckVolume": 0.35,            // セリフの間、duckable な音声をこの倍率まで下げる
     "duckFadeMs": 200              // 下げる・戻すのにかける時間

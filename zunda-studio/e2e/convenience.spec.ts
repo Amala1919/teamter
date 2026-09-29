@@ -214,4 +214,46 @@ test.describe('使い勝手の機能', () => {
       .not.toContain('– 0:00.')
     expect(await others()).toEqual(othersBefore)
   })
+
+  test('設定の「編集」タブで、セリフを消したときに詰めるか・インスペクタへ切り替えるかを選べる', async ({ page, request }) => {
+    try {
+      await openFresh(page)
+      await addLines(page, 'ずんだもん:いちぎょうめ\n四国めたん:にぎょうめ\nずんだもん:さんぎょうめ', 3)
+      const third = async (): Promise<string> => {
+        const title = (await page.locator('[data-item-type="voice"]').evaluateAll((elements) => elements.map((element) => element.getAttribute('title') ?? ''))).find((text) => text.startsWith('さんぎょうめ')) ?? ''
+        return title.split('\n')[1]!.split(' – ')[0]!
+      }
+      const before = await third()
+      const deleteSecond = async (): Promise<void> => {
+        await page.locator('.script__index').nth(1).click({ button: 'right' })
+        await page.getByTestId('context-menu').getByTestId('menu-line-delete').click()
+        await expect(page.getByTestId('script-line')).toHaveCount(2)
+      }
+
+      // 既定では詰めない
+      await deleteSecond()
+      expect(await third()).toBe(before)
+      await page.getByRole('button', { name: '元に戻す' }).click()
+      await expect(page.getByTestId('script-line')).toHaveCount(3)
+
+      // 設定で「消したら詰める」にすると詰める
+      await page.getByTestId('open-settings').click()
+      await page.getByTestId('settings-tab-editing').click()
+      const closeGap = page.getByTestId('editing-closeGapOnVoiceDelete')
+      await expect(closeGap).not.toBeChecked()
+      await closeGap.check()
+      await expect(page.getByTestId('editing-groupFollowsVoice')).toBeChecked()
+      // 素材を選んでもインスペクタへ切り替えない
+      await page.getByTestId('editing-autoInspectorTab').uncheck()
+      await page.keyboard.press('Escape')
+      await deleteSecond()
+      await expect.poll(third).not.toBe(before)
+
+      await page.getByTestId('side-tab-chat').click()
+      await page.getByTestId('add-caption').click()
+      await expect(page.getByTestId('side-tab-chat')).toHaveAttribute('aria-selected', 'true')
+    } finally {
+      await updateSettings(request, { editing: { closeGapOnVoiceDelete: false }, ui: { autoInspectorTab: true } })
+    }
+  })
 })

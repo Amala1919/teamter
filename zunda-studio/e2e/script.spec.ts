@@ -67,7 +67,7 @@ test.describe('台本と音声合成', () => {
     expect(await secondsOf(page)).toBe(stoppedAt)
   })
 
-  test('セリフを消すと後ろが詰まり、元に戻すと元の位置に戻る', async ({ page }) => {
+  test('セリフを消しても後ろは詰まらず(既定)、元に戻すと元に戻る', async ({ page }) => {
     await openFresh(page)
     await page.getByRole('button', { name: /ずんだもん\(あなた\)/ }).click()
     await page.getByTestId('open-bulk').click()
@@ -81,8 +81,9 @@ test.describe('台本と音声合成', () => {
 
     await lines.nth(1).getByTestId('delete-line').click()
     await expect(lines).toHaveCount(2)
-    // 3行目が2行目のあった位置に詰まる
-    await expect(lines.nth(1).locator('.script__time')).toHaveText(new RegExp(`^${(secondStart ?? '').split(' ')[0]}`))
+    // 素材は独立が基本。3行目は置いた場所のまま(詰めるかは設定の「編集」で選べる)
+    await expect(lines.nth(1).locator('.script__time')).toHaveText(thirdStart ?? '')
+    expect(secondStart).not.toBe(thirdStart)
 
     await page.getByRole('button', { name: '元に戻す' }).click()
     await expect(lines).toHaveCount(3)

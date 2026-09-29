@@ -7,6 +7,7 @@ import { createEmptyProject, DEFAULT_SUBTITLE_STYLE_ID } from '@shared/project/f
 import type { ItemId, Ms, Project } from '@shared/project/types'
 
 import { api, AppError } from '../api'
+import { useSettingsStore } from './settings'
 import { projectLook } from './subtitle-defaults'
 
 /**
@@ -136,7 +137,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   newProject: () => {
     discardAutosave(get().sessionKey)
     set({
-      project: withSubtitleDefaults(createEmptyProject()),
+      project: withEditingDefaults(withSubtitleDefaults(createEmptyProject())),
       filePath: null,
       dirty: false,
       sessionKey: newSessionKey(),
@@ -211,6 +212,13 @@ function withSubtitleDefaults(project: Project): Project {
   const standard = project.subtitleStyles[DEFAULT_SUBTITLE_STYLE_ID]
   if (!look || !standard) return project
   return { ...project, subtitleStyles: { ...project.subtitleStyles, [DEFAULT_SUBTITLE_STYLE_ID]: { ...standard, ...structuredClone(look) } } }
+}
+
+/** 新しいプロジェクトの編集の自動処理を、設定の「編集」タブで選んだものにする。 */
+function withEditingDefaults(project: Project): Project {
+  const defaults = useSettingsStore.getState().settings?.editing
+  if (!defaults) return project
+  return { ...project, editing: { ...project.editing, ...defaults } }
 }
 
 function newSessionKey(): string {

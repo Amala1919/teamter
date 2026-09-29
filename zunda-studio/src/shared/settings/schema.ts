@@ -147,6 +147,26 @@ const subtitleSchema = z
   })
   .prefault({})
 
+/** 編集の自動処理の、新しいプロジェクトでの既定(設定の「編集」タブ。開いているプロジェクトにも同時に反映する)。 */
+const editingSchema = z
+  .object({
+    rippleOnVoiceChange: z.boolean().default(true),
+    closeGapOnVoiceDelete: z.boolean().default(false),
+    groupFollowsVoice: z.boolean().default(true),
+    autoPortraitTrack: z.boolean().default(true),
+    avoidOverlap: z.boolean().default(true),
+    defaultGapMs: z.number().int().min(0).max(10_000).default(200)
+  })
+  .prefault({})
+
+/** 画面の自動の動き。 */
+const uiSchema = z
+  .object({
+    /** タイムラインやプレビューで素材を選んだら、右の欄をインスペクタに切り替える。 */
+    autoInspectorTab: z.boolean().default(true)
+  })
+  .prefault({})
+
 export const settingsSchema = z.object({
   version: z.literal(1).default(1),
   ai: aiSchema,
@@ -157,6 +177,8 @@ export const settingsSchema = z.object({
   live: liveSchema,
   export: exportSchema,
   subtitle: subtitleSchema,
+  editing: editingSchema,
+  ui: uiSchema,
   recentProjects: z.array(z.string()).default([])
 })
 

@@ -67,6 +67,9 @@ export interface ProjectSetBriefing {
 export interface ProjectSetEditing {
   op: 'project.setEditing'
   rippleOnVoiceChange?: boolean
+  closeGapOnVoiceDelete?: boolean
+  groupFollowsVoice?: boolean
+  autoPortraitTrack?: boolean
   defaultGapMs?: Ms
   duckVolume?: number
   duckFadeMs?: Ms
