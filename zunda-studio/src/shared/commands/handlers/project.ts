@@ -1,6 +1,6 @@
 import { validateBriefing } from '../../ai/briefing'
 import { isSafeModelId } from '../../ai/types'
-import type { Layer } from '../../project/types'
+import { ZOOM_METHODS, type Layer } from '../../project/types'
 import { normalizeChapters } from '../../project/chapters'
 import { TIMELINE_COLOR } from '../../project/timeline-colors'
 import { fail, insertLayer, requireLayer, refreshSubtitleLines, type HandlerTable } from '../env'
@@ -45,6 +45,20 @@ export const projectHandlers: ProjectHandlers = {
     if (command.closeGapOnVoiceDelete !== undefined) draft.editing.closeGapOnVoiceDelete = command.closeGapOnVoiceDelete
     if (command.groupFollowsVoice !== undefined) draft.editing.groupFollowsVoice = command.groupFollowsVoice
     if (command.autoPortraitTrack !== undefined) draft.editing.autoPortraitTrack = command.autoPortraitTrack
+    for (const key of ['cutFadeInMs', 'cutFadeOutMs'] as const) {
+      const value = command[key]
+      if (value === undefined) continue
+      if (!(value >= 0 && value <= 5000)) fail(command.op, 'フェードの長さは0〜5秒にしてください')
+      draft.editing[key] = Math.round(value)
+    }
+    if (command.zoomMethod !== undefined) {
+      if (!ZOOM_METHODS.includes(command.zoomMethod)) fail(command.op, `寄り方の指定が不正です: ${command.zoomMethod}`)
+      draft.editing.zoomMethod = command.zoomMethod
+    }
+    if (command.zoomOnStill !== undefined) {
+      if (!['off', 'overwrite', 'insert'].includes(command.zoomOnStill)) fail(command.op, `静止画の指定が不正です: ${command.zoomOnStill}`)
+      draft.editing.zoomOnStill = command.zoomOnStill
+    }
     if (command.defaultGapMs !== undefined) {
       if (command.defaultGapMs < 0) fail(command.op, '間は0以上にしてください')
       draft.editing.defaultGapMs = Math.round(command.defaultGapMs)

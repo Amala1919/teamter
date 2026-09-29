@@ -53,12 +53,19 @@ export function speechIntervals(project: Project): [Ms, Ms][] {
   return merged
 }
 
+/** 音のフェードの長さ。動画は映像のフェード(エフェクト)に音も合わせる(切った所で音がぶつっと切れないように)。 */
+function fadeLengths(item: SoundItem): { inMs: Ms; outMs: Ms } {
+  if (item.type === 'audio') return { inMs: item.fadeInMs, outMs: item.fadeOutMs }
+  const fade = item.effects.find((effect) => effect.type === 'fade')
+  return fade && fade.type === 'fade' ? { inMs: fade.inMs, outMs: fade.outMs } : { inMs: 0, outMs: 0 }
+}
+
 function fadeFactor(item: SoundItem, relMs: Ms): number {
-  if (item.type !== 'audio') return 1
+  const { inMs, outMs } = fadeLengths(item)
   let factor = 1
-  if (item.fadeInMs > 0 && relMs < item.fadeInMs) factor = Math.min(factor, relMs / item.fadeInMs)
+  if (inMs > 0 && relMs < inMs) factor = Math.min(factor, relMs / inMs)
   const untilEnd = item.durationMs - relMs
-  if (item.fadeOutMs > 0 && untilEnd < item.fadeOutMs) factor = Math.min(factor, untilEnd / item.fadeOutMs)
+  if (outMs > 0 && untilEnd < outMs) factor = Math.min(factor, untilEnd / outMs)
   return Math.max(0, Math.min(1, factor))
 }
 
@@ -78,10 +85,9 @@ function duckCoverage(intervals: readonly [Ms, Ms][], fadeMs: Ms, timeMs: Ms): n
 export function gainEnvelope(project: Project, item: SoundItem): GainPoint[] {
   const duration = item.durationMs
   const times = new Set<Ms>([0, duration])
-  if (item.type === 'audio') {
-    if (item.fadeInMs > 0) times.add(Math.min(duration, item.fadeInMs))
-    if (item.fadeOutMs > 0) times.add(Math.max(0, duration - item.fadeOutMs))
-  }
+  const { inMs, outMs } = fadeLengths(item)
+  if (inMs > 0) times.add(Math.min(duration, inMs))
+  if (outMs > 0) times.add(Math.max(0, duration - outMs))
   const duck = item.type === 'audio' && item.duckable && project.editing.duckVolume < 1
   const intervals = duck ? speechIntervals(project) : []
   const fade = project.editing.duckFadeMs

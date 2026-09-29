@@ -148,3 +148,27 @@ export function requireFinite(value: number, op: CommandOp, label: string): numb
   if (!Number.isFinite(value)) fail(op, `${label}が数値ではありません`)
   return value
 }
+
+/** 動画を切ったとき(分けた・端を切った)に付けるフェードの既定の長さ。 */
+export const DEFAULT_CUT_FADE_MS = 300
+
+/**
+ * 動画の切った所をフェードさせる(設定の「編集」で長さを選ぶ。0 ならしない)。
+ * 既にフェードがあれば、その側が 0 のときだけ付ける(利用者が決めた長さは変えない)。静止画には付けない。
+ */
+export function fadeCutEdge(draft: Project, item: Item, edge: 'in' | 'out'): void {
+  if (item.type !== 'video' || item.freeze) return
+  const length = edge === 'in' ? (draft.editing.cutFadeInMs ?? DEFAULT_CUT_FADE_MS) : (draft.editing.cutFadeOutMs ?? DEFAULT_CUT_FADE_MS)
+  if (length <= 0) return
+  // 短い動画でも、フェードが長さの半分を超えないようにする。
+  const ms = Math.min(length, Math.floor(item.durationMs / 2))
+  if (ms <= 0) return
+  const fade = item.effects.find((effect) => effect.type === 'fade')
+  if (!fade) {
+    item.effects.push({ type: 'fade', inMs: edge === 'in' ? ms : 0, outMs: edge === 'out' ? ms : 0 })
+    return
+  }
+  if (fade.type !== 'fade') return
+  if (edge === 'in' && fade.inMs === 0) fade.inMs = ms
+  if (edge === 'out' && fade.outMs === 0) fade.outMs = ms
+}

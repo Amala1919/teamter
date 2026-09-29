@@ -113,8 +113,48 @@ test.describe('素材・タイムライン・ズーム', () => {
     await page.getByTestId('import-preview-quality').selectOption('auto')
   })
 
-  test('倍速にした区間の前から再生しても、プレビューが点滅しない', async ({ page, request }) => {
+  test('ズーム枠を置くと、その時点のコマを静止画にしてズームとグループにする(切り替えもできる)', async ({ page, request }) => {
     await openFresh(page)
+    await importFile(page, request, video)
+    const stage = page.getByTestId('preview-canvas')
+    await expect.poll(() => countColor(stage, RED), { timeout: 30_000 }).toBeGreaterThan(QUARTER * 1.6)
+    await page.getByTestId('timeline-ruler').click({ position: { x: 60, y: 5 } })
+
+    await expect(page.getByTestId('zoom-on-still')).toBeChecked()
+    await page.getByTestId('add-zoom').click()
+    const zoom = page.locator('[data-item-type="zoom"]')
+    await expect(zoom).toHaveCount(1)
+    const still = page.locator('[data-item-type="video"]', { hasText: '静止画' })
+    await expect(still).toHaveCount(1)
+    const group = await zoom.getAttribute('data-group-id')
+    expect(group).toBeTruthy()
+    await expect(still).toHaveAttribute('data-group-id', group!)
+    // 1回の取り消しで両方戻る
+    await page.getByRole('button', { name: '元に戻す' }).click()
+    await expect(zoom).toHaveCount(0)
+    await expect(still).toHaveCount(0)
+
+    // 切るとズームだけ
+    await page.getByTestId('zoom-on-still').uncheck()
+    await page.getByTestId('add-zoom').click()
+    await expect(zoom).toHaveCount(1)
+    await expect(still).toHaveCount(0)
+    await page.getByTestId('zoom-on-still').check()
+  })
+
+  test('倍速にした区間の前から再生しても、プレビューが点滅しない', async ({ page, request }) => {
+    // 切った所のフェード(わざと暗くなる)は、点滅と見分けがつかないので切っておく
+    await openFresh(page)
+    await page.getByTestId('open-settings').click()
+    await page.getByTestId('settings-tab-editing').click()
+    for (const id of ['editing-cutFadeInMs', 'editing-cutFadeOutMs']) {
+      await page.getByTestId(id).fill('0')
+      await page.getByTestId(id).press('Enter')
+      await expect(page.getByTestId(id)).toHaveValue('0')
+    }
+    await page.keyboard.press('Escape')
+    // アプリの既定は元に戻しておく(ほかのテストの新しいプロジェクトに効かないように)
+    await updateSettings(request, { editing: { cutFadeInMs: 300, cutFadeOutMs: 300 } })
     await importFile(page, request, video)
     const stage = page.getByTestId('preview-canvas')
     await expect.poll(() => countColor(stage, RED), { timeout: 30_000 }).toBeGreaterThan(QUARTER * 1.6)

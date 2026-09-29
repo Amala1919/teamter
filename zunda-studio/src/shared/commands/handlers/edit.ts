@@ -2,7 +2,7 @@ import { DEFAULT_LAYER_IDS } from '../../project/factory'
 import type { Effect, Item, Ms, Project, VideoItem } from '../../project/types'
 import { TIMELINE_COLOR } from '../../project/timeline-colors'
 import { removeEmptyLayers, resolveOverlaps } from '../arrange'
-import { fail, findMutableItem, itemEnd, layerOrDefault, requireFinite, shiftItemsFrom, type HandlerTable } from '../env'
+import { fadeCutEdge, fail, findMutableItem, itemEnd, layerOrDefault, requireFinite, shiftItemsFrom, type HandlerTable } from '../env'
 import type { CommandOp } from '../types'
 import { validateEffect } from './item'
 import { validateTransform, validateVolume } from './media'
@@ -124,6 +124,9 @@ export const editHandlers: EditHandlers = {
     const second = splitItem(draft, item, at, env.ctx.newId('itm'))
     // 動画の最後まで伸びるのは後半だけ(前半は分けた位置で終わる)。
     if (item.type === 'portrait') delete item.untilEnd
+    // 動画を切った所は、前半を消えていくように、後半を現れるようにする(設定で切れる)。
+    fadeCutEdge(draft, item, 'out')
+    fadeCutEdge(draft, second, 'in')
     if (command.tempId) env.resolvedIds[command.tempId] = second.id
   },
 

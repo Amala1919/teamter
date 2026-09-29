@@ -42,6 +42,10 @@
     "groupFollowsVoice": true,     // 省略可(既定 true)。グループのセリフの尺が変わったら、グループの後ろのものをずらす
     "autoPortraitTrack": true,     // 省略可(既定 true)。立ち絵を付けたら動画の最後までの表示の区間を置く
     "avoidOverlap": true,          // 省略可(既定 true)。同じレイヤーで重なったら空いているレイヤーへ振り分ける
+    "cutFadeInMs": 300,            // 省略可(既定 300)。動画を分けた・端を切ったとき、切った後の始まりをフェードイン(0 ならしない)
+    "cutFadeOutMs": 300,           // 省略可(既定 300)。切る前の終わりをフェードアウト。動画の音もフェードに合わせる
+    "zoomMethod": "smooth",        // 省略可。ズームを置くときの既定の寄り方
+    "zoomOnStill": "overwrite",    // 省略可(既定 overwrite)。ズームを置くとき、その時点のコマを静止画にしてズームとグループにする(off / overwrite / insert)
     "defaultGapMs": 200,           // セリフを続けて追加するときの間
     "duckVolume": 0.35,            // セリフの間、duckable な音声をこの倍率まで下げる
     "duckFadeMs": 200              // 下げる・戻すのにかける時間

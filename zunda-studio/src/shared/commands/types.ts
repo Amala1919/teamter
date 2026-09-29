@@ -70,6 +70,10 @@ export interface ProjectSetEditing {
   closeGapOnVoiceDelete?: boolean
   groupFollowsVoice?: boolean
   autoPortraitTrack?: boolean
+  cutFadeInMs?: Ms
+  cutFadeOutMs?: Ms
+  zoomMethod?: ZoomMethod
+  zoomOnStill?: 'off' | 'overwrite' | 'insert'
   defaultGapMs?: Ms
   duckVolume?: number
   duckFadeMs?: Ms

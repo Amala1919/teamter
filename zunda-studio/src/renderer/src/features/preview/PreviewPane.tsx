@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { findItem, isVoiceItem, itemsAt, projectDurationMs } from '@shared/project/queries'
+import { zoomCommands } from '@shared/commands/zoom-still'
 import { renderFrame } from '@shared/render/compositor'
 import type { PsdManifest } from '@shared/psd/types'
 import type { Ctx2D } from '@shared/render/types'
@@ -14,6 +15,7 @@ import { player, togglePlayback, usePlaybackStore } from '../../playback/player'
 import { browserResources, useResourceStore } from '../../render/browser-resources'
 import { useMediaStore } from '../../state/media'
 import { hasClipboard, pasteAt, splitAtPlayhead } from '../../state/edit-actions'
+import { changeEditing } from '../../state/editing'
 import { saveFrameImage } from '../../state/snapshot'
 import { deleteSelection, useEditorStore } from '../../state/store'
 import { openContextMenu, type MenuEntry } from '../../ui/ContextMenu'
@@ -115,9 +117,11 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
   const building = Object.values(mediaSources).find((source) => source.state === 'building')
   const failed = Object.values(mediaSources).find((source) => source.state === 'error')
 
+  const zoomOnStill = project.editing.zoomOnStill ?? 'overwrite'
+
   const addZoom = (): void => {
     const result = dispatch(
-      [{ op: 'zoom.insert', atMs: playheadMs, durationMs: DEFAULT_ZOOM_MS, region: defaultRegion(project.canvas), tempId: 'zoom' }],
+      zoomCommands(project, playheadMs, DEFAULT_ZOOM_MS, defaultRegion(project.canvas)),
       'ズーム枠の追加'
     )
     if (!result.ok) {
@@ -268,6 +272,15 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
         <button type="button" className="button--small" onClick={addZoom} data-testid="add-zoom" title="再生位置にズーム枠を置く">
           ズーム枠を置く
         </button>
+        <label className="preview__zoomCheck" title="ズームを置くとき、その時点の動画のコマを静止画にして、ズームとグループにする(設定の「編集」で置き換え方も選べます)">
+          <input
+            type="checkbox"
+            checked={zoomOnStill !== 'off'}
+            onChange={(event) => report(changeEditing({ zoomOnStill: event.target.checked ? 'overwrite' : 'off' }))}
+            data-testid="zoom-on-still"
+          />
+          静止画で
+        </label>
         {zoomItem && (
           <label className="preview__zoomCheck">
             <input

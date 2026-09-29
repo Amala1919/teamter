@@ -1,3 +1,4 @@
+import { zoomCommands } from '@shared/commands/zoom-still'
 import type { Command } from '@shared/commands/types'
 import { itemEndMs } from '@shared/project/queries'
 import type { Item, Layer, Ms, Project } from '@shared/project/types'
@@ -432,7 +433,8 @@ export function insertZoom(project: Project, atMs: Ms, durationMs: Ms, center?: 
   const cx = center?.x ?? project.canvas.width / 2
   const cy = center?.y ?? project.canvas.height / 2
   const region = clampRegion(project.canvas, { x: cx - width / 2, y: cy - height / 2, width })
-  const result = state().dispatch([{ op: 'zoom.insert', atMs, durationMs, region, tempId: 'zoom' }], 'ズーム枠の追加')
+  // 設定によっては、その時点の動画のコマを静止画にしてズームとグループにする。
+  const result = state().dispatch(zoomCommands(project, atMs, durationMs, region), 'ズーム枠の追加')
   if (!result.ok) return result.message
   if (result.resolvedIds['zoom']) {
     state().setSelection([result.resolvedIds['zoom']])

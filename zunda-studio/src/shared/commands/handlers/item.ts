@@ -1,5 +1,5 @@
 import type { Effect, Project } from '../../project/types'
-import { fail, findMutableItem, requireFinite, requireLayer, type HandlerTable } from '../env'
+import { fadeCutEdge, fail, findMutableItem, requireFinite, requireLayer, type HandlerTable } from '../env'
 import type { CommandOp } from '../types'
 import { COLOR_PATTERN, validateTransform, validateVolume } from './media'
 
@@ -112,9 +112,14 @@ export const itemHandlers: ItemHandlers = {
       item.inMs = inMs
       item.outMs = outMs
     }
+    const cutStart = start !== item.startMs
+    const cutEnd = end !== item.startMs + item.durationMs
     item.startMs = start
     item.durationMs = end - start
     if (item.type === 'portrait' && command.endMs !== undefined) delete item.untilEnd
+    // 動画の端を切ったら、切った側をフェードさせる(設定で切れる)。
+    if (cutStart) fadeCutEdge(draft, item, 'in')
+    if (cutEnd) fadeCutEdge(draft, item, 'out')
   },
 
   'item.setTransform': (draft, command, env) => {
