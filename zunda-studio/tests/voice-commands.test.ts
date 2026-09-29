@@ -26,16 +26,17 @@ function script(): { project: Project; ids: string[]; characterId: string } {
     { op: 'character.create', name: 'ずんだもん', engineId: 'voicevox', speakerId: 3, speakerName: 'ずんだもん' }
   ])
   const characterId = Object.keys(project.characters)[0]!
-  project = apply(project, [
-    { op: 'voice.insert', characterId, text: 'いちぎょうめ', atMs: 0, tempId: 'a' },
-    { op: 'voice.insert', characterId, text: 'にぎょうめ', afterItemId: 'a', tempId: 'b' },
-    { op: 'voice.insert', characterId, text: 'さんぎょうめ', afterItemId: 'b', tempId: 'c' }
-  ])
-  // 合成結果を反映して、各行の尺を 1000ms にそろえる
-  for (const line of voiceItemsInOrder(project)) {
-    project = apply(project, [
-      { op: 'voice.applySynthesis', itemId: line.id, expectedText: line.text, synthesis: synthesis(1000) }
-    ])
+  // 1行ずつ足して合成し(各 1000ms)、次の行をその後ろ(間 200ms)に足す
+  let previous: string | null = null
+  for (const text of ['いちぎょうめ', 'にぎょうめ', 'さんぎょうめ']) {
+    const result = applyCommands(
+      project,
+      [previous === null ? { op: 'voice.insert', characterId, text, atMs: 0, tempId: 't' } : { op: 'voice.insert', characterId, text, afterItemId: previous, tempId: 't' }],
+      ctx
+    )
+    const id = result.resolvedIds['t']!
+    project = apply(result.project, [{ op: 'voice.applySynthesis', itemId: id, expectedText: text, synthesis: synthesis(1000) }])
+    previous = id
   }
   const bgm: AudioItem = {
     id: 'bgm',
@@ -110,17 +111,14 @@ describe('セリフの並びとリップル編集', () => {
     expect(new Set(voiceItemsInOrder(next).map((line) => line.layerId)).size).toBe(1)
   })
 
-  it('足したばかりのセリフの最初の合成(見積もり→本当の尺)だけは、後ろのセリフを合わせる', () => {
-    const { project, ids, characterId } = script()
-    const added = apply(project, [{ op: 'voice.insert', characterId, text: 'あいだ', afterItemId: ids[0]!, tempId: 'n' }])
-    const line = voiceItemsInOrder(added)[1]!
-    expect(line.durationEstimated).toBe(true)
-    const next = apply(added, [{ op: 'voice.applySynthesis', itemId: line.id, expectedText: 'あいだ', synthesis: synthesis(line.durationMs + 700) }])
-    const lines = voiceItemsInOrder(next)
-    expect(lines[1]!.durationEstimated).toBeUndefined()
-    // 後ろのセリフは、見積もりとの差の分だけずれて、間 200ms が保たれる
-    expect(lines[2]!.startMs).toBe(lines[1]!.startMs + lines[1]!.durationMs + 200)
-    expect(next.items.find((item) => item.id === 'bgm')!.startMs).toBe(1500)
+  it('足したばかりのセリフの最初の合成でも、後ろのセリフは動かさない', () => {
+    const { project, characterId } = script()
+    const added = apply(project, [{ op: 'voice.insert', characterId, text: 'あいだ', atMs: 10_000, tempId: 'n' }])
+    const line = added.items.find((item) => item.type === 'voice' && item.startMs === 10_000)!
+    const later = apply(added, [{ op: 'voice.insert', characterId, text: 'うしろ', atMs: 12_000 }])
+    const next = apply(later, [{ op: 'voice.applySynthesis', itemId: line.id, expectedText: 'あいだ', synthesis: synthesis(5000) }])
+    expect(next.items.find((item) => item.type === 'voice' && item.startMs === 12_000)).toBeDefined()
+    expect(starts(next).slice(0, 3)).toEqual(starts(project))
   })
 
   it('グループにしたものは、グループのセリフの尺が変わると後ろのものだけ合わせてずれる', () => {

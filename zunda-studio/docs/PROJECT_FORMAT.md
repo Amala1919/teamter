@@ -36,7 +36,7 @@
   "chat":       { /* 10章 */ },
   "ai":         { /* 11章 */ },
   "editing": {
-    "rippleOnVoiceChange": true,   // セリフの挿入・削除と、足したばかりのセリフの最初の合成で、後ろのセリフをずらす(編集で尺が変わってもずらさない)
+    "rippleOnVoiceChange": true,   // セリフの挿入・削除で、後ろのセリフをずらす(合成で尺が変わってもずらさない)
     "defaultGapMs": 200,           // セリフを続けて追加するときの間
     "duckVolume": 0.35,            // セリフの間、duckable な音声をこの倍率まで下げる
     "duckFadeMs": 200              // 下げる・戻すのにかける時間
