@@ -88,6 +88,31 @@ test.describe('素材・タイムライン・ズーム', () => {
     await page.getByTestId('play-toggle').click()
   })
 
+  test('読み込む前にプレビュー画質を選べ、読み込んだ後も動画ごとに変えられる(書き出しには関係しない)', async ({ page, request }) => {
+    await openFresh(page)
+    const header = page.getByTestId('import-preview-quality')
+    await header.selectOption('360')
+    await importFile(page, request, video)
+    const stage = page.getByTestId('preview-canvas')
+    await expect.poll(() => countColor(stage, RED), { timeout: 30_000 }).toBeGreaterThan(QUARTER * 1.6)
+    // 読み込んだ動画には選んだ画質が付く
+    const quality = page.getByTestId('inspector-preview-quality')
+    await expect(quality).toHaveValue('360')
+
+    // インスペクタで元の画質に変えると、プレビュー用の動画を作り直して映す
+    await quality.selectOption('original')
+    await expect(quality).toHaveValue('original')
+    await expect.poll(() => countColor(stage, RED), { timeout: 30_000 }).toBeGreaterThan(QUARTER * 1.6)
+    await expect(page.getByTestId('proxy-status')).toBeHidden({ timeout: 30_000 })
+    await page.getByRole('button', { name: '元に戻す' }).click()
+    await expect(quality).toHaveValue('360')
+
+    // 選んだ既定の画質は、開き直しても残る
+    await page.goto('/')
+    await expect(page.getByTestId('import-preview-quality')).toHaveValue('360')
+    await page.getByTestId('import-preview-quality').selectOption('auto')
+  })
+
   test('倍速にした区間の前から再生しても、プレビューが点滅しない', async ({ page, request }) => {
     await openFresh(page)
     await importFile(page, request, video)

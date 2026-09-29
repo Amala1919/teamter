@@ -14,6 +14,7 @@ import {
   AudioInspector,
   EffectsInspector,
   LicenseInspector,
+  PreviewQualityInspector,
   ShapeInspector,
   TextInspector,
   TimingInspector,
@@ -99,6 +100,7 @@ export function InspectorPane({ onError }: { onError: (message: string) => void 
                 onCommit={(rate) => run([{ op: 'item.setSpeed', itemId: item.id, rate }], '速度の変更')}
                 testId="inspector-speed"
               />
+              <PreviewQualityInspector project={project} item={item} run={run} />
             </section>
           )}
           {'transform' in item && <TransformInspector item={item} run={run} />}

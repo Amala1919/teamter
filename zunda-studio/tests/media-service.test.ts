@@ -7,7 +7,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 
 import { EventBus } from '../src/main/core/events'
 import { FfmpegLocator } from '../src/main/services/media/ffmpeg'
-import { interpretProbe, MediaService } from '../src/main/services/media/media-service'
+import { interpretProbe, MediaService, proxyQuality } from '../src/main/services/media/media-service'
 import { defaultSettings, type AppSettings } from '@shared/settings/schema'
 
 import { makeTestAudio, makeTestImage, makeTestVideo } from './fixtures/media'
@@ -69,6 +69,20 @@ describe('MediaService(本物の ffmpeg)', () => {
     const second = await service.proxy(video, 'webm')
     expect(second).toBe(first)
     expect((await stat(second)).mtimeMs).toBe(mtimeMs)
+  })
+
+  it('プレビューの高さを選ぶと、その高さ(0 は元の大きさ)で別に作る', async () => {
+    const tall = makeTestVideo(directory, { name: 'tall.mp4', seconds: 1, width: 640, height: 360 })
+    const standard = await service.proxy(tall, 'mp4')
+    const small = await service.proxy(tall, 'mp4', 180)
+    const original = await service.proxy(tall, 'mp4', 0)
+    expect(new Set([standard, small, original]).size).toBe(3)
+    expect(await service.probe(small)).toMatchObject({ width: 320, height: 180 })
+    expect(await service.probe(original)).toMatchObject({ width: 640, height: 360 })
+    // 元より大きい高さを選んでも、元の大きさを超えない
+    expect(await service.probe(await service.proxy(tall, 'mp4', 1080))).toMatchObject({ height: 360 })
+    expect(proxyQuality(0).crf).toBeLessThan(proxyQuality(540).crf)
+    expect(proxyQuality(720).crf).toBeLessThan(proxyQuality(360).crf)
   })
 
   it('同時に頼まれても、プロキシは1回だけ作る', async () => {

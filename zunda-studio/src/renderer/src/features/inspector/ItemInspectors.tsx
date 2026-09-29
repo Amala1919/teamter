@@ -2,11 +2,11 @@ import type { Command } from '@shared/commands/types'
 import { FREE_SOURCES, freeSource, licenseFromSource } from '@shared/media/free-sources'
 import { DEFAULT_LAYER_IDS } from '@shared/project/factory'
 import { timelineColor } from '@shared/project/timeline-colors'
-import { ZOOM_METHODS, type AssetLicense, type AudioItem, type Effect, type Item, type Project, type ShapeItem, type TextItem, type Transform, type VideoItem, type ZoomItem } from '@shared/project/types'
+import { PREVIEW_RESOLUTIONS, ZOOM_METHODS, type AssetLicense, type AudioItem, type Effect, type Item, type Project, type ShapeItem, type TextItem, type Transform, type VideoItem, type ZoomItem } from '@shared/project/types'
 import { defaultEffect, EFFECT_LABELS } from '@shared/render/effects'
 import { defaultZoomTiming, ZOOM_METHOD_LABELS } from '@shared/render/zoom'
 
-import { assetName } from '../../state/media'
+import { assetName, parsePreview, PREVIEW_LABELS, useMediaStore } from '../../state/media'
 import { NumberField } from '../../ui/NumberField'
 import { CREDIT_LABELS } from '../media/FreeSourcesDialog'
 
@@ -394,6 +394,41 @@ function EffectFields({ effect, onChange }: { effect: Effect; onChange: (effect:
 }
 
 // ---------------------------------------------------------------- 素材の権利
+
+/** 動画のプレビューの画質(書き出しには関係しない)。 */
+export function PreviewQualityInspector({ project, item, run }: { project: Project; item: VideoItem; run: Run }): React.JSX.Element | null {
+  const asset = project.assets[item.assetId]
+  const building = useMediaStore((state) => {
+    if (asset?.type !== 'video') return null
+    const source = state.sources[`${asset.preview ?? 'auto'}|${asset.path.absolute}`]
+    return source?.state === 'building' ? source.ratio : null
+  })
+  if (asset?.type !== 'video') return null
+  return (
+    <label className="field">
+      <span className="field__label">プレビューの画質(元 {asset.width}×{asset.height})</span>
+      <select
+        value={String(asset.preview ?? 'auto')}
+        onChange={(event) => {
+          const preview = parsePreview(event.target.value)
+          run([{ op: 'asset.setPreview', assetId: item.assetId, preview }], 'プレビューの画質の変更')
+        }}
+        data-testid="inspector-preview-quality"
+      >
+        {PREVIEW_RESOLUTIONS.map((value) => (
+          <option key={value} value={String(value)}>
+            {PREVIEW_LABELS[String(value)]}
+          </option>
+        ))}
+      </select>
+      <span className="note">
+        {building !== null
+          ? `プレビュー用の動画を作っています… ${Math.round(building * 100)}%`
+          : '書き出しは常に元の画質で行います。高くするとプレビューはきれいになりますが、用意に時間がかかり、再生も重くなります。'}
+      </span>
+    </label>
+  )
+}
 
 export function LicenseInspector({ project, assetId, run }: { project: Project; assetId: string; run: Run }): React.JSX.Element | null {
   const asset = project.assets[assetId]

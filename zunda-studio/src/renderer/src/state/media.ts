@@ -3,9 +3,11 @@ import { create } from 'zustand'
 import type { Command } from '@shared/commands/types'
 import type { MediaProbe, ProxyFormat } from '@shared/media/types'
 import { detectFreeSource, licenseFromSource } from '@shared/media/free-sources'
-import type { Asset, AssetId, AssetLicense, MediaCodecs, Ms, Project } from '@shared/project/types'
+import { previewPlan } from '@shared/media/preview'
+import type { Asset, AssetId, AssetLicense, MediaCodecs, Ms, PreviewResolution, Project } from '@shared/project/types'
 
 import { api, toAppError } from '../api'
+import { useSettingsStore } from './settings'
 import { useEditorStore } from './store'
 
 /**
@@ -19,7 +21,7 @@ type SourceState =
   | { state: 'error'; message: string }
 
 interface MediaState {
-  /** 素材の絶対パス → プレビューで使う実体。 */
+  /** 「画質|素材の絶対パス」→ プレビューで使う実体(同じ素材でも画質ごとに別に持つ)。 */
   sources: Record<string, SourceState>
   /** 素材の絶対パス → 波形(0〜255 の振幅、1秒あたり samplesPerSecond 個)。 */
   peaks: Record<string, { samplesPerSecond: number; data: Uint8Array } | null>
@@ -33,9 +35,10 @@ function subscribeProgress(): void {
   if (progressSubscribed) return
   progressSubscribed = true
   api.subscribe('media:proxy-progress', ({ path, ratio }) => {
-    const current = useMediaStore.getState().sources[path]
-    if (current?.state !== 'building' || ratio >= 1) return
-    setSource(path, { state: 'building', ratio })
+    if (ratio >= 1) return
+    for (const [key, current] of Object.entries(useMediaStore.getState().sources)) {
+      if (current.state === 'building' && key.endsWith(`|${path}`)) setSource(key, { state: 'building', ratio })
+    }
   })
 }
 
@@ -83,19 +86,36 @@ function proxyFormat(): ProxyFormat {
 export function playableSource(asset: Asset): string | null {
   if (asset.type !== 'video') return asset.path.absolute
   const path = asset.path.absolute
-  const current = useMediaStore.getState().sources[path]
+  const preview = asset.preview ?? 'auto'
+  const key = `${preview}|${path}`
+  const current = useMediaStore.getState().sources[key]
   if (current) return current.state === 'direct' || current.state === 'ready' ? current.path : null
-  if (canPlayDirectly(asset.codecs)) {
-    setSource(path, { state: 'direct', path })
+  const plan = previewPlan(preview, asset.height, canPlayDirectly(asset.codecs))
+  if (plan.direct) {
+    setSource(key, { state: 'direct', path })
     return path
   }
   subscribeProgress()
-  setSource(path, { state: 'building', ratio: 0 })
-  api
-    .invoke('media:proxy', path, proxyFormat())
-    .then((proxy) => setSource(path, { state: 'ready', path: proxy }))
-    .catch((error: unknown) => setSource(path, { state: 'error', message: toAppError(error).message }))
+  setSource(key, { state: 'building', ratio: 0 })
+  const request = plan.maxHeight === undefined ? api.invoke('media:proxy', path, proxyFormat()) : api.invoke('media:proxy', path, proxyFormat(), plan.maxHeight)
+  request
+    .then((proxy) => setSource(key, { state: 'ready', path: proxy }))
+    .catch((error: unknown) => setSource(key, { state: 'error', message: toAppError(error).message }))
   return null
+}
+
+/** 選択肢の値(文字列)を画質に戻す。 */
+export function parsePreview(value: string): PreviewResolution {
+  return (value === 'auto' || value === 'original' ? value : Number(value)) as PreviewResolution
+}
+
+export const PREVIEW_LABELS: Record<string, string> = {
+  auto: '自動(そのまま再生できなければ 540p)',
+  original: '元の画質',
+  1080: '1080p',
+  720: '720p',
+  540: '540p',
+  360: '360p(軽い)'
 }
 
 // ---------------------------------------------------------------- 波形
@@ -126,7 +146,7 @@ function codecsOf(probe: MediaProbe): MediaCodecs {
 }
 
 /** 調べた結果から、素材の登録と配置のコマンドを作る。 */
-export function importCommands(project: Project, path: string, probe: MediaProbe, atMs: Ms, tempId: string): Command[] {
+export function importCommands(project: Project, path: string, probe: MediaProbe, atMs: Ms, tempId: string, preview: PreviewResolution = 'auto'): Command[] {
   // フリー素材サイトの素材だとファイル名から分かれば、入手元とクレジットを埋めておく。
   const fileName = path.split(/[\\/]/).at(-1) ?? path
   const known = probe.kind === 'video' ? undefined : detectFreeSource(fileName)
@@ -146,7 +166,8 @@ export function importCommands(project: Project, path: string, probe: MediaProbe
             height: probe.height,
             fps: probe.fps,
             hasAudio: probe.hasAudio,
-            codecs: codecsOf(probe)
+            codecs: codecsOf(probe),
+            ...(preview === 'auto' ? {} : { preview })
           },
           tempId
         },
@@ -182,7 +203,8 @@ export async function importMediaFiles(): Promise<{ itemIds: string[]; errors: s
     try {
       const probe = await api.invoke('media:probe', path)
       const { project, playheadMs, dispatch } = useEditorStore.getState()
-      const commands = importCommands(project, path, probe, playheadMs, 'asset')
+      const preview = useSettingsStore.getState().settings?.media.previewResolution ?? 'auto'
+      const commands = importCommands(project, path, probe, playheadMs, 'asset', preview)
       const before = new Set(project.items.map((item) => item.id))
       const result = dispatch(commands, '素材の追加')
       if (!result.ok) {

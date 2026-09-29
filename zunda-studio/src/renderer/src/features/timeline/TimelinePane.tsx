@@ -4,13 +4,14 @@ import type { Command } from '@shared/commands/types'
 import { entryTimelineMs } from '@shared/live/timing'
 import { itemEndMs, projectDurationMs } from '@shared/project/queries'
 import { timelineColor } from '@shared/project/timeline-colors'
-import type { Item, Layer, Ms, Project } from '@shared/project/types'
+import { PREVIEW_RESOLUTIONS, type Item, type Layer, type Ms, type Project } from '@shared/project/types'
 import { ZOOM_METHOD_LABELS } from '@shared/render/zoom'
 
 import { pickColor } from '../../lib/pick-color'
 import { formatMs } from '../../lib/time'
 import { usePlaybackStore } from '../../playback/player'
-import { assetName, importMediaFiles } from '../../state/media'
+import { assetName, importMediaFiles, parsePreview } from '../../state/media'
+import { useSettingsStore } from '../../state/settings'
 import { useEditorStore } from '../../state/store'
 import { openContextMenu } from '../../ui/ContextMenu'
 import { itemMenu, laneMenu, layerMenu, rulerMenu, type MenuContext } from './timeline-menus'
@@ -235,6 +236,8 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
     }
   }
 
+  const previewDefault = useSettingsStore((state) => state.settings?.media.previewResolution ?? 'auto')
+
   const addCaption = (): void => {
     const result = dispatch([{ op: 'media.placeText', text: 'テロップ', atMs: playheadMs, durationMs: 3000, tempId: 'text' }], 'テロップの追加')
     if (!result.ok) onError(result.message)
@@ -260,6 +263,20 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
         <button type="button" className="button--small" onClick={() => void addMedia()} data-testid="add-media">
           素材を追加
         </button>
+        <label className="timeline__previewQuality" title="これから読み込む動画のプレビューの画質(書き出しは常に元の画質)。読み込んだ後はインスペクタで動画ごとに変えられます">
+          プレビュー画質
+          <select
+            value={String(previewDefault)}
+            onChange={(event) => void useSettingsStore.getState().update({ media: { previewResolution: parsePreview(event.target.value) } })}
+            data-testid="import-preview-quality"
+          >
+            {PREVIEW_RESOLUTIONS.map((value) => (
+              <option key={value} value={String(value)}>
+                {PREVIEW_SHORT_LABELS[String(value)]}
+              </option>
+            ))}
+          </select>
+        </label>
         <button type="button" className="button--small" onClick={addCaption} data-testid="add-caption">
           テロップ
         </button>
@@ -562,4 +579,14 @@ function TimelineItem(props: TimelineItemProps): React.JSX.Element {
       )}
     </div>
   )
+}
+
+/** タイムラインの見出しに出す、プレビュー画質の短い名前。 */
+const PREVIEW_SHORT_LABELS: Record<string, string> = {
+  auto: '自動',
+  original: '元の画質',
+  1080: '1080p',
+  720: '720p',
+  540: '540p',
+  360: '360p'
 }

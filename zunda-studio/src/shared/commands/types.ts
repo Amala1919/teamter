@@ -13,6 +13,7 @@ import type {
   Asset,
   AssetId,
   AssetLicense,
+  PreviewResolution,
   ChatMessage,
   PublishInfo,
   PortraitConfig,
@@ -137,6 +138,13 @@ export interface AssetUpdateLicense {
   op: 'asset.updateLicense'
   assetId: AssetId
   license: AssetLicense
+}
+
+/** 動画のプレビューの画質を変える(書き出しには関係しない)。 */
+export interface AssetSetPreview {
+  op: 'asset.setPreview'
+  assetId: AssetId
+  preview: PreviewResolution
 }
 
 /** 使われていない素材だけ外せる。 */
@@ -662,6 +670,7 @@ export type Command =
   | LayerInsert
   | LayerUpdate
   | AssetAdd
+  | AssetSetPreview
   | AssetUpdateLicense
   | AssetRemove
   | StyleUpsertSubtitle

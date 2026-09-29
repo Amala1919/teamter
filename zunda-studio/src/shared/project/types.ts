@@ -51,9 +51,21 @@ export interface MediaCodecs {
   container: string
 }
 
+/**
+ * プレビューで使う動画の画質。書き出しには関係しない(書き出しは常に元のファイルから作る)。
+ * - auto: そのまま再生できる形式なら元のファイル、できなければ設定の高さ(既定 540p)の軽い動画を作る
+ * - original: そのまま再生できる形式なら元のファイル、できなければ元の大きさのまま変換する
+ * - 数値: その高さを上限にする(元がそれより大きければ、その高さの軽い動画を作る)
+ */
+export type PreviewResolution = 'auto' | 'original' | 360 | 540 | 720 | 1080
+
+export const PREVIEW_RESOLUTIONS: readonly PreviewResolution[] = ['auto', 'original', 1080, 720, 540, 360]
+
 export interface VideoAsset extends AssetBase {
   type: 'video'
   codecs?: MediaCodecs
+  /** プレビューの画質。無ければ auto。 */
+  preview?: PreviewResolution
   durationMs: Ms
   width: number
   height: number
