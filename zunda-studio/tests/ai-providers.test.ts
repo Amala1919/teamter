@@ -146,12 +146,37 @@ describe('ClaudeCodeProvider', () => {
     expect((error as AppError).message).toContain('Fable 5.1 requires usage credits')
   })
 
-  it('CLI が古くてオプションを知らなければ、更新を案内する', async () => {
+  it('代わりのやり方が無いオプションを知らないほど古い CLI なら、更新を案内する', async () => {
     const error = await claude(fakeCliSettings(), envFor('outdated'))
       .generate('sonnet', { system: 's', turns: [{ role: 'user', content: 'u' }] })
       .catch((caught: unknown) => caught)
     expect(error).toMatchObject({ code: 'CLI_OUTDATED' })
-    expect((error as AppError).message).toContain("unknown option '--safe-mode'")
+    expect((error as AppError).message).toContain("unknown option '--output-format'")
+  })
+
+  it('古い CLI が知らないオプションは覚えて外し、代わりのやり方で生成する(2回目からはやり直さない)', async () => {
+    const unknown = '--permission-prompts,--safe-mode,--system-prompt-file,--tools,--no-session-persistence,--json-schema'
+    const provider = claude(fakeCliSettings(), envFor('structured', { FAKE_UNKNOWN: unknown, FAKE_STRUCTURED: '{"reply":"できたのだ"}' }))
+    const request = {
+      system: '語尾はなのだ',
+      turns: [{ role: 'user' as const, content: '挨拶して' }],
+      jsonSchema: { type: 'object', properties: { reply: { type: 'string' } }, required: ['reply'] }
+    }
+    const first = await provider.generate('sonnet', request)
+    expect(first.structured).toEqual({ reply: 'できたのだ' })
+    const attempts = await readCliLog(logFile)
+    expect(attempts.length).toBe(7)
+    const last = attempts.at(-1)!
+    for (const name of unknown.split(',')) expect(last.argv).not.toContain(name)
+    // 代わり: 設定の読み込み元を空にし、組み込みのツールを名前で拒否し、指示とスキーマは本文に書く
+    expect(last.argv).toContain('--setting-sources')
+    expect(last.argv).toContain('--strict-mcp-config')
+    expect(last.argv[last.argv.indexOf('--disallowedTools') + 1]).toContain('Bash')
+    expect(last.stdin).toContain('語尾はなのだ')
+    expect(last.stdin).toContain('JSON')
+
+    await provider.generate('sonnet', request)
+    expect((await readCliLog(logFile)).length).toBe(8)
   })
 
   it('時間内に応答しなければ打ち切る', async () => {

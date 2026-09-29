@@ -52,6 +52,13 @@ if (process.env.FAKE_LOG) {
   )
 }
 
+// 古い CLI のふり: FAKE_UNKNOWN に並べたオプションを知らないと言って終わる(本物と同じ形のエラー)。
+for (const name of (process.env.FAKE_UNKNOWN ?? '').split(',').filter(Boolean)) {
+  if (argv.includes(name)) {
+    process.stderr.write(`error: unknown option '${name}'\n`)
+    process.exit(1)
+  }
+}
 
 /**
  * FAKE_RESPONSE_DIR が指定され、そこに queue.json(応答の配列)があれば、先頭の1件を取り出して返す。
@@ -129,7 +136,7 @@ switch (mode) {
     process.exit(1)
     break
   case 'outdated':
-    process.stderr.write("error: unknown option '--safe-mode'\n")
+    process.stderr.write("error: unknown option '--output-format'\n")
     process.exit(1)
     break
   case 'sleep':
