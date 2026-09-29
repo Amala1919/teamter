@@ -184,7 +184,7 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
     })
   ]) as unknown as z.ZodType<ChannelArgs<'ai:draft'>>,
   'media:probe': z.tuple([pathArg]),
-  'media:proxy': z.tuple([pathArg, z.enum(['mp4', 'webm'])]),
+  'media:proxy': z.union([z.tuple([pathArg, z.enum(['mp4', 'webm'])]), z.tuple([pathArg, z.enum(['mp4', 'webm']), z.number().int().min(0).max(4320)])]),
   'media:peaks': z.tuple([pathArg]),
   'export:start': z.tuple([
     z
@@ -462,7 +462,7 @@ export function createHandlers(services: Services): HandlerTable {
     },
 
     'media:probe': (path) => requireAllowed(services, path).then(() => services.mediaTools.probe(path)),
-    'media:proxy': (path, format) => requireAllowed(services, path).then(() => services.mediaTools.proxy(path, format)),
+    'media:proxy': (path, format, maxHeight) => requireAllowed(services, path).then(() => services.mediaTools.proxy(path, format, maxHeight)),
     'media:peaks': (path) => requireAllowed(services, path).then(() => services.mediaTools.peaks(path)),
 
     'export:start': (request) => {

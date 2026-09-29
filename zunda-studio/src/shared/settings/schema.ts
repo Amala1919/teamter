@@ -81,7 +81,9 @@ const mediaSchema = z
     ffmpegPath: executablePath,
     ffprobePath: executablePath,
     /** 編集用プロキシの縦解像度。 */
-    proxyHeight: z.number().int().positive().default(540)
+    proxyHeight: z.number().int().positive().default(540),
+    /** 読み込んだ動画のプレビューの画質(タイムラインの「プレビュー画質」で選ぶ)。 */
+    previewResolution: z.union([z.enum(['auto', 'original']), z.literal(1080), z.literal(720), z.literal(540), z.literal(360)]).default('auto')
   })
   .prefault({})
 

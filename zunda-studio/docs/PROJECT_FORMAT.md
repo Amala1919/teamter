@@ -162,6 +162,7 @@ PSDのレイヤーツリーに対する「役割の割り当て」を保存す�
     "width": 1920, "height": 1080, "fps": 60,
     "hasAudio": true,
     "proxyPath": null,             // キャッシュ側で管理。参照は実行時に解決する
+    "preview": 720,                // プレビューの画質(省略時 auto)。"auto" / "original" / 1080 / 720 / 540 / 360。書き出しには関係しない
     "license": { "source": "自分で録画", "creditRequired": false, "note": "" }
   },
   "ast_bgm_01": {

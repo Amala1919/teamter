@@ -126,7 +126,8 @@ export interface IpcContract {
   /** 素材の長さ・大きさ・符号化方式を調べる(ffprobe)。 */
   'media:probe': { args: [path: string]; result: MediaProbe }
   /** 編集用の軽い動画を用意して、その場所を返す。 */
-  'media:proxy': { args: [path: string, format: ProxyFormat]; result: string }
+  /** maxHeight はプレビューの高さの上限(0 は元の大きさ)。省略すると設定の高さ。 */
+  'media:proxy': { args: [path: string, format: ProxyFormat, maxHeight?: number]; result: string }
   /** 波形の表示用データ。 */
   'media:peaks': { args: [path: string]; result: WaveformPeaks }
 

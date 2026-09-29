@@ -2355,3 +2355,13 @@ input[type='url'] {
   font-size: 12px;
   padding: 1px 6px;
 }
+
+/* タイムラインの見出しの「プレビュー画質」 */
+.timeline__previewQuality {
+  align-items: center;
+  color: var(--text-dim);
+  display: inline-flex;
+  font-size: 12px;
+  gap: 4px;
+  white-space: nowrap;
+}

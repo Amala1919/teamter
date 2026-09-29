@@ -1,7 +1,7 @@
-import type { Asset, Project } from '../../project/types'
+import { PREVIEW_RESOLUTIONS, type Asset, type Project } from '../../project/types'
 import { fail, type HandlerTable } from '../env'
 
-type AssetHandlers = Pick<HandlerTable, 'asset.add' | 'asset.updateLicense' | 'asset.remove'>
+type AssetHandlers = Pick<HandlerTable, 'asset.add' | 'asset.updateLicense' | 'asset.setPreview' | 'asset.remove'>
 
 function assetInUse(draft: Project, assetId: string): boolean {
   const usedByItem = draft.items.some((item) => 'assetId' in item && item.assetId === assetId)
@@ -35,6 +35,15 @@ export const assetHandlers: AssetHandlers = {
     const asset = draft.assets[env.resolve(command.assetId)]
     if (!asset) fail(command.op, `素材が見つかりません: ${command.assetId}`)
     asset.license = command.license
+  },
+
+  'asset.setPreview': (draft, command, env) => {
+    const asset = draft.assets[env.resolve(command.assetId)]
+    if (!asset) fail(command.op, `素材が見つかりません: ${command.assetId}`)
+    if (asset.type !== 'video') fail(command.op, 'プレビューの画質は動画の素材にだけ設定できます')
+    if (!PREVIEW_RESOLUTIONS.includes(command.preview)) fail(command.op, `プレビューの画質が不正です: ${String(command.preview)}`)
+    if (command.preview === 'auto') delete asset.preview
+    else asset.preview = command.preview
   },
 
   'asset.remove': (draft, command, env) => {

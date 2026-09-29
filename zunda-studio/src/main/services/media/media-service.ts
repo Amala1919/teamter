@@ -126,9 +126,12 @@ export class MediaService {
     return interpretProbe(path, output)
   }
 
-  /** 編集用の軽い動画を用意して、その場所を返す。作成中は進み具合を media:proxy-progress で知らせる。 */
-  async proxy(path: string, format: ProxyFormat): Promise<string> {
-    const height = this.getSettings().media.proxyHeight
+  /**
+   * 編集用の軽い動画を用意して、その場所を返す。作成中は進み具合を media:proxy-progress で知らせる。
+   * maxHeight はプレビューの高さの上限(0 なら元の大きさのまま)。省略すると設定の高さ(既定 540p)。
+   */
+  async proxy(path: string, format: ProxyFormat, maxHeight?: number): Promise<string> {
+    const height = maxHeight ?? this.getSettings().media.proxyHeight
     const key = await this.cacheKey(path, `proxy:${format}:${height}`)
     const output = join(this.directories.proxy, `${key}.${format}`)
     if (await exists(output)) return output
@@ -161,10 +164,12 @@ export class MediaService {
     const partial = output.replace(/\.(\w+)$/, '.part.$1')
     // シークしやすいよう、キーフレームを 0.5 秒ごとに入れる。
     const gop = String(Math.max(1, Math.round((probe.fps || 30) / 2)))
+    // 高い画質を選んだときは、画質の落ちにくい設定にする(大きさ・作る時間とのつり合い)。
+    const quality = proxyQuality(height)
     const codec =
       format === 'mp4'
-        ? ['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '26', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart']
-        : ['-c:v', 'libvpx', '-deadline', 'realtime', '-cpu-used', '8', '-b:v', '2M', '-c:a', 'libopus', '-b:a', '96k']
+        ? ['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', String(quality.crf), '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart']
+        : ['-c:v', 'libvpx', '-deadline', 'realtime', '-cpu-used', '8', '-b:v', quality.bitrate, '-c:a', 'libopus', '-b:a', '96k']
     const args = [
       '-y',
       '-hide_banner',
@@ -180,7 +185,8 @@ export class MediaService {
       '-map',
       '0:a:0?',
       '-vf',
-      `scale=-2:'min(${height},ih)'`,
+      // 0 は元の大きさのまま(符号化できるよう偶数にだけそろえる)。
+      height > 0 ? `scale=-2:'min(${height},ih)'` : 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
       '-g',
       gop,
       ...codec,
@@ -276,4 +282,11 @@ async function exists(path: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/** プレビュー用の動画の画質。高さ 0 は元の大きさ。 */
+export function proxyQuality(height: number): { crf: number; bitrate: string } {
+  if (height === 0 || height >= 1080) return { crf: 20, bitrate: '8M' }
+  if (height >= 720) return { crf: 23, bitrate: '4M' }
+  return { crf: 26, bitrate: '2M' }
 }
