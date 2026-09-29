@@ -29,7 +29,7 @@ export const CLAUDE_MODELS: ModelInfo[] = [
   { id: 'sonnet', label: 'Sonnet(最新)', source: 'static', recommended: true, note: '速さと質のバランスが良い。迷ったらこれ' },
   { id: 'opus', label: 'Opus(最新)', source: 'static', recommended: true, note: '文章の質を優先するとき。編集AI向き' },
   { id: 'haiku', label: 'Haiku(最新)', source: 'static', recommended: true, note: '速さ優先。ライブ向き' },
-  { id: 'fable', label: 'Fable(最新)', source: 'static', note: '最上位。プランによっては使えない' },
+  { id: 'fable', label: 'Fable(最新)', source: 'static', note: '最上位。プランによっては使用量クレジットが要り、無いと断られる(接続テストで確かめられる)' },
   { id: 'claude-fable-5-1', label: 'Claude Fable 5.1', source: 'static' },
   { id: 'claude-fable-5', label: 'Claude Fable 5', source: 'static' },
   { id: 'claude-opus-5-5', label: 'Claude Opus 5.5', source: 'static' },

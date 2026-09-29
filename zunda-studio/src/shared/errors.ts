@@ -9,6 +9,8 @@ export const ERROR_CODES = [
   'CANCELLED',
   'CLI_NOT_FOUND',
   'CLI_FAILED',
+  /** CLI が古く、アプリが使うオプションに対応していない。 */
+  'CLI_OUTDATED',
   'AI_NOT_CONFIGURED',
   'AI_NOT_LOGGED_IN',
   'AI_RATE_LIMITED',
@@ -51,13 +53,14 @@ export const ERROR_GUIDANCE: Record<ErrorCode, string> = {
   CLI_NOT_FOUND:
     'CLIがインストールされているか確認してください。設定画面で実行ファイルの場所を指定することもできます。',
   CLI_FAILED: 'CLIの出力を確認してください。CLIを単体で起動して動作するか試すと原因が分かることがあります。',
+  CLI_OUTDATED: 'ターミナルで CLI を最新にしてください(Claude Code は claude update、OpenCode は opencode upgrade)。',
   AI_NOT_CONFIGURED: '設定画面の「AI」で、この役割に使うAIを選んでください。',
   AI_NOT_LOGGED_IN:
     'ターミナルでCLIを起動してログインしてください(Claude Code は claude で /login、OpenCode は opencode auth login)。',
   AI_RATE_LIMITED: '利用上限に達しています。時間をおくか、設定で別のモデルを選んでください。',
   AI_KEY_REQUIRED: '設定画面の「AI」→ OpenCode に API キーを入力してください。キーは OpenCode のサイト(opencode.ai)の管理画面で発行できます。',
   AI_MODEL_UNAVAILABLE:
-    '別のモデルを選ぶか、OpenCode のサイト(opencode.ai)の管理画面で契約・残高・モデルの設定を確認してください。',
+    '設定画面の「AI」で別のモデル(Sonnet・Opus など)を選んでください。Claude Code では、Fable のようにプランによっては使えない(使用量クレジットが要る)モデルがあります。OpenCode なら、サイト(opencode.ai)の管理画面で契約・残高・モデルの設定を確認してください。',
   AI_SUBSCRIPTION_REQUIRED:
     'API キーで使うには、キーを発行したワークスペースで OpenCode Go を契約するか、Zen に残高を入れてください。契約せずに無料枠で使うなら、設定の「接続のしかた」を「opencode コマンドを使う」にしてください。',
   AI_OUTPUT_INVALID: 'AIの応答を解釈できませんでした。もう一度試すか、別のモデルを選んでください。',
