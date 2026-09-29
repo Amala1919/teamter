@@ -141,7 +141,7 @@ describe('下書きの依頼文', () => {
     expect(content).toContain('ボス戦中心')
   })
 
-  it('下書きを当てる間だけ、セリフの挿入で後ろがずれないようにする', () => {
+  it('既定では、下書きのコマンドを包まずにそのまま当てる(挿入で後ろがずれないため)', () => {
     const { project, assetId } = draftProject()
     const characterId = Object.values(project.characters).find((character) => character.authorRole === 'ai')!.id
     const commands = wrapDraftCommands(project, [
@@ -152,7 +152,20 @@ describe('下書きの依頼文', () => {
     const next = apply(project, commands)
     const videos = next.items.filter((item) => item.type === 'video').map((item) => item.startMs)
     expect(videos).toEqual([0, 25_000])
-    expect(next.editing.rippleOnVoiceChange).toBe(true)
+    // 既定では、挿入で後ろをずらさないので、包まずにそのまま適用する
+    expect(commands.some((command) => command.op === 'project.setEditing')).toBe(false)
+  })
+
+  it('「間に足したら空ける」設定のときは、下書きを当てる間だけ止めて、終わったら元に戻す', () => {
+    const { project, assetId } = draftProject()
+    const characterId = Object.values(project.characters).find((character) => character.authorRole === 'ai')!.id
+    const withGap = apply(project, [{ op: 'project.setEditing', openGapOnVoiceInsert: true }])
+    const commands = wrapDraftCommands(withGap, [
+      { op: 'media.placeVideo', assetId, atMs: 0, inMs: 55_000, outMs: 80_000 },
+      { op: 'voice.insert', characterId, text: '見なさい', atMs: 1_000 }
+    ])
+    expect(commands[0]).toMatchObject({ op: 'project.setEditing', openGapOnVoiceInsert: false })
+    expect(apply(withGap, commands).editing.openGapOnVoiceInsert).toBe(true)
   })
 })
 

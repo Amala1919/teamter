@@ -76,6 +76,6 @@ export function createEmptyProject(options: CreateProjectOptions = {}): Project 
     credits: { generated: '', confirmedByUser: false },
     chat: { messages: [] },
     ai: { conversation: null },
-    editing: { rippleOnVoiceChange: true, defaultGapMs: 200, duckVolume: 0.35, duckFadeMs: 200 }
+    editing: { defaultGapMs: 200, duckVolume: 0.35, duckFadeMs: 200 }
   }
 }

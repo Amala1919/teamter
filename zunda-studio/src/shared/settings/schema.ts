@@ -150,7 +150,7 @@ const subtitleSchema = z
 /** 編集の自動処理の、新しいプロジェクトでの既定(設定の「編集」タブ。開いているプロジェクトにも同時に反映する)。 */
 const editingSchema = z
   .object({
-    rippleOnVoiceChange: z.boolean().default(true),
+    openGapOnVoiceInsert: z.boolean().default(false),
     closeGapOnVoiceDelete: z.boolean().default(false),
     groupFollowsVoice: z.boolean().default(true),
     autoPortraitTrack: z.boolean().default(true),

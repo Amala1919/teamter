@@ -10,7 +10,7 @@ import { useSettingsStore } from '../../state/settings'
 import { useEditorStore } from '../../state/store'
 import { NumberField } from '../../ui/NumberField'
 
-type Toggle = 'rippleOnVoiceChange' | 'closeGapOnVoiceDelete' | 'groupFollowsVoice' | 'autoPortraitTrack' | 'avoidOverlap'
+type Toggle = 'openGapOnVoiceInsert' | 'closeGapOnVoiceDelete' | 'groupFollowsVoice' | 'autoPortraitTrack' | 'avoidOverlap'
 
 /** 編集の自動処理の一覧。値が無いときの扱い(以前のプロジェクト)もここで決める。 */
 const TOGGLES: { key: Toggle; label: string; note: string; fallback: boolean }[] = [
@@ -21,10 +21,10 @@ const TOGGLES: { key: Toggle; label: string; note: string; fallback: boolean }[]
     fallback: false
   },
   {
-    key: 'rippleOnVoiceChange',
+    key: 'openGapOnVoiceInsert',
     label: 'セリフを間に足したら、後ろのセリフをずらして場所を空ける',
-    note: '切ると、足したセリフが次のセリフと重なることがあります(重なりの自動振り分けが入っていれば別のレイヤーに置かれます)。',
-    fallback: true
+    note: '切っておくと(既定)、後ろのセリフは動きません。足したセリフが次のセリフと重なるときは、重なりの自動振り分けが入っていれば別のレイヤーに置かれます。',
+    fallback: false
   },
   {
     key: 'groupFollowsVoice',

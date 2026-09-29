@@ -103,7 +103,8 @@ export const voiceHandlers: VoiceHandlers = {
       subtitleLinesManual: false
     }
     item.subtitleLines = autoSubtitleLines(draft, item)
-    if (draft.editing.rippleOnVoiceChange) openGap(draft, atMs, item.durationMs + gap, id)
+    // 後ろのセリフをずらして場所を空けるかは設定で選ぶ(既定は空けない。素材は独立が基本)。
+    if (draft.editing.openGapOnVoiceInsert === true) openGap(draft, atMs, item.durationMs + gap, id)
     draft.items.push(item)
     if (command.tempId) env.resolvedIds[command.tempId] = id
   },

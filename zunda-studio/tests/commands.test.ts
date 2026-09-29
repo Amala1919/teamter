@@ -110,17 +110,17 @@ describe('セリフの操作で動くのはセリフだけ', () => {
     const before = others(next)
     const [first, second] = voiceItemsInOrder(next)
 
-    // 1つめの後ろに足す → 2つめのセリフは後ろへずれるが、ほかの素材はそのまま
+    // 1つめの後ろに足しても、2つめのセリフもほかの素材も動かない
     next = apply(next, [{ op: 'voice.insert', characterId, text: '間に足したセリフなのだ', afterItemId: first!.id }])
     expect(others(next)).toEqual(before)
-    const lines = voiceItemsInOrder(next)
-    expect(lines.map((line) => line.text)).toEqual(['ひとつめ', '間に足したセリフなのだ', 'ふたつめ'])
-    expect(lines[2]!.startMs).toBeGreaterThan(second!.startMs)
+    expect(next.items.find((item) => item.id === first!.id)!.startMs).toBe(first!.startMs)
+    expect(next.items.find((item) => item.id === second!.id)!.startMs).toBe(second!.startMs)
+    const added = next.items.find((item) => item.type === 'voice' && item.text === '間に足したセリフなのだ')!
 
-    // 消して詰めても、ほかの素材はそのまま
-    next = apply(next, [{ op: 'project.setEditing', closeGapOnVoiceDelete: true }, { op: 'voice.delete', itemId: lines[1]!.id }])
+    // 設定で「消したら詰める」にすると、後ろのセリフは詰まるが、ほかの素材はそのまま
+    next = apply(next, [{ op: 'project.setEditing', closeGapOnVoiceDelete: true }, { op: 'voice.delete', itemId: added.id }])
     expect(others(next)).toEqual(before)
-    expect(voiceItemsInOrder(next)[1]!.startMs).toBe(second!.startMs)
+    expect(next.items.find((item) => item.id === second!.id)!.startMs).toBe(second!.startMs)
 
     // 合成で尺が伸びても、ほかの素材はそのまま
     next = apply(next, [

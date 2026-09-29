@@ -91,6 +91,6 @@ export function buildDraftPrompt(project: Project, request: DraftRequest, candid
  * セリフを挿入すると後ろのアイテムがずれる設定(リップル)だと、AI が決めた位置からずれてしまうので、その間だけ止める。
  */
 export function wrapDraftCommands(project: Project, commands: Command[]): Command[] {
-  if (!project.editing.rippleOnVoiceChange) return commands
-  return [{ op: 'project.setEditing', rippleOnVoiceChange: false }, ...commands, { op: 'project.setEditing', rippleOnVoiceChange: true }]
+  if (project.editing.openGapOnVoiceInsert !== true) return commands
+  return [{ op: 'project.setEditing', openGapOnVoiceInsert: false }, ...commands, { op: 'project.setEditing', openGapOnVoiceInsert: true }]
 }

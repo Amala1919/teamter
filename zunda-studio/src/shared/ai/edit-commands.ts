@@ -161,6 +161,7 @@ export const aiCommandSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('project.setMeta'), title: z.string().min(1).max(200).optional(), synopsis: z.string().max(4000).optional() }),
   z.object({
     op: z.literal('project.setEditing'),
+    openGapOnVoiceInsert: z.boolean().optional(),
     rippleOnVoiceChange: z.boolean().optional(),
     defaultGapMs: ms.optional(),
     duckVolume: z.number().min(0).max(1).optional(),
