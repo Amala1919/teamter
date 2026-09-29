@@ -551,6 +551,22 @@ export interface ItemSetColor {
   color: string | null
 }
 
+/**
+ * 選んだアイテムを1つのグループにする(2つ以上)。既に別のグループに入っているものは、そのグループごと新しいグループにまとめる。
+ * グループのアイテムは一緒に動き、グループのセリフの尺が変わると後ろのものが合わせてずれる。
+ */
+export interface ItemGroup {
+  op: 'item.group'
+  itemIds: ItemId[]
+  tempId?: string
+}
+
+/** 選んだアイテムを入っているグループから外す(グループに1つしか残らなければ、そのグループも解く)。 */
+export interface ItemUngroup {
+  op: 'item.ungroup'
+  itemIds: ItemId[]
+}
+
 /** 素材の無いレイヤーを消す(既定のレイヤーは残す)。 */
 export interface LayerRemoveEmpty {
   op: 'layer.removeEmpty'
@@ -699,6 +715,8 @@ export type Command =
   | TimelineInsertGap
   | TimelineArrangeOverlaps
   | ItemSetColor
+  | ItemGroup
+  | ItemUngroup
   | LayerRemoveEmpty
   | MediaPlaceVideo
   | MediaPlaceImage

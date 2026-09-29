@@ -36,7 +36,7 @@
   "chat":       { /* 10章 */ },
   "ai":         { /* 11章 */ },
   "editing": {
-    "rippleOnVoiceChange": true,   // セリフの尺が変わったら後ろのアイテムもずらす
+    "rippleOnVoiceChange": true,   // セリフの挿入・削除で、後ろのセリフをずらす(合成で尺が変わってもずらさない)
     "defaultGapMs": 200,           // セリフを続けて追加するときの間
     "duckVolume": 0.35,            // セリフの間、duckable な音声をこの倍率まで下げる
     "duckFadeMs": 200              // 下げる・戻すのにかける時間
@@ -209,7 +209,8 @@ PSDのレイヤーツリーに対する「役割の割り当て」を保存す�
   "startMs": 0,
   "durationMs": 2480,
   "effects": [ /* 7章 */ ],
-  "locked": false
+  "locked": false,
+  "groupId": "grp_01"               // 省略可。同じ値のアイテムは一緒に動く(グループ)。無ければ独立
 }
 ```
 

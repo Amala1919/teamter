@@ -2365,3 +2365,19 @@ input[type='url'] {
   gap: 4px;
   white-space: nowrap;
 }
+
+/* グループに入っている素材: 上辺に印を付ける(同じグループは一緒に動く) */
+.timeline__item--grouped {
+  box-shadow: inset 0 2px 0 #e0b84c;
+}
+
+.timeline__groupMark {
+  background: #e0b84c;
+  border-radius: 50%;
+  height: 6px;
+  left: 3px;
+  pointer-events: none;
+  position: absolute;
+  top: 4px;
+  width: 6px;
+}

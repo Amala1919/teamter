@@ -70,6 +70,22 @@ export function InspectorPane({ onError }: { onError: (message: string) => void 
             <dd>
               {formatMs(item.startMs)} – {formatMs(itemEndMs(item))}({(item.durationMs / 1000).toFixed(2)}秒)
             </dd>
+            {item.groupId !== undefined && (
+              <>
+                <dt>グループ</dt>
+                <dd data-testid="inspector-group">
+                  {project.items.filter((candidate) => candidate.groupId === item.groupId).length}個で一緒に動く{' '}
+                  <button
+                    type="button"
+                    className="button--small"
+                    onClick={() => run([{ op: 'item.ungroup', itemIds: project.items.filter((candidate) => candidate.groupId === item.groupId).map((candidate) => candidate.id) }], 'グループを解く')}
+                    data-testid="inspector-ungroup"
+                  >
+                    グループを解く
+                  </button>
+                </dd>
+              </>
+            )}
           </dl>
           <TimingInspector project={project} item={item} run={run} />
           {item.type === 'voice' && <VoiceInspector item={item} />}

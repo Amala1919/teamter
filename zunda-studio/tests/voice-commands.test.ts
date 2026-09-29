@@ -26,16 +26,17 @@ function script(): { project: Project; ids: string[]; characterId: string } {
     { op: 'character.create', name: 'ずんだもん', engineId: 'voicevox', speakerId: 3, speakerName: 'ずんだもん' }
   ])
   const characterId = Object.keys(project.characters)[0]!
-  project = apply(project, [
-    { op: 'voice.insert', characterId, text: 'いちぎょうめ', atMs: 0, tempId: 'a' },
-    { op: 'voice.insert', characterId, text: 'にぎょうめ', afterItemId: 'a', tempId: 'b' },
-    { op: 'voice.insert', characterId, text: 'さんぎょうめ', afterItemId: 'b', tempId: 'c' }
-  ])
-  // 合成結果を反映して、各行の尺を 1000ms にそろえる
-  for (const line of voiceItemsInOrder(project)) {
-    project = apply(project, [
-      { op: 'voice.applySynthesis', itemId: line.id, expectedText: line.text, synthesis: synthesis(1000) }
-    ])
+  // 1行ずつ足して合成し(各 1000ms)、次の行をその後ろ(間 200ms)に足す
+  let previous: string | null = null
+  for (const text of ['いちぎょうめ', 'にぎょうめ', 'さんぎょうめ']) {
+    const result = applyCommands(
+      project,
+      [previous === null ? { op: 'voice.insert', characterId, text, atMs: 0, tempId: 't' } : { op: 'voice.insert', characterId, text, afterItemId: previous, tempId: 't' }],
+      ctx
+    )
+    const id = result.resolvedIds['t']!
+    project = apply(result.project, [{ op: 'voice.applySynthesis', itemId: id, expectedText: text, synthesis: synthesis(1000) }])
+    previous = id
   }
   const bgm: AudioItem = {
     id: 'bgm',
@@ -100,20 +101,34 @@ describe('セリフの並びとリップル編集', () => {
     expect(starts(next)).toEqual([0, 1700, 2900])
   })
 
-  it('尺が伸びた合成結果は、途中から鳴っている BGM は動かさずに後ろのセリフだけずらす', () => {
+  it('セリフを書き換えて尺が変わっても、ほかのセリフも素材も動かさない(素材は独立)', () => {
     const { project, ids } = script()
     const edited = apply(project, [{ op: 'voice.setText', itemId: ids[1]!, text: 'ながくなったにぎょうめ' }])
-    const next = apply(edited, [
-      {
-        op: 'voice.applySynthesis',
-        itemId: ids[1]!,
-        expectedText: 'ながくなったにぎょうめ',
-        synthesis: synthesis(1600)
-      }
-    ])
-    expect(starts(next)).toEqual([0, 1200, 3000])
-    // BGM は2行目の終わりより前に始まっているので動かない
+    const next = apply(edited, [{ op: 'voice.applySynthesis', itemId: ids[1]!, expectedText: 'ながくなったにぎょうめ', synthesis: synthesis(1600) }])
+    expect(starts(next)).toEqual([0, 1200, 2400])
     expect(next.items.find((item) => item.id === 'bgm')!.startMs).toBe(1500)
+    // 重なっても、書き換えたセリフは置いたレイヤーのまま(別のレイヤーへ飛ばさない)
+    expect(new Set(voiceItemsInOrder(next).map((line) => line.layerId)).size).toBe(1)
+  })
+
+  it('足したばかりのセリフの最初の合成でも、後ろのセリフは動かさない', () => {
+    const { project, characterId } = script()
+    const added = apply(project, [{ op: 'voice.insert', characterId, text: 'あいだ', atMs: 10_000, tempId: 'n' }])
+    const line = added.items.find((item) => item.type === 'voice' && item.startMs === 10_000)!
+    const later = apply(added, [{ op: 'voice.insert', characterId, text: 'うしろ', atMs: 12_000 }])
+    const next = apply(later, [{ op: 'voice.applySynthesis', itemId: line.id, expectedText: 'あいだ', synthesis: synthesis(5000) }])
+    expect(next.items.find((item) => item.type === 'voice' && item.startMs === 12_000)).toBeDefined()
+    expect(starts(next).slice(0, 3)).toEqual(starts(project))
+  })
+
+  it('グループにしたものは、グループのセリフの尺が変わると後ろのものだけ合わせてずれる', () => {
+    const { project, ids } = script()
+    const grouped = apply(project, [{ op: 'item.group', itemIds: [ids[0]!, ids[1]!, 'bgm'] }])
+    const edited = apply(grouped, [{ op: 'voice.setText', itemId: ids[0]!, text: 'のびた' }])
+    const next = apply(edited, [{ op: 'voice.applySynthesis', itemId: ids[0]!, expectedText: 'のびた', synthesis: synthesis(1500) }])
+    // 同じグループの2行目と BGM は +500、グループ外の3行目は動かない
+    expect(starts(next)).toEqual([0, 1700, 2400])
+    expect(next.items.find((item) => item.id === 'bgm')!.startMs).toBe(2000)
   })
 
   it('追従を切ると、尺が変わっても後ろは動かない', () => {
@@ -245,5 +260,39 @@ describe('字幕スタイル', () => {
     expect(() =>
       apply(createEmptyProject(), [{ op: 'style.upsertSubtitle', props: { color: 'red; x' } }])
     ).toThrow(CommandError)
+  })
+})
+
+describe('グループ', () => {
+  it('2つ以上でグループになり、既存のグループはまとめ、外して1つになったグループは解く', () => {
+    const { project, ids } = script()
+    expect(() => apply(project, [{ op: 'item.group', itemIds: [ids[0]!] }])).toThrow('2つ以上')
+    let next = apply(project, [{ op: 'item.group', itemIds: [ids[0]!, ids[1]!] }])
+    const first = next.items.find((item) => item.id === ids[0])!.groupId
+    expect(first).toBeDefined()
+    // グループの1つと別のアイテムをまとめると、元のグループの仲間ごと1つのグループになる
+    next = apply(next, [{ op: 'item.group', itemIds: [ids[1]!, 'bgm'] }])
+    const groupIds = new Set(next.items.filter((item) => [ids[0], ids[1], 'bgm'].includes(item.id)).map((item) => item.groupId))
+    expect(groupIds.size).toBe(1)
+    expect([...groupIds][0]).not.toBe(first)
+    // 2つ外すと1つだけ残るので、そのグループも解く
+    next = apply(next, [{ op: 'item.ungroup', itemIds: [ids[0]!, ids[1]!] }])
+    expect(next.items.every((item) => item.groupId === undefined)).toBe(true)
+    // 消して1つになっても解く
+    next = apply(project, [{ op: 'item.group', itemIds: [ids[0]!, 'bgm'] }, { op: 'item.delete', itemId: 'bgm' }])
+    expect(next.items.every((item) => item.groupId === undefined)).toBe(true)
+  })
+
+  it('貼り付けたものは元のグループに入らず、一緒に貼った仲間どうしで新しいグループになる', () => {
+    const { project, ids } = script()
+    const grouped = apply(project, [{ op: 'item.group', itemIds: [ids[0]!, ids[1]!] }])
+    const source = grouped.items.filter((item) => item.id === ids[0] || item.id === ids[1])
+    const pasted = apply(grouped, [{ op: 'item.paste', items: source, atMs: 20_000, tempIdPrefix: 'p' }])
+    const originalGroup = source[0]!.groupId
+    const copies = pasted.items.filter((item) => item.startMs >= 20_000)
+    expect(copies).toHaveLength(2)
+    expect(copies[0]!.groupId).toBeDefined()
+    expect(copies[0]!.groupId).toBe(copies[1]!.groupId)
+    expect(copies[0]!.groupId).not.toBe(originalGroup)
   })
 })

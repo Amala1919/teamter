@@ -264,8 +264,10 @@ export const voiceHandlers: VoiceHandlers = {
     const delta = newDuration - item.durationMs
     item.synthesis = command.synthesis
     item.durationMs = newDuration
-    if (draft.editing.rippleOnVoiceChange && delta !== 0) {
-      shiftItemsFrom(draft, oldEnd, delta, new Set([item.id]), isLine)
-    }
+    // 素材は独立が基本。合成で尺が変わっても、ほかのセリフ・素材は動かさない。
+    // 同じグループの、このセリフより後ろのものだけ一緒にずらす(グループは動きを合わせるためのもの)。
+    const groupId = item.groupId
+    if (delta === 0 || groupId === undefined) return
+    shiftItemsFrom(draft, oldEnd, delta, new Set([item.id]), (other) => other.groupId === groupId)
   }
 }

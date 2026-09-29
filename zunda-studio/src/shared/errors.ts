@@ -14,6 +14,8 @@ export const ERROR_CODES = [
   'AI_NOT_CONFIGURED',
   'AI_NOT_LOGGED_IN',
   'AI_RATE_LIMITED',
+  /** API(従量課金)の残高が足りない。サブスクではなく API のアカウントでログインしていることが多い。 */
+  'AI_CREDIT_LOW',
   /** APIキーが無い・正しくない。 */
   'AI_KEY_REQUIRED',
   /** キーは通ったが、選んだモデルが今の契約・設定では使えない(残高不足・プラン外・同意が必要など)。 */
@@ -58,6 +60,8 @@ export const ERROR_GUIDANCE: Record<ErrorCode, string> = {
   AI_NOT_LOGGED_IN:
     'ターミナルでCLIを起動してログインしてください(Claude Code は claude で /login、OpenCode は opencode auth login)。',
   AI_RATE_LIMITED: '利用上限に達しています。時間をおくか、設定で別のモデルを選んでください。',
+  AI_CREDIT_LOW:
+    'サブスク(Pro・Max)で使うつもりなら、Claude Code が API のアカウントでログインしています。ターミナルで claude を起動して /login を入力し、「Claude account with subscription」(サブスクのアカウント)を選んでログインし直してください。API で使うなら console.anthropic.com で残高を追加してください。',
   AI_KEY_REQUIRED: '設定画面の「AI」→ OpenCode に API キーを入力してください。キーは OpenCode のサイト(opencode.ai)の管理画面で発行できます。',
   AI_MODEL_UNAVAILABLE:
     '設定画面の「AI」で別のモデル(Sonnet・Opus など)を選んでください。Claude Code では、Fable のようにプランによっては使えない(使用量クレジットが要る)モデルがあります。OpenCode なら、サイト(opencode.ai)の管理画面で契約・残高・モデルの設定を確認してください。',

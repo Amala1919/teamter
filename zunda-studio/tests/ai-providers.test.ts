@@ -8,6 +8,7 @@ import { AppError } from '@main/core/errors'
 import { AiService } from '@main/services/ai/ai-service'
 import { ClaudeCodeProvider } from '@main/services/ai/claude-code-provider'
 import { OpenCodeProvider, parseModelList, parseRunEvents } from '@main/services/ai/opencode-provider'
+import { ERROR_GUIDANCE } from '@shared/errors'
 import type { AppSettings } from '@shared/settings/schema'
 
 import { fakeCliSettings, readCliLog, tempDir, type CliLogEntry } from './helpers/env'
@@ -144,6 +145,15 @@ describe('ClaudeCodeProvider', () => {
     expect(error).toBeInstanceOf(AppError)
     expect(error).toMatchObject({ code: 'AI_MODEL_UNAVAILABLE' })
     expect((error as AppError).message).toContain('Fable 5.1 requires usage credits')
+  })
+
+  it('API の残高不足は、サブスクのアカウントでログインし直すよう案内する', async () => {
+    const error = await expectAppError(
+      claude(fakeCliSettings(), envFor('credit')).generate('sonnet', { system: 's', turns: [{ role: 'user', content: 'u' }] }),
+      'AI_CREDIT_LOW'
+    )
+    expect(error.message).toContain('Credit balance is too low')
+    expect(ERROR_GUIDANCE.AI_CREDIT_LOW).toContain('/login')
   })
 
   it('代わりのやり方が無いオプションを知らないほど古い CLI なら、更新を案内する', async () => {

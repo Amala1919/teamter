@@ -342,6 +342,11 @@ interface ItemBase {
   locked: boolean
   /** タイムラインでの色(#rrggbb)。見分けるための印で、動画には出ない。無ければレイヤーの色、それも無ければ種類ごとの色。 */
   color?: string
+  /**
+   * グループ。同じ値のアイテムは一緒に動く(ドラッグで一緒に動き、グループのセリフの尺が変わると後ろのものが合わせてずれる)。
+   * 無ければ独立していて、ほかのアイテムの変化では動かない。
+   */
+  groupId?: string
 }
 
 /** VOICEVOX の Mora。docs/ARCHITECTURE.md の音声合成の項を参照。 */

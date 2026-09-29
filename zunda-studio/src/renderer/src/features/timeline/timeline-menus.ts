@@ -20,6 +20,8 @@ import {
   rippleDeleteSelection,
   selectAll,
   selectFrom,
+  groupSelection,
+  ungroupSelection,
   selectLayer,
   setLocked,
   setSpeed,
@@ -80,6 +82,10 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
   const layer = project.layers.find((candidate) => candidate.id === item.layerId)
   const locked = item.locked || layer?.locked === true
   const many = ids.length > 1
+  const selected = project.items.filter((candidate) => ids.includes(candidate.id))
+  // 選んでいるのが1つのグループの仲間だけなら、グループとして1つのものと同じに扱う。
+  const oneGroup = item.groupId !== undefined && selected.every((candidate) => candidate.groupId === item.groupId)
+  const anyGrouped = selected.some((candidate) => candidate.groupId !== undefined)
   const splittable = item.type !== 'voice' && item.type !== 'zoom' && item.startMs < playheadMs && playheadMs < itemEndMs(item)
   const entries: MenuEntry[] = [
     {
@@ -115,9 +121,18 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
       testId: 'menu-ripple-delete'
     },
     'separator',
-    { label: '再生位置へ移動', disabled: locked || many, onSelect: report(context, () => moveToPlayhead(item.id)), testId: 'menu-move-to-playhead' },
+    { label: '再生位置へ移動', disabled: locked || (many && !oneGroup), onSelect: report(context, () => moveToPlayhead(item.id)), testId: 'menu-move-to-playhead' },
     { label: '再生位置をここの頭へ', onSelect: () => state().setPlayhead(item.startMs) },
     { label: '再生位置をここの終わりへ', onSelect: () => state().setPlayhead(itemEndMs(item)) },
+    'separator',
+    {
+      label: many && !oneGroup ? `選んだ${ids.length}個をグループにする` : 'グループにする',
+      shortcut: 'Ctrl+G',
+      disabled: !many || oneGroup,
+      onSelect: report(context, () => groupSelection(ids)),
+      testId: 'menu-group'
+    },
+    { label: 'グループを解く', shortcut: 'Ctrl+Shift+G', disabled: !anyGrouped, onSelect: report(context, () => ungroupSelection(ids)), testId: 'menu-ungroup' },
     'separator',
     {
       label: many ? `選んだ${ids.length}個の色` : '色',

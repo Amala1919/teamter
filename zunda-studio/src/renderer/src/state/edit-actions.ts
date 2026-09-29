@@ -148,10 +148,52 @@ export function selectLayer(layerId: string): void {
   setSelection(project.items.filter((item) => item.layerId === layerId).map((item) => item.id))
 }
 
-/** アイテムの頭を再生位置へ動かす。 */
+/** グループの仲間(グループに入っていなければ自分だけ)。 */
+export function groupMembers(items: readonly Item[], item: Item): Item[] {
+  return item.groupId === undefined ? [item] : items.filter((candidate) => candidate.groupId === item.groupId)
+}
+
+/** 選んだものに、それぞれのグループの仲間を足す(グループは一緒に選び、一緒に動かす)。 */
+export function withGroups(items: readonly Item[], ids: readonly ItemId[]): ItemId[] {
+  const groups = new Set(items.filter((item) => ids.includes(item.id) && item.groupId !== undefined).map((item) => item.groupId))
+  return items.filter((item) => ids.includes(item.id) || (item.groupId !== undefined && groups.has(item.groupId))).map((item) => item.id)
+}
+
+/**
+ * アイテムの頭を startMs へ動かすコマンド。グループに入っていれば、仲間も同じだけ動かす
+ * (いちばん前のものが 0 秒より前に出ないようにする)。
+ */
+export function moveCommands(items: readonly Item[], item: Item, startMs: Ms): Command[] {
+  const members = groupMembers(items, item).filter((member) => !member.locked)
+  const earliest = Math.min(...members.map((member) => member.startMs))
+  const delta = Math.max(Math.round(startMs) - item.startMs, -earliest)
+  if (delta === 0) return []
+  return members.map((member) => ({ op: 'item.setTimeRange', itemId: member.id, startMs: member.startMs + delta }))
+}
+
+/** アイテムの頭を再生位置へ動かす(グループなら仲間も一緒に)。 */
 export function moveToPlayhead(itemId: ItemId): string | null {
-  const { playheadMs } = state()
-  return run([{ op: 'item.setTimeRange', itemId, startMs: playheadMs }], '再生位置へ移動').error
+  const { playheadMs, project } = state()
+  const item = project.items.find((candidate) => candidate.id === itemId)
+  if (!item) return null
+  return run(moveCommands(project.items, item, playheadMs), '再生位置へ移動').error
+}
+
+/** 選んだものを1つのグループにする(2つ以上)。 */
+export function groupSelection(ids?: readonly ItemId[]): string | null {
+  const { selectedItemIds } = state()
+  const target = ids ?? selectedItemIds
+  if (target.length < 2) return 'グループにするには、2つ以上選んでください(Shift+クリックで選ぶものを足せます)'
+  return run([{ op: 'item.group', itemIds: [...target] }], 'グループにする').error
+}
+
+/** 選んだものが入っているグループを解く(グループの仲間も全部独立に戻す)。 */
+export function ungroupSelection(ids?: readonly ItemId[]): string | null {
+  const { selectedItemIds, project } = state()
+  const target = withGroups(project.items, ids ?? selectedItemIds)
+  const grouped = project.items.filter((item) => target.includes(item.id) && item.groupId !== undefined).map((item) => item.id)
+  if (grouped.length === 0) return null
+  return run([{ op: 'item.ungroup', itemIds: grouped }], 'グループを解く').error
 }
 
 export function setSpeed(itemId: ItemId, rate: number): string | null {
