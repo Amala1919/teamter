@@ -118,7 +118,7 @@ describe('セリフの操作で動くのはセリフだけ', () => {
     expect(lines[2]!.startMs).toBeGreaterThan(second!.startMs)
 
     // 消して詰めても、ほかの素材はそのまま
-    next = apply(next, [{ op: 'voice.delete', itemId: lines[1]!.id }])
+    next = apply(next, [{ op: 'project.setEditing', closeGapOnVoiceDelete: true }, { op: 'voice.delete', itemId: lines[1]!.id }])
     expect(others(next)).toEqual(before)
     expect(voiceItemsInOrder(next)[1]!.startMs).toBe(second!.startMs)
 

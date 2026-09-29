@@ -144,7 +144,8 @@ export const voiceHandlers: VoiceHandlers = {
 
   'voice.delete': (draft, command, env) => {
     const item = findVoiceItem(draft, env.resolve(command.itemId), command.op)
-    if (draft.editing.rippleOnVoiceChange) closeGap(draft, item)
+    // 消した後を詰めるかは設定で選ぶ(既定は詰めない。素材は独立が基本)。
+    if (draft.editing.closeGapOnVoiceDelete === true) closeGap(draft, item)
     draft.items.splice(draft.items.indexOf(item), 1)
     for (const session of Object.values(draft.liveSessions)) {
       for (const entry of session.entries) {
@@ -267,7 +268,7 @@ export const voiceHandlers: VoiceHandlers = {
     // 素材は独立が基本。合成で尺が変わっても、ほかのセリフ・素材は動かさない。
     // 同じグループの、このセリフより後ろのものだけ一緒にずらす(グループは動きを合わせるためのもの)。
     const groupId = item.groupId
-    if (delta === 0 || groupId === undefined) return
+    if (delta === 0 || groupId === undefined || draft.editing.groupFollowsVoice === false) return
     shiftItemsFrom(draft, oldEnd, delta, new Set([item.id]), (other) => other.groupId === groupId)
   }
 }

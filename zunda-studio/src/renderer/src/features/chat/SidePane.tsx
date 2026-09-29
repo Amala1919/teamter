@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { useSettingsStore } from '../../state/settings'
 import { useEditorStore } from '../../state/store'
 import { InspectorPane } from '../inspector/InspectorPane'
 import { LiveLogPane } from '../live/LiveLogPane'
@@ -16,10 +17,12 @@ export function SidePane({ onError }: { onError: (message: string | null) => voi
   const [tab, setTab] = useState<Tab>('chat')
   const selectedItemIds = useEditorStore((state) => state.selectedItemIds)
   const selectionSource = useEditorStore((state) => state.selectionSource)
+  // 素材を選んだらインスペクタに切り替えるか(設定の「編集」タブで切れる)
+  const autoInspector = useSettingsStore((state) => state.settings?.ui.autoInspectorTab !== false)
 
   useEffect(() => {
-    if (selectedItemIds.length > 0 && selectionSource === 'other') setTab('inspector')
-  }, [selectedItemIds, selectionSource])
+    if (autoInspector && selectedItemIds.length > 0 && selectionSource === 'other') setTab('inspector')
+  }, [selectedItemIds, selectionSource, autoInspector])
 
   return (
     <section className="pane pane--side">

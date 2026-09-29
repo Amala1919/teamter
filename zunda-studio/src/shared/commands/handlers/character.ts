@@ -115,8 +115,8 @@ export const characterHandlers: CharacterHandlers = {
       fail(command.op, '既定の表情が見つかりません')
     }
     character.portrait = { ...portrait, assetId: env.resolve(portrait.assetId) }
-    // 立ち絵を付けたら、タイムラインに動画全体の表示の区間を置く(選んで位置などを直せるように)。
-    ensurePortraitTrack(draft, characterId, env.ctx.newId('itm'))
+    // 立ち絵を付けたら、タイムラインに動画全体の表示の区間を置く(選んで位置などを直せるように)。設定で切れる。
+    if (draft.editing.autoPortraitTrack !== false) ensurePortraitTrack(draft, characterId, env.ctx.newId('itm'))
     // 消えた表情を指しているセリフは既定の表情に戻す。
     for (const item of draft.items) {
       if (item.type === 'voice' && item.characterId === characterId && item.expressionId && !portrait.expressions[item.expressionId]) {

@@ -42,6 +42,9 @@ export const projectHandlers: ProjectHandlers = {
 
   'project.setEditing': (draft, command) => {
     if (command.rippleOnVoiceChange !== undefined) draft.editing.rippleOnVoiceChange = command.rippleOnVoiceChange
+    if (command.closeGapOnVoiceDelete !== undefined) draft.editing.closeGapOnVoiceDelete = command.closeGapOnVoiceDelete
+    if (command.groupFollowsVoice !== undefined) draft.editing.groupFollowsVoice = command.groupFollowsVoice
+    if (command.autoPortraitTrack !== undefined) draft.editing.autoPortraitTrack = command.autoPortraitTrack
     if (command.defaultGapMs !== undefined) {
       if (command.defaultGapMs < 0) fail(command.op, '間は0以上にしてください')
       draft.editing.defaultGapMs = Math.round(command.defaultGapMs)

@@ -4,14 +4,16 @@ import { toAppError } from '../../api'
 import { useSettingsStore } from '../../state/settings'
 import { Modal } from '../../ui/Modal'
 import { AiSettings } from './AiSettings'
+import { EditingSettings } from './EditingSettings'
 import { LiveSettings } from './LiveSettings'
 import { VoiceSettings } from './VoiceSettings'
 
-type Tab = 'ai' | 'voice' | 'live'
+type Tab = 'ai' | 'voice' | 'editing' | 'live'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'ai', label: 'AI' },
   { id: 'voice', label: '音声エンジン' },
+  { id: 'editing', label: '編集' },
   { id: 'live', label: 'ライブ・外部ツール' }
 ]
 
@@ -66,6 +68,8 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): React.JSX.Elem
         <AiSettings settings={settings} onError={onError} />
       ) : tab === 'voice' ? (
         <VoiceSettings settings={settings} onError={onError} />
+      ) : tab === 'editing' ? (
+        <EditingSettings settings={settings} onError={onError} />
       ) : (
         <LiveSettings settings={settings} onError={onError} />
       )}

@@ -60,6 +60,15 @@ describe('立ち絵の表示の区間(タイムライン)', () => {
     expect(tracks(again)).toHaveLength(1)
   })
 
+  it('設定で切ると、立ち絵を付けても区間は置かない', () => {
+    const { project, characterId, assetId } = setup()
+    const next = apply(project, [
+      { op: 'project.setEditing', autoPortraitTrack: false },
+      { op: 'character.setPortrait', characterId, portrait: portraitConfig(assetId) }
+    ])
+    expect(tracks(next)).toHaveLength(0)
+  })
+
   it('セリフが増えると最後まで伸び、長さを変えるとその長さに固定される', () => {
     const { project, characterId, assetId } = setup()
     let next = apply(project, [{ op: 'character.setPortrait', characterId, portrait: portraitConfig(assetId) }])

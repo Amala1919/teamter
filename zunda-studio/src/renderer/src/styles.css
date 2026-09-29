@@ -2381,3 +2381,17 @@ input[type='url'] {
   top: 4px;
   width: 6px;
 }
+
+/* 設定の「編集」タブ: チェックと、その下の説明 */
+.field__row--top {
+  align-items: flex-start;
+}
+
+.field__row--top > input[type='checkbox'] {
+  margin-top: 3px;
+}
+
+.note--block {
+  display: block;
+  margin-top: 2px;
+}

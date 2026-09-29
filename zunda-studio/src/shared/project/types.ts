@@ -622,9 +622,18 @@ export interface PublishInfo {
   generatedBy: GeneratedBy | null
 }
 
+/**
+ * 編集の自動処理。素材は独立が基本で、ここで選んだものだけを自動で行う(設定の「編集」タブで選ぶ)。
+ */
 export interface EditingSettings {
-  /** セリフの尺が変わったとき、後ろのアイテムを一緒にずらすか(V-4)。 */
+  /** セリフを間に足したとき、後ろのセリフをずらして場所を空けるか(V-4)。 */
   rippleOnVoiceChange: boolean
+  /** セリフを消したとき、後ろのセリフを前に詰めるか。無いときは詰めない。 */
+  closeGapOnVoiceDelete?: boolean
+  /** グループのセリフの長さが変わったとき、グループのうち後ろのものを一緒にずらすか。無いときはずらす。 */
+  groupFollowsVoice?: boolean
+  /** 立ち絵を付けたとき、動画の最後までの表示の区間をタイムラインに置くか。無いときは置く。 */
+  autoPortraitTrack?: boolean
   /** セリフを続けて追加するときの間。 */
   defaultGapMs: Ms
   /** セリフの間、duckable な音声(BGM など)をこの倍率まで下げる(M-4)。 */

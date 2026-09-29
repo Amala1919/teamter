@@ -77,11 +77,32 @@ describe('セリフの並びとリップル編集', () => {
     expect(starts(next)[2]).toBe(1200 + inserted.durationMs + 200)
   })
 
-  it('削除すると後ろを前に詰め、同じ間を保つ', () => {
+  it('削除しても、既定では後ろを詰めない(消したところは空いたまま)', () => {
     const { project, ids } = script()
     const next = apply(project, [{ op: 'voice.delete', itemId: ids[1]! }])
     expect(texts(next)).toEqual(['いちぎょうめ', 'さんぎょうめ'])
+    expect(starts(next)).toEqual([0, 2400])
+  })
+
+  it('設定で「消したら詰める」にすると、後ろを前に詰めて同じ間を保つ', () => {
+    const { project, ids } = script()
+    const next = apply(project, [
+      { op: 'project.setEditing', closeGapOnVoiceDelete: true },
+      { op: 'voice.delete', itemId: ids[1]! }
+    ])
     expect(starts(next)).toEqual([0, 1200])
+  })
+
+  it('設定でグループの追従・立ち絵の区間の自動配置を切れる', () => {
+    const { project, ids } = script()
+    const grouped = apply(project, [
+      { op: 'item.group', itemIds: [ids[0]!, ids[1]!] },
+      { op: 'project.setEditing', groupFollowsVoice: false }
+    ])
+    const edited = apply(grouped, [{ op: 'voice.setText', itemId: ids[0]!, text: 'のびた' }])
+    const next = apply(edited, [{ op: 'voice.applySynthesis', itemId: ids[0]!, expectedText: 'のびた', synthesis: synthesis(1500) }])
+    expect(starts(next)).toEqual([0, 1200, 2400])
+    expect(next.editing).toMatchObject({ groupFollowsVoice: false })
   })
 
   it('並べ替えると、元の場所を詰めて新しい場所を空ける', () => {
