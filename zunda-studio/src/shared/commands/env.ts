@@ -103,7 +103,12 @@ export function autoSubtitleLines(draft: Project, item: VoiceItem): string[] {
   const character = draft.characters[item.characterId]
   const styleId = item.subtitleOverride?.styleId ?? character?.subtitleStyleId
   const style = styleId === undefined ? undefined : draft.subtitleStyles[styleId]
-  return wrapSubtitle(item.text, style?.maxCharsPerLine ?? 22)
+  return wrapSubtitle(subtitleText(item), style?.maxCharsPerLine ?? 22)
+}
+
+/** 字幕に出す文字(字幕だけ別にしていればそれ、無ければセリフ)。 */
+export function subtitleText(item: Pick<VoiceItem, 'text' | 'displayText'>): string {
+  return item.displayText ?? item.text
 }
 
 export function refreshSubtitleLines(draft: Project, item: VoiceItem): void {

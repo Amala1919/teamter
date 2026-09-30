@@ -167,7 +167,8 @@ test.describe('右クリックとショートカットでの編集', () => {
 
     // 先頭(0〜2秒)を削除して詰めると、残りが前へ寄る
     await images.first().click({ button: 'right' })
-    await choose(page, 'menu-ripple-delete')
+    await page.getByTestId('context-menu').getByTestId('menu-ripple-delete').hover()
+    await choose(page, 'menu-ripple-delete-respect')
     await expect(images).toHaveCount(2)
     await images.last().click()
     await expect(page.getByTestId('inspector-start')).toHaveValue('3')
@@ -183,6 +184,128 @@ test.describe('右クリックとショートカットでの編集', () => {
     await choose(page, 'menu-fade-both')
     await expect(page.getByTestId('effect-row')).toHaveCount(1)
     await expect(page.getByTestId('effect-row')).toContainText('フェード')
+  })
+
+  test('削除して詰めるとき、ほかの素材を考慮しないで消した長さだけ詰めることもでき、Shift+Delete の既定を設定で選べる', async ({ page, request }) => {
+    try {
+      await openFresh(page)
+      await queuePick(request, [image])
+      await page.getByTestId('add-media').click()
+      const images = page.locator('[data-item-type="image"]')
+      await expect(images).toHaveCount(1)
+      const secondRow = page.locator('.timeline__row', { has: page.locator('.timeline__layerName', { hasText: /^背景 2$/ }) })
+
+      // 背景に 0〜5秒(A)と 8〜13秒(B)、背景 2 に同じ時間の 0〜5秒(C)
+      await images.first().click({ button: 'right' })
+      await choose(page, 'menu-copy')
+      await rightClickAt(page, 'lane-lyr_bg', 8)
+      await choose(page, 'menu-paste-here')
+      await page.keyboard.press('Home')
+      await page.keyboard.press('Control+v')
+      await expect(images).toHaveCount(3)
+      await expect(secondRow.getByTestId('timeline-item')).toHaveCount(1)
+      const background = page.getByTestId('layer-lyr_bg').getByTestId('timeline-item')
+      const startOfB = async (): Promise<string> => {
+        await background.last().click()
+        return await page.getByTestId('inspector-start').inputValue()
+      }
+      const deleteA = async (testId: string): Promise<void> => {
+        await background.first().click({ button: 'right' })
+        await page.getByTestId('context-menu').getByTestId('menu-ripple-delete').hover()
+        await choose(page, testId)
+        await expect(images).toHaveCount(2)
+      }
+
+      // 既定: C が残っている 0〜5秒は詰めない
+      await deleteA('menu-ripple-delete-respect')
+      expect(await startOfB()).toBe('8')
+      await page.keyboard.press('Control+z')
+      await expect(images).toHaveCount(3)
+
+      // ほかの素材は考慮しない: 消した 5秒 だけ詰める(C は動かない)
+      await deleteA('menu-ripple-delete-ignore')
+      expect(await startOfB()).toBe('3')
+      await secondRow.getByTestId('timeline-item').click()
+      await expect(page.getByTestId('inspector-start')).toHaveValue('0')
+      await page.keyboard.press('Control+z')
+      await expect(images).toHaveCount(3)
+
+      // 設定で選ぶと、Shift+Delete もそちらになる(メニューにも印が付く)
+      await page.getByTestId('open-settings').click()
+      await page.getByTestId('settings-tab-editing').click()
+      await page.getByTestId('editing-rippleIgnoresOthers').check()
+      await page.keyboard.press('Escape')
+      await background.first().click({ button: 'right' })
+      await page.getByTestId('context-menu').getByTestId('menu-ripple-delete').hover()
+      await expect(page.getByTestId('context-menu').getByTestId('menu-ripple-delete-ignore')).toContainText('✓')
+      await page.keyboard.press('Escape')
+      await page.keyboard.press('Escape')
+      await expect(page.getByTestId('context-menu')).toHaveCount(0)
+      await background.first().click()
+      await page.keyboard.press('Shift+Delete')
+      await expect(images).toHaveCount(2)
+      expect(await startOfB()).toBe('3')
+    } finally {
+      await updateSettings(request, { editing: { rippleIgnoresOthers: false } })
+    }
+  })
+
+  test('選んだ素材を左に詰める。複数なら空白を埋めるか保つかを選べ、ほかの素材は動かない', async ({ page, request }) => {
+    await openFresh(page)
+    await queuePick(request, [image])
+    await page.getByTestId('add-media').click()
+    const images = page.locator('[data-item-type="image"]')
+    await expect(images).toHaveCount(1)
+    await expect(page.getByTestId('inspector-duration')).toHaveValue('5')
+
+    // 0〜5秒の画像をコピーし、7秒と14秒に貼る
+    await images.first().click({ button: 'right' })
+    await choose(page, 'menu-copy')
+    for (const seconds of [7, 14]) {
+      await rightClickAt(page, 'lane-lyr_bg', seconds)
+      await choose(page, 'menu-paste-here')
+    }
+    await expect(images).toHaveCount(3)
+    const starts = async (): Promise<string[]> => {
+      const values: string[] = []
+      for (let index = 0; index < 3; index++) {
+        await images.nth(index).click()
+        values.push(await page.getByTestId('inspector-start').inputValue())
+      }
+      return values
+    }
+    const before = await starts()
+    expect(before.map(Number).sort((a, b) => a - b)).toEqual([0, 7, 14])
+    const middle = before.indexOf('7')
+    const last = before.indexOf('14')
+    const first = before.indexOf('0')
+
+    // 1つなら、前の素材の終わりまで寄る(後ろは動かない)
+    await images.nth(middle).click({ button: 'right' })
+    await choose(page, 'menu-pack-left')
+    await expect.poll(starts).toEqual(before.map((value, index) => (index === middle ? '5' : value)))
+    await page.keyboard.press('Control+z')
+    await expect.poll(starts).toEqual(before)
+
+    const packTwo = async (testId: string): Promise<void> => {
+      await images.nth(middle).click()
+      await images.nth(last).click({ modifiers: ['Shift'] })
+      await images.nth(last).click({ button: 'right' })
+      await page.getByTestId('context-menu').getByTestId('menu-pack-left').hover()
+      await choose(page, testId)
+    }
+    const expected = (middleStart: string, lastStart: string): string[] =>
+      before.map((value, index) => (index === middle ? middleStart : index === last ? lastStart : index === first ? '0' : value))
+
+    // 空白を保つ: 2つの間(2秒)はそのまま、まとめて左へ
+    await packTwo('menu-pack-left-keep')
+    await expect.poll(starts).toEqual(expected('5', '12'))
+    await page.keyboard.press('Control+z')
+    await expect.poll(starts).toEqual(before)
+
+    // 空白を埋める: 2つの間も詰める
+    await packTwo('menu-pack-left-fill')
+    await expect.poll(starts).toEqual(expected('5', '10'))
   })
 
   test('メニューはキーで操作でき、動画の速度を変えられ、プレビューからズーム枠を置ける', async ({ page, request }) => {
@@ -257,6 +380,49 @@ test.describe('右クリックとショートカットでの編集', () => {
     await page.keyboard.press('f')
     await expect(clips).toHaveCount(3)
     await expect(page.getByTestId('inspector-duration')).toHaveValue('2')
+  })
+
+  test('再生位置から先を静止画にすると、続きの動画だけがフェードインし、設定で切れる', async ({ page, request }) => {
+    try {
+      await openFresh(page)
+      await queuePick(request, [video])
+      await page.getByTestId('add-media').click()
+      const clips = page.locator('[data-item-type="video"]')
+      await expect(clips).toHaveCount(1)
+
+      const overwriteAtOneSecond = async (): Promise<void> => {
+        await rightClickAt(page, 'timeline-ruler', 1)
+        await page.getByTestId('context-menu').getByText('再生位置をここへ').click()
+        await clips.first().click({ button: 'right' })
+        await page.getByTestId('context-menu').getByTestId('menu-freeze-overwrite').hover()
+        await choose(page, 'menu-freeze-overwrite-1000')
+        await expect(clips).toHaveCount(3)
+      }
+
+      // 前(0〜1秒)と静止画はフェードせず、続き(2秒〜)だけフェードイン
+      await overwriteAtOneSecond()
+      await clips.nth(0).click()
+      await expect(page.getByTestId('effect-row')).toHaveCount(0)
+      await clips.nth(2).click()
+      await expect(page.getByTestId('inspector-start')).toHaveValue('2')
+      await expect(page.getByTestId('effect-row')).toHaveCount(1)
+      await expect(page.getByTestId('effect-row')).toContainText('フェード')
+
+      // 設定で切ると付かない
+      await page.keyboard.press('Control+z')
+      await expect(clips).toHaveCount(1)
+      await page.getByTestId('open-settings').click()
+      await page.getByTestId('settings-tab-editing').click()
+      await expect(page.getByTestId('editing-freezeFadeIn')).toBeChecked()
+      await page.getByTestId('editing-freezeFadeIn').uncheck()
+      await page.keyboard.press('Escape')
+      await overwriteAtOneSecond()
+      await clips.nth(2).click()
+      await expect(page.getByTestId('inspector-start')).toHaveValue('2')
+      await expect(page.getByTestId('effect-row')).toHaveCount(0)
+    } finally {
+      await updateSettings(request, { editing: { freezeFadeIn: true } })
+    }
   })
 
   test('プレビューでも、止めている間は止めたコマが映り続ける(止めているときも再生中も)', async ({ page, request }) => {

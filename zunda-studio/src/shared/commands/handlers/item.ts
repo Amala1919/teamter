@@ -1,6 +1,6 @@
-import type { Effect, Project } from '../../project/types'
+import type { Effect, Project, TextLook } from '../../project/types'
 import { fadeCutEdge, fail, findMutableItem, requireFinite, requireLayer, type HandlerTable } from '../env'
-import type { CommandOp } from '../types'
+import type { CommandOp, ItemSetTextLook } from '../types'
 import { COLOR_PATTERN, validateTransform, validateVolume } from './media'
 
 type ItemHandlers = Pick<
@@ -12,6 +12,7 @@ type ItemHandlers = Pick<
   | 'item.setTransform'
   | 'item.setAudio'
   | 'item.setContent'
+  | 'item.setTextLook'
   | 'item.addEffect'
   | 'item.updateEffect'
   | 'item.removeEffect'
@@ -185,6 +186,24 @@ export const itemHandlers: ItemHandlers = {
     fail(command.op, 'テロップか図形のアイテムではありません')
   },
 
+  'item.setTextLook': (draft, command, env) => {
+    if (command.itemIds.length === 0) fail(command.op, 'テロップを選んでください')
+    const patch = validateTextLook(command.look, command.op)
+    for (const rawId of command.itemIds) {
+      const item = findMutableItem(draft, env.resolve(rawId), command.op)
+      if (item.type !== 'text') fail(command.op, 'テロップではありません')
+      const look: Record<string, unknown> = command.replace ? {} : { ...(item.look ?? {}) }
+      for (const [key, value] of Object.entries(patch)) {
+        if (value === null) delete look[key]
+        else look[key] = JSON.parse(JSON.stringify(value)) as unknown
+      }
+      // 文字送り 0 は「しない」と同じ。
+      if (look['typewriterMs'] === 0) delete look['typewriterMs']
+      if (Object.keys(look).length === 0) delete item.look
+      else item.look = look as TextLook
+    }
+  },
+
   'item.addEffect': (draft, command, env) => {
     const item = findMutableItem(draft, env.resolve(command.itemId), command.op)
     if (item.type === 'zoom') fail(command.op, 'ズームにはエフェクトを付けられません')
@@ -202,4 +221,40 @@ export const itemHandlers: ItemHandlers = {
     if (!item.effects[command.effectIndex]) fail(command.op, `エフェクトが見つかりません: ${command.effectIndex}`)
     item.effects.splice(command.effectIndex, 1)
   }
+}
+
+export const TEXT_ALIGNS = ['left', 'center', 'right'] as const
+
+/** テロップの見た目の指定を確かめる(null は「スタイルに戻す」なのでそのまま通す)。 */
+export function validateTextLook(look: ItemSetTextLook['look'], op: CommandOp): ItemSetTextLook['look'] {
+  const range = (value: number, min: number, max: number, label: string): void => {
+    if (!(Number.isFinite(value) && value >= min && value <= max)) fail(op, `${label}は ${min}〜${max} で指定してください`)
+  }
+  const color = (value: string, label: string): void => {
+    if (!COLOR_PATTERN.test(value)) fail(op, `${label}の指定が不正です: ${value}`)
+  }
+  if (look.color != null) color(look.color, '文字の色')
+  if (look.fontFamily != null && (look.fontFamily.trim() === '' || look.fontFamily.length > 100)) fail(op, 'フォントの指定が不正です')
+  if (look.fontWeight != null) range(look.fontWeight, 100, 900, '文字の太さ')
+  if (look.fontSizePx != null) range(look.fontSizePx, 8, 400, '文字の大きさ(px)')
+  if (look.align != null && !TEXT_ALIGNS.includes(look.align)) fail(op, `揃え方の指定が不正です: ${String(look.align)}`)
+  if (look.lineHeight != null) range(look.lineHeight, 0.5, 4, '行間')
+  if (look.outline != null && look.outline !== 'none') {
+    color(look.outline.color, '縁取りの色')
+    range(look.outline.widthPx, 0, 60, '縁取りの太さ(px)')
+  }
+  if (look.shadow != null && look.shadow !== 'none') {
+    color(look.shadow.color, '影の色')
+    range(look.shadow.offsetX, -100, 100, '影のずれ')
+    range(look.shadow.offsetY, -100, 100, '影のずれ')
+    range(look.shadow.blurPx, 0, 100, '影のぼかし')
+  }
+  if (look.background != null) {
+    color(look.background.color, '帯の色')
+    range(look.background.opacity, 0, 1, '帯の濃さ')
+    range(look.background.paddingPx, 0, 200, '帯の余白(px)')
+    range(look.background.radiusPx, 0, 200, '帯の角の丸み(px)')
+  }
+  if (look.typewriterMs != null) range(look.typewriterMs, 0, 60_000, '文字送りの時間(ms)')
+  return look
 }

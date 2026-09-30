@@ -19,6 +19,8 @@
   --section-timeline: #17291f;
   --accent-toolbar: #7d8b99;
   --accent-script: #4f8fd6;
+  /* 台本の最新(一番下)のセリフ。選択(緑)・検索(黄)と見分けられる色。 */
+  --latest-line: #f08a5d;
   --accent-preview: #59636e;
   --accent-side: #9a72d6;
   --accent-timeline: #3fa38d;
@@ -344,6 +346,21 @@ body.resizing-y * {
   cursor: pointer;
   margin-bottom: 6px;
   padding: 6px;
+}
+
+/* 最新(一番下)のセリフ。選んだときの枠の色は選択のほうを優先する。 */
+.script__line--latest {
+  background: color-mix(in srgb, var(--latest-line) 12%, transparent);
+  border-color: color-mix(in srgb, var(--latest-line) 55%, var(--border));
+}
+
+.script__latest {
+  background: color-mix(in srgb, var(--latest-line) 30%, transparent);
+  border-radius: 4px;
+  color: var(--latest-line);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 0 5px;
 }
 
 .script__line--selected {
@@ -1068,6 +1085,16 @@ input[type='color'] {
   font-weight: 600;
   max-width: 120px;
   padding: 1px 4px;
+}
+
+/* 字幕だけ別の文字にしているセリフ */
+.script__displayText {
+  color: var(--text-dim);
+  font-size: 11px;
+  margin: 2px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .script__lineFooter {
@@ -2519,4 +2546,46 @@ input[type='url'] {
 /* ラベルを上に、入力欄を下に幅いっぱいで置く(長い文を入れる欄用) */
 .field--stacked {
   grid-template-columns: 1fr;
+}
+
+/* テロップのインスペクタ */
+.inspector__subhead {
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  margin: 10px 0 4px;
+}
+
+.telop-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.telop-place {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.telop-place .field__label {
+  margin-left: 4px;
+}
+
+/* プレビューで選んだ素材(テロップ・画像など)の枠 */
+.item-frame {
+  border-color: #6ee07a;
+  border-style: dashed;
+  box-shadow: none;
+  pointer-events: auto;
+}
+
+/* テロップは枠いっぱいに文字があるので、説明は枠の外(上)に出す */
+.item-frame .zoom-frame__label {
+  background: rgba(110, 224, 122, 0.9);
+  color: #14181d;
+  left: -2px;
+  top: -20px;
+  white-space: nowrap;
 }

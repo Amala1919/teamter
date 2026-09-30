@@ -209,6 +209,10 @@ export class ExportService {
         renderFrame(ctx as unknown as Ctx2D, project, timeMs, context.resources)
         const pixels = ctx.getImageData(0, 0, width, height).data
         await writeFrame(encoder, Buffer.from(pixels.buffer, pixels.byteOffset, pixels.byteLength))
+        // 1コマごとにイベントループを一巡させる。@napi-rs/canvas の getImageData・ImageData の画素(1コマ 8MB)は、
+        // 次の巡回(setImmediate)で解放される。書き込みがすぐ終わる環境(Windows のパイプなど)では巡回が起きず、
+        // コマの数だけメモリが溜まって、PC のメモリを使い切って ffmpeg が失敗していた。
+        await yieldToEventLoop()
         if (frame % 5 === 0 || frame === frameCount - 1) {
           const elapsed = (Date.now() - started) / 1000
           onProgress((frame + 1) / frameCount, elapsed > 0 ? (frame + 1) / elapsed : 0)
@@ -216,13 +220,13 @@ export class ExportService {
       }
       encoder.stdin?.end()
       const code = await exited
-      if (code !== 0) throw new AppError('FFMPEG_FAILED', '動画のエンコードに失敗しました', ffmpegErrorDetail(stderr))
+      if (code !== 0) throw new AppError('FFMPEG_FAILED', encodeFailure(stderr), ffmpegErrorDetail(stderr))
     } catch (error) {
       encoder.kill('SIGKILL')
       if (error instanceof AppError && error.code === 'FFMPEG_FAILED') throw error
       // 書き込みの失敗は、ffmpeg が先に異常終了したことが原因であることが多い。その理由を添える。
       if (!(error instanceof AppError) && stderr.trim() !== '') {
-        throw new AppError('FFMPEG_FAILED', '動画のエンコードに失敗しました', ffmpegErrorDetail(stderr))
+        throw new AppError('FFMPEG_FAILED', encodeFailure(stderr), ffmpegErrorDetail(stderr))
       }
       throw error
     } finally {
@@ -294,6 +298,18 @@ export class ExportService {
       height
     }
   }
+}
+
+/** エンコードの失敗を伝える文。メモリ不足なら対処も添える。 */
+export function encodeFailure(stderr: string): string {
+  return /Cannot allocate memory|out of memory/i.test(stderr)
+    ? '動画のエンコードに失敗しました(PC のメモリが足りなくなりました。ほかのアプリを閉じるか、書き出しの解像度を下げてもう一度試してください)'
+    : '動画のエンコードに失敗しました'
+}
+
+/** イベントループを一巡させる(ネイティブのメモリの後片付けを走らせる)。 */
+export function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve))
 }
 
 function writeFrame(child: ChildProcess, data: Buffer): Promise<void> {

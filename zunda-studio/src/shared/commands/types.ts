@@ -37,6 +37,7 @@ import type {
   SubtitleStyle,
   SubtitleStyleId,
   SynthesisResult,
+  TextLook,
   VoiceConfig,
   VoiceParams
 } from '../project/types'
@@ -74,6 +75,8 @@ export interface ProjectSetEditing {
   autoPortraitTrack?: boolean
   cutFadeInMs?: Ms
   cutFadeOutMs?: Ms
+  freezeFadeIn?: boolean
+  rippleIgnoresOthers?: boolean
   zoomMethod?: ZoomMethod
   zoomOnStill?: 'off' | 'overwrite' | 'insert'
   defaultGapMs?: Ms
@@ -316,6 +319,13 @@ export interface VoiceSetSubtitleLines {
   lines: string[] | null
 }
 
+/** 字幕に出す文字を、読み上げる文字とは別にする。null でセリフと同じに戻す。声は変わらない。 */
+export interface VoiceSetDisplayText {
+  op: 'voice.setDisplayText'
+  itemId: ItemId
+  text: string | null
+}
+
 /** 読み方を直す(カタカナとアクセント記号)。null で自動の読みに戻す。 */
 export interface VoiceSetReading {
   op: 'voice.setReading'
@@ -456,6 +466,17 @@ export interface ItemSetContent {
   shape?: ShapeItem['shape']
 }
 
+/**
+ * テロップだけの見た目を変える(選んだ複数のテロップにまとめて)。look の項目を null にすると、スタイルに戻す。
+ * replace なら、今の見た目を捨てて look だけにする(見た目の貼り付け・ひな形)。
+ */
+export interface ItemSetTextLook {
+  op: 'item.setTextLook'
+  itemIds: ItemId[]
+  look: { [K in keyof TextLook]?: TextLook[K] | null }
+  replace?: boolean
+}
+
 export interface ItemAddEffect {
   op: 'item.addEffect'
   itemId: ItemId
@@ -528,16 +549,32 @@ export interface ItemSetLocked {
 
 // ------------------------------------------------------------------ タイムライン全体
 
-/** アイテムを消し、空いた時間を詰める(後ろのアイテムを前へずらす)。 */
+/**
+ * アイテムを消し、空いた時間を詰める(後ろのアイテムを前へずらす)。
+ * 既定では、ほかのレイヤーに残った素材がある時間は詰めない。
+ * ignoreOthers: true なら、ほかの素材は考慮せず、消した長さだけ詰める。
+ */
 export interface TimelineRippleDelete {
   op: 'timeline.rippleDelete'
   itemIds: ItemId[]
+  ignoreOthers?: boolean
 }
 
 /** atMs の位置にある「何も置かれていない時間」を詰める。 */
 export interface TimelineCloseGap {
   op: 'timeline.closeGap'
   atMs: Ms
+}
+
+/**
+ * 選んだアイテムを左(前)へ詰める。前にある同じレイヤーの素材(セリフはほかのレイヤーのセリフも)の終わり、無ければ 0 秒まで。
+ * 選んでいないものは動かさない。グループに入っていれば仲間も一緒に動かす。ロック中のものは動かさない。
+ * keepGaps: true なら選んだもの同士の間を保ったまま、まとめて動かす。false(既定)なら選んだもの同士の間も詰める。
+ */
+export interface TimelinePackLeft {
+  op: 'timeline.packLeft'
+  itemIds: ItemId[]
+  keepGaps?: boolean
 }
 
 /** atMs 以降に始まるアイテムを後ろへずらし、空白を作る。 */
@@ -713,6 +750,7 @@ export type Command =
   | ItemSetTransform
   | ItemSetAudio
   | ItemSetContent
+  | ItemSetTextLook
   | ItemAddEffect
   | ItemUpdateEffect
   | ItemRemoveEffect
@@ -723,6 +761,7 @@ export type Command =
   | ItemSetLocked
   | TimelineRippleDelete
   | TimelineCloseGap
+  | TimelinePackLeft
   | TimelineInsertGap
   | TimelineArrangeOverlaps
   | ItemSetColor
@@ -754,6 +793,7 @@ export type Command =
   | VoiceSetSubtitleLines
   | VoiceSetGapAfter
   | VoiceSetReading
+  | VoiceSetDisplayText
   | VoiceInvalidateSynthesis
   | VoiceApplySynthesis
 

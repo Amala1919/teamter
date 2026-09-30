@@ -22,6 +22,7 @@ import type {
 } from '../project/types'
 import { effectStateAt, IDENTITY_EFFECT, type EffectState } from './effects'
 import { drawPortrait, portraitPlacement } from './portrait'
+import { drawTelop, fontFamilyStack } from './telop'
 import type { CanvasLike, Ctx2D, RenderResources } from './types'
 import { zoomProgress, zoomViewport } from './zoom'
 
@@ -196,9 +197,7 @@ function drawItem(context: Ctx2D, project: Project, item: Item, relMs: Ms, resou
     case 'text': {
       const style = project.subtitleStyles[item.styleId]
       if (!style) return
-      withTransform(context, item.transform, effect, 0, 0, () => {
-        drawText(context, item.text.split('\n'), { ...style, position: { anchor: 'center', x: 0, y: 0 } }, true)
-      })
+      withTransform(context, item.transform, effect, 0, 0, () => drawTelop(context, item, style, relMs))
       return
     }
     case 'image': {
@@ -272,42 +271,25 @@ function drawSubtitle(context: Ctx2D, project: Project, item: VoiceItem, effect:
   context.restore()
 }
 
-/** 字幕に使うフォント。指定のフォントが無い環境でも日本語が表示されるよう、OS ごとの候補を後ろに並べる。 */
-export function fontFamilyStack(family: string): string {
-  const fallbacks = ['Noto Sans JP', 'Yu Gothic UI', 'Meiryo', 'Hiragino Sans', 'IPAGothic', 'sans-serif']
-  return [family, ...fallbacks.filter((candidate) => candidate !== family)]
-    .map((name) => (name === 'sans-serif' ? name : `"${name}"`))
-    .join(', ')
-}
+export { fontFamilyStack }
 
 /** 字幕を描く(字幕の設定画面の見本用。動画と同じ描き方)。 */
 export function drawSubtitleLines(context: Ctx2D, lines: readonly string[], style: SubtitleStyle): void {
   drawText(context, lines, style)
 }
 
-/**
- * 文字を描く。字幕は指定位置を最終行の下端として上へ積む。
- * centered なら行の塊の中心を指定位置に置く(テロップ)。
- */
-function drawText(context: Ctx2D, lines: readonly string[], style: SubtitleStyle | undefined, centered = false): void {
+/** 字幕を描く。指定位置を最終行の下端として上へ積む(テロップは telop.ts)。 */
+function drawText(context: Ctx2D, lines: readonly string[], style: SubtitleStyle | undefined): void {
   if (!style || lines.length === 0) return
 
   context.save()
   context.font = `${style.fontWeight} ${style.fontSizePx}px ${fontFamilyStack(style.fontFamily)}`
-  context.textAlign = centered
-    ? 'center'
-    : style.position.anchor.endsWith('left')
-      ? 'left'
-      : style.position.anchor.endsWith('right')
-        ? 'right'
-        : 'center'
+  context.textAlign = style.position.anchor.endsWith('left') ? 'left' : style.position.anchor.endsWith('right') ? 'right' : 'center'
   context.textBaseline = 'alphabetic'
 
   const lineHeightPx = style.fontSizePx * style.lineHeight
-  const firstLineY = centered
-    ? style.position.y - (lineHeightPx * (lines.length - 1)) / 2 + style.fontSizePx * 0.35
-    : // 指定位置を最終行の下端とみなし、行数に応じて上へ積む。
-      style.position.y - lineHeightPx * (lines.length - 1)
+  // 指定位置を最終行の下端とみなし、行数に応じて上へ積む。
+  const firstLineY = style.position.y - lineHeightPx * (lines.length - 1)
 
   lines.forEach((line, index) => {
     const y = firstLineY + lineHeightPx * index

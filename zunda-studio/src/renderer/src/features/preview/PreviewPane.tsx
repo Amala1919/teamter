@@ -9,17 +9,21 @@ import { defaultRegion, zoomProgress } from '@shared/render/zoom'
 import { portraitScenes, type PortraitScene } from '@shared/portrait/scene'
 import type { Ms, PortraitTransform, Project, VoiceItem } from '@shared/project/types'
 import { portraitPlacement } from '@shared/render/portrait'
+import { isPlacedItem, itemBox, type PlacedItem } from '@shared/render/item-box'
 
+import { measureContext } from '../../lib/fonts'
 import { formatMs } from '../../lib/time'
 import { player, togglePlayback, usePlaybackStore } from '../../playback/player'
 import { browserResources, useResourceStore } from '../../render/browser-resources'
 import { useMediaStore } from '../../state/media'
 import { hasClipboard, pasteAt, splitAtPlayhead } from '../../state/edit-actions'
 import { changeEditing } from '../../state/editing'
+import { useSettingsStore } from '../../state/settings'
 import { saveFrameImage } from '../../state/snapshot'
 import { deleteSelection, useEditorStore } from '../../state/store'
 import { openContextMenu, type MenuEntry } from '../../ui/ContextMenu'
 import { insertZoom } from '../timeline/timeline-menus'
+import { ItemFrameEditor } from './ItemFrameEditor'
 import { PortraitFrameEditor } from './PortraitFrameEditor'
 import { ZoomFrameEditor } from './ZoomFrameEditor'
 
@@ -37,7 +41,7 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
   const durationMs = projectDurationMs(project)
   const caption = itemsAt(project, playheadMs)
     .filter(isVoiceItem)
-    .map((item) => `${project.characters[item.characterId]?.name ?? ''}「${item.text}」`)
+    .map((item) => `${project.characters[item.characterId]?.name ?? ''}「${item.displayText ?? item.text}」`)
     .join(' ')
   const playing = usePlaybackStore((state) => state.playing)
   const loading = usePlaybackStore((state) => state.loading)
@@ -67,7 +71,26 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
     if (manifest) placedPortraits.push({ scene, manifest, rect: portraitPlacement(scene.transform, manifest) })
   }
   placedPortraits.sort((a, b) => (layerIndex.get(a.scene.layerId) ?? 0) - (layerIndex.get(b.scene.layerId) ?? 0))
-  const editingPortrait = zoomItem ? undefined : placedPortraits.find((entry) => entry.scene.character.id === portraitTarget)
+  // プレビューでクリックした素材を選ぶか(設定の「編集」タブで切れる)
+  const clickSelect = useSettingsStore((state) => state.settings?.ui.previewClickSelect !== false)
+  const hiddenLayers = new Set(project.layers.filter((layer) => !layer.visible).map((layer) => layer.id))
+  const lockedLayers = new Set(project.layers.filter((layer) => layer.locked).map((layer) => layer.id))
+  /** 画面に出ていて、プレビューで動かせる素材と、その範囲。描く順(上にあるものが後)。 */
+  const placedItems = itemsAt(project, playheadMs)
+    .filter((item): item is PlacedItem => isPlacedItem(item) && !hiddenLayers.has(item.layerId))
+    .flatMap((item) => {
+      const rect = itemBox(project, item, measureContext())
+      return rect ? [{ item, rect }] : []
+    })
+    .sort((a, b) => (layerIndex.get(a.item.layerId) ?? 0) - (layerIndex.get(b.item.layerId) ?? 0))
+  /** 画面いっぱいの動画(背景のゲーム映像など)。枠を出すと下の素材を触れなくなるので、枠もクリックでの選択もしない。 */
+  const fillsScreen = ({ rect }: { rect: { x: number; y: number; width: number; height: number } }): boolean =>
+    rect.x <= 1 && rect.y <= 1 && rect.x + rect.width >= project.canvas.width - 1 && rect.y + rect.height >= project.canvas.height - 1
+  const framed =
+    zoomItem || !selected || !isPlacedItem(selected) || selected.locked || lockedLayers.has(selected.layerId)
+      ? undefined
+      : placedItems.find((entry) => entry.item.id === selected.id && !(entry.item.type === 'video' && fillsScreen(entry)))
+  const editingPortrait = zoomItem || framed ? undefined : placedPortraits.find((entry) => entry.scene.character.id === portraitTarget)
 
   /** 画面上の位置を、キャンバスの座標に直す(canvas の上でも、重ねた枠の上でも同じ)。 */
   const toCanvasPoint = (event: React.MouseEvent): { x: number; y: number } => {
@@ -202,8 +225,29 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
 
   const onCanvasPointerDown = (event: React.PointerEvent<HTMLCanvasElement>): void => {
     if (event.button !== 0) return
-    const hit = portraitAt(toCanvasPoint(event))
+    const point = toCanvasPoint(event)
+    const hit = portraitAt(point)
+    // テロップ・画像・図形の上なら、それを選ぶ(立ち絵より上のレイヤーにあるときだけ)。
+    const itemHit = clickSelect
+      ? [...placedItems]
+          .reverse()
+          .find(
+            (entry) =>
+              !fillsScreen(entry) &&
+              point.x >= entry.rect.x &&
+              point.x <= entry.rect.x + entry.rect.width &&
+              point.y >= entry.rect.y &&
+              point.y <= entry.rect.y + entry.rect.height
+          )
+      : undefined
+    if (itemHit && (!hit || (layerIndex.get(itemHit.item.layerId) ?? 0) >= (layerIndex.get(hit.scene.layerId) ?? 0))) {
+      setPortraitTarget(null)
+      setSelection([itemHit.item.id])
+      return
+    }
     setPortraitTarget(hit ? hit.scene.character.id : null)
+    // 枠を出している素材の外をクリックしたら、選ぶのをやめる(立ち絵やほかの素材を触れるように)。
+    if (framed) setSelection([])
   }
 
   // 画像の保存などの短いお知らせ。しばらくしたら消す。
@@ -332,6 +376,22 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
             />
           </div>
         )}
+        {framed && overlayBox && (
+          <div className="preview__overlay preview__overlay--passthrough" style={overlayBox}>
+            <ItemFrameEditor
+              canvas={project.canvas}
+              size={{ width: framed.rect.width, height: framed.rect.height }}
+              placement={{ x: framed.item.transform.x, y: framed.item.transform.y, scale: framed.item.transform.scale }}
+              scale={project.canvas.width / Math.max(1, overlayBox.width)}
+              label={FRAME_LABELS[framed.item.type]}
+              onCommit={(placement) => {
+                const result = dispatch([{ op: 'item.setTransform', itemId: framed.item.id, ...placement }], `${FRAME_LABELS[framed.item.type]}の位置・大きさ`)
+                if (!result.ok) onError(result.message)
+              }}
+              onContextMenu={onCanvasContextMenu}
+            />
+          </div>
+        )}
         {editingPortrait && overlayBox && (
           <div className="preview__overlay preview__overlay--passthrough" style={overlayBox}>
             <PortraitFrameEditor
@@ -385,6 +445,8 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
     </section>
   )
 }
+
+const FRAME_LABELS: Record<PlacedItem['type'], string> = { text: 'テロップ', image: '画像', shape: '図形', video: '動画' }
 
 interface PlacedPortrait {
   scene: PortraitScene

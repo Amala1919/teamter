@@ -159,6 +159,10 @@ const editingSchema = z
     /** 動画を分けた・端を切ったときのフェードの長さ(0 ならしない)。 */
     cutFadeInMs: z.number().int().min(0).max(5000).default(300),
     cutFadeOutMs: z.number().int().min(0).max(5000).default(300),
+    /** 再生位置から先を静止画にしたとき、静止画の後に続く動画をフェードインさせるか。 */
+    freezeFadeIn: z.boolean().default(true),
+    /** 「削除して詰める」(Shift+Delete)で、ほかの素材は考慮せず消した長さだけ詰めるか。 */
+    rippleIgnoresOthers: z.boolean().default(false),
     /** ズームを置くときの既定の寄り方。 */
     zoomMethod: z.enum(['cut', 'smooth', 'linear', 'punch', 'slowPush']).default('smooth'),
     /** ズームを置くとき、その時点のコマを静止画にしてズームとグループにするか。 */
@@ -170,7 +174,9 @@ const editingSchema = z
 const uiSchema = z
   .object({
     /** タイムラインやプレビューで素材を選んだら、右の欄をインスペクタに切り替える。 */
-    autoInspectorTab: z.boolean().default(true)
+    autoInspectorTab: z.boolean().default(true),
+    /** プレビューでテロップ・画像・図形をクリックしたら選び、枠で動かせるようにする。 */
+    previewClickSelect: z.boolean().default(true)
   })
   .prefault({})
 

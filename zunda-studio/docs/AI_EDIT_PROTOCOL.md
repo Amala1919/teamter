@@ -110,6 +110,7 @@ LLM(tool use) → コマンド列
 | `voice.setExpression` | `itemId`, `expressionId` | 表情を変える |
 | `voice.setVoiceParams` | `itemId`, `speedScale?`, `pitchScale?`, `intonationScale?`, `volumeScale?` | 発話パラメータを上書きする |
 | `voice.setSubtitleOverride` | `itemId`, `color?`, `sizeScale?`, `styleId?` | 字幕の見た目を個別に上書きする |
+| `voice.setDisplayText` | `itemId`, `text`(`null` で戻す) | 字幕に出す文字だけを、読み上げるセリフと別にする(声は変わらない) |
 | `voice.setGapAfter` | `itemId`, `gapMs` | 次のセリフまでの間を指定する |
 | `script.adoptLiveEntry` | `sessionId`, `entryId`, `atMs?` | ライブセッションの発言を台本に採用する。発言者に応じた役のボイスアイテムになる |
 
@@ -135,6 +136,7 @@ LLM(tool use) → コマンド列
 | `item.setTransform` | `itemId`, `x?`, `y?`, `scale?`, `rotation?`, `opacity?` | 変形を設定する |
 | `item.setAudio` | `itemId`, `volume?`, `loop?`, `fadeInMs?`, `fadeOutMs?`, `duckable?` | 音量などを設定する(動画は音量のみ) |
 | `item.setContent` | `itemId`, `text?`, `styleId?`, `fill?`, `shape?` | テロップの文字・図形の色や形を変える |
+| `item.setTextLook` | `itemIds`, `look`, `replace?` | テロップだけの見た目(色・フォント・太さ・大きさ・揃え・行間・縁取り・影・背景の帯・文字送り)。項目を `null` にするとスタイルに戻す。`replace` なら今の見た目を捨てて `look` だけにする |
 | `item.addEffect` | `itemId`, `effect` | エフェクトを追加する |
 | `item.updateEffect` | `itemId`, `effectIndex`, `effect` | エフェクトを置き換える |
 | `item.removeEffect` | `itemId`, `effectIndex` | エフェクトを外す |
@@ -142,7 +144,8 @@ LLM(tool use) → コマンド列
 | `item.split` | `itemId`, `atMs`, `tempId?` | その時刻で2つに分ける(セリフ・ズームは不可)。後半が新しいアイテムになる |
 | `item.setSpeed` | `itemId`, `rate` | 動画の再生速度(0.25〜4倍)。画面上の長さが変わる |
 | `item.freezeFrame` | `itemId`, `atMs`, `durationMs`, `mode`(`insert`/`overwrite`), `tempId?` | その時刻のコマで動画を止め、静止画として表示する。`insert` は後ろをずらし(かかっているズームは寄ったまま伸ばす)、`overwrite` は動画のその先を静止画で置き換える |
-| `timeline.rippleDelete` | `itemIds` | 削除して、空いた時間を詰める |
+| `timeline.rippleDelete` | `itemIds`, `ignoreOthers?` | 削除して、空いた時間を詰める(`ignoreOthers` なら、ほかの素材は考慮せず消した長さだけ詰める) |
+| `timeline.packLeft` | `itemIds`, `keepGaps?` | 選んだものを左(前)へ詰める。ほかのものは動かさない。`keepGaps` なら選んだもの同士の間を保つ |
 | `timeline.closeGap` | `atMs` | その位置の何も無い時間を詰める |
 | `timeline.insertGap` | `atMs`, `durationMs` | その位置から後ろをずらして空白を作る |
 | `portrait.insert` | `characterId`, `atMs`, `durationMs`, `kind?`(`show`/`hide`/`adjust`), `transform?`, `expressionId?`, `transition?`(`none`/`fade`/`pop`), `tempId?` | 場面ごとの立ち絵を置く(出す・隠す・位置や表情を変える) |

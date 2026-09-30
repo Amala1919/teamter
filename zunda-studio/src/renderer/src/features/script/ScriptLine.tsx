@@ -58,7 +58,14 @@ export function ScriptLine(props: ScriptLineProps): React.JSX.Element {
 
   return (
     <li
-      className={['script__line', props.selected ? 'script__line--selected' : '', props.matched ? 'script__line--matched' : ''].filter(Boolean).join(' ')}
+      className={[
+        'script__line',
+        props.isLast ? 'script__line--latest' : '',
+        props.selected ? 'script__line--selected' : '',
+        props.matched ? 'script__line--matched' : ''
+      ]
+        .filter(Boolean)
+        .join(' ')}
       data-line-id={line.id}
       onClick={props.onSelect}
       onContextMenu={(event) => {
@@ -70,6 +77,11 @@ export function ScriptLine(props: ScriptLineProps): React.JSX.Element {
     >
       <div className="script__lineHeader">
         <span className="script__index">{props.index + 1}</span>
+        {props.isLast && (
+          <span className="script__latest" data-testid="script-line-latest">
+            最新
+          </span>
+        )}
         <select
           className="script__speakerSelect"
           value={line.characterId}
@@ -134,6 +146,11 @@ export function ScriptLine(props: ScriptLineProps): React.JSX.Element {
         aria-label={`${props.index + 1}行目のセリフ`}
         data-testid="script-text"
       />
+      {line.displayText && (
+        <p className="script__displayText" title="字幕だけ別の文字を出しています(インスペクタで変えられます)" data-testid="script-display-text">
+          字幕: {line.displayText}
+        </p>
+      )}
 
       <div className="script__lineFooter">
         <SynthesisBadge line={line} status={status} onRetry={props.onRetry} />

@@ -10,7 +10,7 @@ import { useSettingsStore } from '../../state/settings'
 import { useEditorStore } from '../../state/store'
 import { NumberField } from '../../ui/NumberField'
 
-type Toggle = 'openGapOnVoiceInsert' | 'closeGapOnVoiceDelete' | 'groupFollowsVoice' | 'autoPortraitTrack' | 'avoidOverlap'
+type Toggle = 'openGapOnVoiceInsert' | 'closeGapOnVoiceDelete' | 'rippleIgnoresOthers' | 'groupFollowsVoice' | 'autoPortraitTrack' | 'avoidOverlap'
 
 /** 編集の自動処理の一覧。値が無いときの扱い(以前のプロジェクト)もここで決める。 */
 const TOGGLES: { key: Toggle; label: string; note: string; fallback: boolean }[] = [
@@ -18,6 +18,12 @@ const TOGGLES: { key: Toggle; label: string; note: string; fallback: boolean }[]
     key: 'closeGapOnVoiceDelete',
     label: 'セリフを消したら、後ろのセリフを前に詰める',
     note: '切ると、消したところは空いたままになります(ほかのものは動きません)。',
+    fallback: false
+  },
+  {
+    key: 'rippleIgnoresOthers',
+    label: '「削除して詰める」(Shift+Delete)では、ほかの素材は考慮せず、消した長さだけ詰める',
+    note: '切っておくと(既定)、ほかのレイヤーに素材が残っている時間は詰めません。右クリックの「削除して詰める」からは、どちらも選べます。',
     fallback: false
   },
   {
@@ -56,6 +62,7 @@ export function EditingSettings({ settings, onError }: { settings: AppSettings; 
 
   // 保存の応答を待たずに見た目を切り替える(応答が来るまで押しても変わらないように見えないよう)。
   const [autoInspector, setAutoInspector] = useState(settings.ui.autoInspectorTab)
+  const [clickSelect, setClickSelect] = useState(settings.ui.previewClickSelect)
 
   const value = (key: Toggle, fallback: boolean): boolean => (editing as ProjectEditing)[key] ?? fallback
 
@@ -119,6 +126,20 @@ export function EditingSettings({ settings, onError }: { settings: AppSettings; 
           testId="editing-cutFadeOutMs"
         />
       </div>
+      <label className="field__row field__row--top">
+        <input
+          type="checkbox"
+          checked={editing.freezeFadeIn ?? true}
+          onChange={(event) => change({ freezeFadeIn: event.target.checked })}
+          data-testid="editing-freezeFadeIn"
+        />
+        <span>
+          「再生位置から先を静止画にする」とき、静止画の後に続く動画をフェードインさせる
+          <span className="note note--block">
+            長さは上の「切った後の始まりをフェードイン」と同じです。静止画の前はそのコマから続くので、フェードアウトはしません。
+          </span>
+        </span>
+      </label>
 
       <h3>ズーム</h3>
       <label className="field">
@@ -161,6 +182,22 @@ export function EditingSettings({ settings, onError }: { settings: AppSettings; 
           data-testid="editing-autoInspectorTab"
         />
         タイムラインやプレビューで素材を選んだら、右の欄をインスペクタに切り替える
+      </label>
+      <label className="field__row">
+        <input
+          type="checkbox"
+          checked={clickSelect}
+          onChange={(event) => {
+            const next = event.target.checked
+            setClickSelect(next)
+            update({ ui: { previewClickSelect: next } }).catch((error: unknown) => {
+              setClickSelect(!next)
+              onError(error)
+            })
+          }}
+          data-testid="editing-previewClickSelect"
+        />
+        プレビューでテロップ・画像・図形をクリックしたら選び、枠をドラッグして動かせるようにする
       </label>
     </div>
   )

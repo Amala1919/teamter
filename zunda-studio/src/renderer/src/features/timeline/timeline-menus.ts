@@ -10,14 +10,18 @@ import {
   addFade,
   closeGapAt,
   copySelection,
+  copyTextLook,
   cutSelection,
   duplicateSelection,
   freezeAtPlayhead,
   hasClipboard,
+  hasTextLook,
   insertGapAt,
   moveToLayer,
   moveToPlayhead,
+  packLeftSelection,
   pasteAt,
+  pasteTextLook,
   rippleDeleteSelection,
   selectAll,
   selectFrom,
@@ -87,6 +91,8 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
   // 選んでいるのが1つのグループの仲間だけなら、グループとして1つのものと同じに扱う。
   const oneGroup = item.groupId !== undefined && selected.every((candidate) => candidate.groupId === item.groupId)
   const anyGrouped = selected.some((candidate) => candidate.groupId !== undefined)
+  // Shift+Delete で使う方(設定の「編集」タブで選ぶ)に印を付ける。
+  const rippleIgnoresOthers = project.editing.rippleIgnoresOthers === true
   const splittable = item.type !== 'voice' && item.type !== 'zoom' && item.startMs < playheadMs && playheadMs < itemEndMs(item)
   const entries: MenuEntry[] = [
     {
@@ -118,10 +124,42 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
       shortcut: 'Shift+Delete',
       disabled: locked,
       danger: true,
-      onSelect: report(context, () => rippleDeleteSelection(ids)),
-      testId: 'menu-ripple-delete'
+      testId: 'menu-ripple-delete',
+      submenu: [
+        {
+          label: 'ほかの素材が残っている時間は詰めない',
+          checked: !rippleIgnoresOthers,
+          onSelect: report(context, () => rippleDeleteSelection(ids, false)),
+          testId: 'menu-ripple-delete-respect'
+        },
+        {
+          label: 'ほかの素材は考慮せず、消した長さだけ詰める',
+          checked: rippleIgnoresOthers,
+          onSelect: report(context, () => rippleDeleteSelection(ids, true)),
+          testId: 'menu-ripple-delete-ignore'
+        }
+      ]
     },
     'separator',
+    many && !oneGroup
+      ? {
+          label: `選んだ${ids.length}個を左に詰める`,
+          disabled: locked,
+          testId: 'menu-pack-left',
+          submenu: [
+            {
+              label: '空白を埋める(選んだもの同士の間も詰める)',
+              onSelect: report(context, () => packLeftSelection(false, ids)),
+              testId: 'menu-pack-left-fill'
+            },
+            {
+              label: '空白を保つ(間はそのまま、まとめて左へ)',
+              onSelect: report(context, () => packLeftSelection(true, ids)),
+              testId: 'menu-pack-left-keep'
+            }
+          ]
+        }
+      : { label: '左に詰める', disabled: locked, onSelect: report(context, () => packLeftSelection(false, ids)), testId: 'menu-pack-left' },
     { label: '再生位置へ移動', disabled: locked || (many && !oneGroup), onSelect: report(context, () => moveToPlayhead(item.id)), testId: 'menu-move-to-playhead' },
     { label: '再生位置をここの頭へ', onSelect: () => state().setPlayhead(item.startMs) },
     { label: '再生位置をここの終わりへ', onSelect: () => state().setPlayhead(itemEndMs(item)) },
@@ -152,6 +190,18 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
   ]
 
   const tools: MenuEntry[] = []
+  if (item.type === 'text') {
+    const texts = selected.filter((candidate) => candidate.type === 'text').length
+    tools.push(
+      { label: '見た目をコピー', onSelect: () => copyTextLook(item), testId: 'menu-copy-look' },
+      {
+        label: texts > 1 ? `選んだ${texts}個のテロップに見た目を貼り付け` : '見た目を貼り付け',
+        disabled: locked || !hasTextLook(),
+        onSelect: report(context, () => pasteTextLook(ids)),
+        testId: 'menu-paste-look'
+      }
+    )
+  }
   if (item.type === 'video' && !item.freeze) {
     const canFreeze = !locked && item.startMs <= playheadMs && playheadMs <= itemEndMs(item)
     const freezeMenu = (mode: 'insert' | 'overwrite'): MenuEntry[] =>

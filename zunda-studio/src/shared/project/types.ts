@@ -412,6 +412,11 @@ export interface VoiceItem extends ItemBase {
    * null ならテキストから自動で読む。テキストを書き換えると外れる(V-6)。
    */
   reading?: string | null
+  /**
+   * 字幕に出す文字(読み上げる text とは別にしたいとき)。null・無しなら text をそのまま出す。
+   * 声は text(と reading)で合成する。text を書き換えると外れる。
+   */
+  displayText?: string | null
 }
 
 export interface VideoItem extends ItemBase {
@@ -440,6 +445,41 @@ export interface TextItem extends ItemBase {
   text: string
   styleId: SubtitleStyleId
   transform: Transform
+  /** このテロップだけの見た目。無い項目は字幕スタイル(styleId)に従う。 */
+  look?: TextLook
+}
+
+/** テロップの文字の揃え方(行の塊の中での揃え)。 */
+export type TextAlign = 'left' | 'center' | 'right'
+
+/** テロップの後ろに敷く帯。 */
+export interface TextBackground {
+  /** #rrggbb */
+  color: string
+  /** 0〜1 */
+  opacity: number
+  /** 文字の周りの余白(px)。 */
+  paddingPx: number
+  /** 角の丸み(px)。 */
+  radiusPx: number
+}
+
+/**
+ * テロップだけの見た目(字幕スタイルの上書き)。無い項目はスタイルに従う。
+ * 縁取り・影の 'none' は「スタイルにあっても付けない」。
+ */
+export interface TextLook {
+  color?: string
+  fontFamily?: string
+  fontWeight?: number
+  fontSizePx?: number
+  align?: TextAlign
+  lineHeight?: number
+  outline?: SubtitleOutline | 'none'
+  shadow?: SubtitleShadow | 'none'
+  background?: TextBackground
+  /** 文字送り: 最初のこの時間で1文字ずつ出す(ms)。無いか0なら、はじめから全部出す。 */
+  typewriterMs?: Ms
 }
 
 export interface AudioItem extends ItemBase {
@@ -647,6 +687,16 @@ export interface EditingSettings {
   /** 動画を分けた・端を切ったとき、切った所をフェードさせる長さ(0 ならしない)。無いときは 300ms。 */
   cutFadeInMs?: Ms
   cutFadeOutMs?: Ms
+  /**
+   * 再生位置から先を静止画にしたとき(上書き)、静止画の後に続く動画をフェードインさせるか(長さは cutFadeInMs)。無いときはさせる。
+   * 静止画の前はそのコマから続くので、フェードアウトはしない。
+   */
+  freezeFadeIn?: boolean
+  /**
+   * 「削除して詰める」(Shift+Delete)で、ほかの素材は考慮せず消した長さだけ詰めるか。
+   * 無いときは考慮する(ほかのレイヤーに残った素材がある時間は詰めない)。右クリックのメニューからはどちらも選べる。
+   */
+  rippleIgnoresOthers?: boolean
   /** ズームを置くときの既定の寄り方。無いときは smooth。 */
   zoomMethod?: ZoomMethod
   /**

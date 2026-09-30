@@ -1,6 +1,6 @@
 import type { Command } from '@shared/commands/types'
 import { itemEndMs, projectDurationMs } from '@shared/project/queries'
-import type { Effect, Item, ItemId, Ms } from '@shared/project/types'
+import type { Effect, Item, ItemId, Ms, TextItem, TextLook } from '@shared/project/types'
 
 import { deleteSelection, useEditorStore } from './store'
 
@@ -113,13 +113,59 @@ export function splitAtPlayhead(ids?: readonly ItemId[]): string | null {
   ).error
 }
 
-/** 消して詰める。 */
-export function rippleDeleteSelection(ids?: readonly ItemId[]): string | null {
+/**
+ * 消して詰める。ignoreOthers: ほかの素材は考慮せず、消した長さだけ詰める(省くと設定の「編集」タブで選んだ方)。
+ */
+export function rippleDeleteSelection(ids?: readonly ItemId[], ignoreOthers?: boolean): string | null {
   const items = selectedItems(ids)
   if (items.length === 0) return '消すアイテムを選んでください'
-  const { error } = run([{ op: 'timeline.rippleDelete', itemIds: items.map((item) => item.id) }], '削除して詰める')
+  const ignore = ignoreOthers ?? state().project.editing.rippleIgnoresOthers === true
+  const { error } = run(
+    [{ op: 'timeline.rippleDelete', itemIds: items.map((item) => item.id), ignoreOthers: ignore }],
+    ignore ? '削除して詰める(消した長さだけ)' : '削除して詰める'
+  )
   if (!error) state().setSelection([])
   return error
+}
+
+/**
+ * 選んだものを左(前)へ詰める。ほかのものは動かさない。
+ * keepGaps: 選んだもの同士の間を保ってまとめて動かす(false なら選んだもの同士の間も詰める)。
+ */
+export function packLeftSelection(keepGaps: boolean, ids?: readonly ItemId[]): string | null {
+  const items = selectedItems(ids)
+  if (items.length === 0) return '詰めるアイテムを選んでください'
+  return run([{ op: 'timeline.packLeft', itemIds: items.map((item) => item.id), keepGaps }], keepGaps ? '左に詰める(間を保つ)' : '左に詰める').error
+}
+
+/** コピーしたテロップの見た目とスタイル(このアプリの中だけで使う)。 */
+let lookClipboard: TextLook | null = null
+let lookStyleId: string | null = null
+
+export function hasTextLook(): boolean {
+  return lookClipboard !== null
+}
+
+/** テロップの見た目(スタイルとこのテロップだけの見た目)をコピーする。 */
+export function copyTextLook(item: TextItem): void {
+  lookClipboard = { ...structuredClone(item.look ?? {}) }
+  lookStyleId = item.styleId
+}
+
+/** コピーした見た目を、選んだテロップに貼る(スタイルも同じにする)。テロップでないものは飛ばす。 */
+export function pasteTextLook(ids: readonly ItemId[]): string | null {
+  if (!lookClipboard) return '先にテロップの見た目をコピーしてください'
+  const targets = selectedItems(ids).filter((item) => item.type === 'text')
+  if (targets.length === 0) return '見た目を貼るテロップを選んでください'
+  const itemIds = targets.map((item) => item.id)
+  const styleId = lookStyleId && state().project.subtitleStyles[lookStyleId] ? lookStyleId : null
+  return run(
+    [
+      ...(styleId ? itemIds.map((itemId) => ({ op: 'item.setContent' as const, itemId, styleId })) : []),
+      { op: 'item.setTextLook', itemIds, look: lookClipboard, replace: true }
+    ],
+    'テロップの見た目の貼り付け'
+  ).error
 }
 
 export function closeGapAt(atMs: Ms): string | null {

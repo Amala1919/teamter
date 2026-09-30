@@ -144,6 +144,14 @@ describe('間の編集', () => {
     expect(byType<TextItem>(result, 'text')[0]!.startMs).toBe(12_000)
   })
 
+  it('ほかの素材を考慮しないなら、残った素材があっても消した長さだけ詰める(残った素材は動かない)', () => {
+    const project = base()
+    const clip = byType<VideoItem>(project, 'video')[0]!
+    const result = apply(project, [{ op: 'timeline.rippleDelete', itemIds: [clip.id], ignoreOthers: true }])
+    expect(byType<TextItem>(result, 'text')[0]!.startMs).toBe(2000)
+    expect(byType<AudioItem>(result, 'audio')[0]!.startMs).toBe(0)
+  })
+
   it('何も無い時間を詰める・空ける', () => {
     const project = base()
     const closed = apply(project, [{ op: 'timeline.closeGap', atMs: 11_000 }])
@@ -153,6 +161,76 @@ describe('間の編集', () => {
     const opened = apply(project, [{ op: 'timeline.insertGap', atMs: 11_000, durationMs: 3000 }])
     expect(byType<TextItem>(opened, 'text')[0]!.startMs).toBe(15_000)
     expect(byType<VideoItem>(opened, 'video')[0]!.startMs).toBe(0)
+  })
+
+  describe('左に詰める', () => {
+    /** 同じレイヤーにテロップを 0〜2秒・5〜7秒・10〜12秒、別のレイヤーに BGM(3〜20秒)。 */
+    function spaced(): { project: Project; a: string; b: string; c: string; bgm: string } {
+      const result = run(createEmptyProject(), [
+        {
+          op: 'asset.add',
+          asset: { type: 'audio', path: { absolute: '/bgm/a.mp3', relative: null }, license: { source: 'x', creditRequired: false }, durationMs: 60_000 },
+          tempId: 'asset'
+        },
+        { op: 'media.placeText', text: 'A', atMs: 0, durationMs: 2000, tempId: 'a' },
+        { op: 'media.placeText', text: 'B', atMs: 5000, durationMs: 2000, tempId: 'b' },
+        { op: 'media.placeText', text: 'C', atMs: 10_000, durationMs: 2000, tempId: 'c' },
+        { op: 'media.placeAudio', assetId: 'asset', atMs: 3000, durationMs: 17_000, tempId: 'bgm' }
+      ])
+      const id = (key: string): string => result.resolvedIds[key]!
+      return { project: result.project, a: id('a'), b: id('b'), c: id('c'), bgm: id('bgm') }
+    }
+    const startOf = (project: Project, id: string): number => project.items.find((item) => item.id === id)!.startMs
+
+    it('1つなら、同じレイヤーの前の素材の終わりまで寄せ、ほかは動かさない(別のレイヤーの素材は関係ない)', () => {
+      const { project, a, b, c, bgm } = spaced()
+      const next = apply(project, [{ op: 'timeline.packLeft', itemIds: [b] }])
+      expect([startOf(next, a), startOf(next, b), startOf(next, c), startOf(next, bgm)]).toEqual([0, 2000, 10_000, 3000])
+      // 前に何も無ければ 0 秒まで
+      expect(startOf(apply(project, [{ op: 'timeline.packLeft', itemIds: [bgm] }]), bgm)).toBe(0)
+    })
+
+    it('複数なら、空白を埋める(選んだもの同士の間も詰める)か、空白を保ってまとめて動かすかを選べる', () => {
+      const { project, a, b, c } = spaced()
+      const filled = apply(project, [{ op: 'timeline.packLeft', itemIds: [c, b] }])
+      expect([startOf(filled, a), startOf(filled, b), startOf(filled, c)]).toEqual([0, 2000, 4000])
+      const kept = apply(project, [{ op: 'timeline.packLeft', itemIds: [b, c], keepGaps: true }])
+      expect([startOf(kept, a), startOf(kept, b), startOf(kept, c)]).toEqual([0, 2000, 7000])
+    })
+
+    it('グループの仲間は一緒に動き、ロック中のものは動かさない。詰める空白が無ければ断る', () => {
+      const { project, a, b, c, bgm } = spaced()
+      const grouped = apply(project, [{ op: 'item.group', itemIds: [c, bgm] }])
+      // C は 2秒まで寄れるが、BGM は 3秒 しか寄れないので、仲間そろって 3秒 だけ動く
+      const moved = apply(grouped, [{ op: 'timeline.packLeft', itemIds: [c] }])
+      expect([startOf(moved, c), startOf(moved, bgm), startOf(moved, b)]).toEqual([7000, 0, 5000])
+
+      const locked = apply(project, [{ op: 'item.setLocked', itemId: b, locked: true }])
+      const packed = apply(locked, [{ op: 'timeline.packLeft', itemIds: [b, c] }])
+      expect([startOf(packed, b), startOf(packed, c)]).toEqual([5000, 7000])
+      expect(() => apply(project, [{ op: 'timeline.packLeft', itemIds: [a] }])).toThrow('前に詰められる空白がありません')
+    })
+
+    it('セリフは、ほかのレイヤーのセリフとも声が重ならないところまで', () => {
+      const project = apply(createEmptyProject(), [
+        { op: 'character.create', name: 'ずんだもん', engineId: 'voicevox', speakerId: 3, speakerName: 'ずんだもん' }
+      ])
+      const characterId = Object.keys(project.characters)[0]!
+      // 2つめは1つめと重ねて置いて別のレイヤーへ振り分けさせ、後ろへ離す
+      let withLines = apply(project, [
+        { op: 'voice.insert', characterId, text: 'ひとつめ', atMs: 20_000 },
+        { op: 'voice.insert', characterId, text: 'ふたつめ', atMs: 20_100 }
+      ])
+      const [first, second] = byType(withLines, 'voice').sort((x, y) => x.startMs - y.startMs)
+      expect(second!.layerId).not.toBe(first!.layerId)
+      withLines = apply(withLines, [{ op: 'item.setTimeRange', itemId: second!.id, startMs: 40_000 }])
+
+      const next = apply(withLines, [{ op: 'timeline.packLeft', itemIds: [first!.id, second!.id] }])
+      const packed = (id: string): Item => next.items.find((item) => item.id === id)!
+      expect(packed(first!.id).startMs).toBe(0)
+      expect(packed(second!.id).startMs).toBe(packed(first!.id).durationMs)
+      expect(packed(second!.id).layerId).toBe(second!.layerId)
+    })
   })
 
   it('速度は動画だけ・範囲内だけ', () => {
@@ -168,7 +246,9 @@ describe('間の編集', () => {
       { op: 'item.split', itemId: 'itm_1', atMs: 1000 },
       { op: 'item.setSpeed', itemId: 'itm_1', rate: 1.5 },
       { op: 'timeline.rippleDelete', itemIds: ['itm_1'] },
+      { op: 'timeline.rippleDelete', itemIds: ['itm_1'], ignoreOthers: true },
       { op: 'timeline.closeGap', atMs: 1000 },
+      { op: 'timeline.packLeft', itemIds: ['itm_1'], keepGaps: true },
       { op: 'timeline.insertGap', atMs: 1000, durationMs: 500 }
     ]) {
       expect(aiCommandSchema.safeParse(command).success).toBe(true)

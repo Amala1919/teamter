@@ -52,6 +52,8 @@ export const projectHandlers: ProjectHandlers = {
       if (!(value >= 0 && value <= 5000)) fail(command.op, 'フェードの長さは0〜5秒にしてください')
       draft.editing[key] = Math.round(value)
     }
+    if (command.freezeFadeIn !== undefined) draft.editing.freezeFadeIn = command.freezeFadeIn
+    if (command.rippleIgnoresOthers !== undefined) draft.editing.rippleIgnoresOthers = command.rippleIgnoresOthers
     if (command.zoomMethod !== undefined) {
       if (!ZOOM_METHODS.includes(command.zoomMethod)) fail(command.op, `寄り方の指定が不正です: ${command.zoomMethod}`)
       draft.editing.zoomMethod = command.zoomMethod

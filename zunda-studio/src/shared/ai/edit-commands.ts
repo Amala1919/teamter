@@ -39,6 +39,29 @@ const portraitTransform = z.object({
 
 const nullableNumber = z.number().nullable().optional()
 
+/** テロップだけの見た目(null はスタイルに戻す)。 */
+const textLook = z
+  .object({
+    color: color.nullable(),
+    fontFamily: z.string().min(1).max(100).nullable(),
+    fontWeight: z.number().min(100).max(900).nullable(),
+    fontSizePx: z.number().min(8).max(400).nullable(),
+    align: z.enum(['left', 'center', 'right']).nullable(),
+    lineHeight: z.number().min(0.5).max(4).nullable(),
+    outline: z.union([z.literal('none'), z.object({ color, widthPx: z.number().min(0).max(60) })]).nullable(),
+    shadow: z
+      .union([
+        z.literal('none'),
+        z.object({ color, offsetX: z.number().min(-100).max(100), offsetY: z.number().min(-100).max(100), blurPx: z.number().min(0).max(100) })
+      ])
+      .nullable(),
+    background: z
+      .object({ color, opacity: z.number().min(0).max(1), paddingPx: z.number().min(0).max(200), radiusPx: z.number().min(0).max(200) })
+      .nullable(),
+    typewriterMs: z.number().min(0).max(60_000).nullable()
+  })
+  .partial()
+
 export const aiCommandSchema = z.discriminatedUnion('op', [
   // 台本
   z.object({
@@ -75,6 +98,11 @@ export const aiCommandSchema = z.discriminatedUnion('op', [
     itemId: id,
     reading: z.string().max(1000).nullable().describe("読み方(カタカナ。アクセントの位置の後に '、区切りは /)")
   }),
+  z.object({
+    op: z.literal('voice.setDisplayText'),
+    itemId: id,
+    text: z.string().min(1).max(2000).nullable().describe('字幕に出す文字(読み上げとは別にしたいとき)。null でセリフと同じに戻す')
+  }),
   // アイテム共通
   z.object({ op: z.literal('item.setTimeRange'), itemId: id, startMs: ms.optional(), durationMs: ms.optional() }),
   z.object({ op: z.literal('item.trim'), itemId: id, startMs: ms.optional(), endMs: ms.optional() }),
@@ -90,6 +118,7 @@ export const aiCommandSchema = z.discriminatedUnion('op', [
     duckable: z.boolean().optional()
   }),
   z.object({ op: z.literal('item.setContent'), itemId: id, text: text.optional(), styleId: id.optional(), fill: color.optional(), shape: z.enum(['rect', 'ellipse']).optional() }),
+  z.object({ op: z.literal('item.setTextLook'), itemIds: z.array(id).min(1).max(200), look: textLook, replace: z.boolean().optional() }),
   z.object({ op: z.literal('item.addEffect'), itemId: id, effect }),
   z.object({ op: z.literal('item.updateEffect'), itemId: id, effectIndex: z.number().int().min(0), effect }),
   z.object({ op: z.literal('item.removeEffect'), itemId: id, effectIndex: z.number().int().min(0) }),
@@ -98,8 +127,9 @@ export const aiCommandSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('item.setSpeed'), itemId: id, rate: z.number().min(0.25).max(4) }),
   z.object({ op: z.literal('item.freezeFrame'), itemId: id, atMs: ms, durationMs: ms, mode: z.enum(['insert', 'overwrite']), tempId }),
   // タイムライン全体の間
-  z.object({ op: z.literal('timeline.rippleDelete'), itemIds: z.array(id).min(1).max(200) }),
+  z.object({ op: z.literal('timeline.rippleDelete'), itemIds: z.array(id).min(1).max(200), ignoreOthers: z.boolean().optional() }),
   z.object({ op: z.literal('timeline.closeGap'), atMs: ms }),
+  z.object({ op: z.literal('timeline.packLeft'), itemIds: z.array(id).min(1).max(200), keepGaps: z.boolean().optional() }),
   z.object({ op: z.literal('timeline.insertGap'), atMs: ms, durationMs: ms }),
   // 素材の配置(素材そのものの登録・削除は利用者だけが行う)
   z.object({ op: z.literal('media.placeVideo'), assetId: id, atMs: ms, layerId: id.optional(), inMs: ms.optional(), outMs: ms.optional(), transform: transform.optional(), volume: z.number().min(0).max(4).optional(), tempId }),
