@@ -417,6 +417,8 @@ export interface VoiceItem extends ItemBase {
    * 声は text(と reading)で合成する。text を書き換えると外れる。
    */
   displayText?: string | null
+  /** 真なら、このセリフの字幕を画面にも SRT にも出さない(声はそのまま)。 */
+  subtitleHidden?: boolean
 }
 
 export interface VideoItem extends ItemBase {

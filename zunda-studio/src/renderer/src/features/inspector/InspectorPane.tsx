@@ -239,20 +239,30 @@ function DisplayTextEditor({ item, run }: { item: VoiceItem; run: (commands: Com
   const current = item.displayText ?? item.text
   const [draft, setDraft] = useState(current)
   useEffect(() => setDraft(current), [current])
+  const hidden = item.subtitleHidden === true
+  const setHidden = (next: boolean): void =>
+    run([{ op: 'voice.setSubtitleHidden', itemIds: [item.id], hidden: next }], next ? '字幕を出さない' : '字幕を出す')
   const commit = (): void => {
     if (draft.trim() === '') {
+      // 空にしたら、字幕を出さないことにする(文字は元のまま残す)
       setDraft(current)
+      if (!hidden) setHidden(true)
       return
     }
     if (draft !== current) run([{ op: 'voice.setDisplayText', itemId: item.id, text: draft }], '字幕に出す文字の変更')
   }
   return (
     <section data-testid="display-text-editor">
+      <label className="field__row">
+        <input type="checkbox" checked={hidden} onChange={(event) => setHidden(event.target.checked)} data-testid="subtitle-hidden" />
+        このセリフの字幕を出さない(声はそのまま)
+      </label>
       <label className="field field--stacked">
         <span className="field__label">字幕に出す文字{item.displayText ? '(セリフと別)' : '(セリフと同じ)'}</span>
         <textarea
           rows={2}
           value={draft}
+          disabled={hidden}
           onChange={(event) => setDraft(event.target.value)}
           onBlur={commit}
           onKeyDown={(event) => {
@@ -263,7 +273,7 @@ function DisplayTextEditor({ item, run }: { item: VoiceItem; run: (commands: Com
           data-testid="display-text-input"
         />
       </label>
-      <p className="note">字幕だけを変えます(声はセリフのまま)。Enter で反映、Shift+Enter で改行。セリフを書き換えると、セリフと同じに戻ります。</p>
+      <p className="note">字幕だけを変えます(声はセリフのまま)。Enter で反映、Shift+Enter で改行。空にすると字幕を出さなくなります。セリフを書き換えると、セリフと同じに戻ります。</p>
       {item.displayText && (
         <button
           type="button"

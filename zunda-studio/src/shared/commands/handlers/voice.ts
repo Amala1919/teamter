@@ -22,6 +22,7 @@ type VoiceHandlers = Pick<
   | 'voice.setText'
   | 'voice.setReading'
   | 'voice.setDisplayText'
+  | 'voice.setSubtitleHidden'
   | 'voice.invalidateSynthesis'
   | 'voice.delete'
   | 'voice.move'
@@ -138,6 +139,15 @@ export const voiceHandlers: VoiceHandlers = {
     // 字幕の改行は、新しい文字で自動に戻す(声は変わらないので合成し直さない)。
     item.subtitleLinesManual = false
     refreshSubtitleLines(draft, item)
+  },
+
+  'voice.setSubtitleHidden': (draft, command, env) => {
+    if (command.itemIds.length === 0) fail(command.op, 'セリフを選んでください')
+    for (const rawId of command.itemIds) {
+      const item = findVoiceItem(draft, env.resolve(rawId), command.op)
+      if (command.hidden) item.subtitleHidden = true
+      else delete item.subtitleHidden
+    }
   },
 
   'voice.setReading': (draft, command, env) => {

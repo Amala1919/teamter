@@ -190,6 +190,20 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
   ]
 
   const tools: MenuEntry[] = []
+  if (item.type === 'voice') {
+    // 選んだセリフの字幕をまとめて出す・出さない(1つめのセリフに合わせて切り替える)
+    const lines = selected.filter((candidate) => candidate.type === 'voice').map((candidate) => candidate.id)
+    const hide = item.subtitleHidden !== true
+    tools.push({
+      label: `${lines.length > 1 ? `選んだ${lines.length}個のセリフの` : ''}字幕を${hide ? '出さない' : '出す'}`,
+      disabled: locked,
+      onSelect: report(context, () => {
+        const result = state().dispatch([{ op: 'voice.setSubtitleHidden', itemIds: lines, hidden: hide }], hide ? '字幕を出さない' : '字幕を出す')
+        return result.ok ? null : result.message
+      }),
+      testId: 'menu-subtitle-hidden'
+    })
+  }
   if (item.type === 'text') {
     const texts = selected.filter((candidate) => candidate.type === 'text').length
     tools.push(

@@ -94,6 +94,29 @@ test.describe('実用の機能(読み方・辞書・自動保存・SRT・相方�
     await expect(input).toHaveValue('くさはえるのだ')
     await page.getByRole('button', { name: '元に戻す' }).click()
     await expect(line.getByTestId('script-display-text')).toHaveText('字幕: 草生えるのだ')
+
+    // 字幕を出さない: 画面の字幕が消え、台本に「字幕なし」と出る。声はそのまま
+    const hidden = page.getByTestId('subtitle-hidden')
+    await hidden.check()
+    await expect(line.getByTestId('script-subtitle-hidden')).toHaveText('字幕なし')
+    await expect(page.getByTestId('current-subtitle')).toHaveText('')
+    await expect(input).toBeDisabled()
+    await expect(line.getByTestId('synthesis-status')).toContainText('合成済み')
+    await hidden.uncheck()
+    await expect(line.getByTestId('script-subtitle-hidden')).toHaveCount(0)
+    await expect(page.getByTestId('current-subtitle')).toContainText('草生えるのだ')
+
+    // 字幕に出す文字を空にしても、出さないことになる
+    await input.fill('')
+    await input.press('Enter')
+    await expect(hidden).toBeChecked()
+    await expect(input).toHaveValue('草生えるのだ')
+
+    // 台本の右クリックでも切り替えられる
+    await line.locator('.script__index').click({ button: 'right' })
+    await page.getByTestId('context-menu').getByTestId('menu-line-subtitle-hidden').click()
+    await expect(line.getByTestId('script-subtitle-hidden')).toHaveCount(0)
+    await expect(page.getByTestId('current-subtitle')).toContainText('草生えるのだ')
   })
 
   test('辞書に語を登録すると、その語を含むセリフが新しい読みで合成し直される', async ({ page }) => {

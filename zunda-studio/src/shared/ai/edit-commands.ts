@@ -98,6 +98,7 @@ export const aiCommandSchema = z.discriminatedUnion('op', [
     itemId: id,
     reading: z.string().max(1000).nullable().describe("読み方(カタカナ。アクセントの位置の後に '、区切りは /)")
   }),
+  z.object({ op: z.literal('voice.setSubtitleHidden'), itemIds: z.array(id).min(1).max(200), hidden: z.boolean() }),
   z.object({
     op: z.literal('voice.setDisplayText'),
     itemId: id,

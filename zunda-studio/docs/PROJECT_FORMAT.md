@@ -255,7 +255,8 @@ PSDのレイヤーツリーに対する「役割の割り当て」を保存す�
     "accentPhrases": [ /* VOICEVOX の AudioQuery をそのまま保持(読み修正の保存先) */ ]
   },
   "subtitleLines": ["今日はこのゲームを", "やっていくのだ！"],  // 自動改行の結果。手動編集可
-  "displayText": null   // 字幕だけ別の文字を出すときの文字(無し・null なら text)。声は text で合成する。text を書き換えると外れる
+  "displayText": null,  // 字幕だけ別の文字を出すときの文字(無し・null なら text)。声は text で合成する。text を書き換えると外れる
+  "subtitleHidden": true // 真ならこのセリフの字幕を画面にも SRT にも出さない(無ければ出す)
 }
 ```
 

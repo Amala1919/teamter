@@ -64,7 +64,8 @@ export function renderFrame(
   for (const item of itemsAt(project, timeMs)) {
     // 立ち絵は、場面ごとの立ち絵をまとめて portraitScenes で決める。
     if (item.type === 'portrait') continue
-    if (item.type === 'voice' && options.subtitles === false) continue
+    // 字幕を出さないセリフ(と、字幕なしで描くとき)は、セリフを描かない(声は書き出しの音声で鳴る)。
+    if (item.type === 'voice' && (options.subtitles === false || item.subtitleHidden === true)) continue
     if (item.type === 'zoom') {
       if (options.applyZoom !== false) drawables.push({ kind: 'zoom', layerId: item.layerId, item })
     } else {

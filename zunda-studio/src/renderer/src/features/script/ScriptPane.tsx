@@ -292,6 +292,15 @@ export function ScriptPane({ onError }: ScriptPaneProps): React.JSX.Element {
                           }
                         ]
                       : []),
+                    {
+                      label: line.subtitleHidden ? '字幕を出す' : '字幕を出さない',
+                      onSelect: () =>
+                        run(
+                          [{ op: 'voice.setSubtitleHidden', itemIds: [line.id], hidden: !line.subtitleHidden }],
+                          line.subtitleHidden ? '字幕を出す' : '字幕を出さない'
+                        ),
+                      testId: 'menu-line-subtitle-hidden'
+                    },
                     'separator',
                     { label: '上へ', disabled: index === 0, onSelect: () => move(index, -1) },
                     { label: '下へ', disabled: index === lines.length - 1, onSelect: () => move(index, 1) },
