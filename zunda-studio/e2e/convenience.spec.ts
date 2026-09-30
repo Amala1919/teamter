@@ -298,4 +298,40 @@ test.describe('使い勝手の機能', () => {
     expect(new Set(backgrounds).size).toBe(4)
     expect(backgrounds.every((color) => color !== '' && color !== 'rgba(0, 0, 0, 0)')).toBe(true)
   })
+
+  test('台本のセリフを右クリック →「次にセリフを追加」しても、後ろのセリフは動かない(設定で空けることもできる)', async ({ page, request }) => {
+    try {
+      await openFresh(page)
+      await addLines(page, 'ずんだもん:いちぎょうめ\n四国めたん:にぎょうめ\nずんだもん:さんぎょうめ', 3)
+      const lines = page.getByTestId('script-line')
+      const startOf = async (index: number): Promise<string> => ((await lines.nth(index).locator('.script__time').textContent()) ?? '').split(' ')[0]!
+      const beforeSecond = await startOf(1)
+      const beforeThird = await startOf(2)
+
+      const addAfterFirst = async (): Promise<void> => {
+        await lines.first().locator('.script__index').click({ button: 'right' })
+        await page.getByTestId('context-menu').getByTestId('menu-line-add-after').click()
+        await expect(lines).toHaveCount(4)
+      }
+
+      // 既定: 後ろのセリフはそのまま(足したセリフは重ならないよう別のレイヤーに置かれる)
+      await addAfterFirst()
+      const starts = await lines.evaluateAll((elements) => elements.map((element) => (element.querySelector('.script__time')?.textContent ?? '').split(' ')[0]))
+      expect(starts).toContain(beforeSecond)
+      expect(starts).toContain(beforeThird)
+      await page.getByRole('button', { name: '元に戻す' }).click()
+      await expect(lines).toHaveCount(3)
+
+      // 設定で「間に足したら空ける」にすると、後ろのセリフがずれる
+      await page.getByTestId('open-settings').click()
+      await page.getByTestId('settings-tab-editing').click()
+      await page.getByTestId('editing-openGapOnVoiceInsert').check()
+      await page.keyboard.press('Escape')
+      await addAfterFirst()
+      await expect.poll(async () => await startOf(2)).not.toBe(beforeSecond)
+      await expect.poll(async () => await startOf(3)).not.toBe(beforeThird)
+    } finally {
+      await updateSettings(request, { editing: { openGapOnVoiceInsert: false } })
+    }
+  })
 })

@@ -631,8 +631,13 @@ export interface PublishInfo {
  * 編集の自動処理。素材は独立が基本で、ここで選んだものだけを自動で行う(設定の「編集」タブで選ぶ)。
  */
 export interface EditingSettings {
-  /** セリフを間に足したとき、後ろのセリフをずらして場所を空けるか(V-4)。 */
-  rippleOnVoiceChange: boolean
+  /**
+   * セリフを間に足したとき、後ろのセリフをずらして場所を空けるか(V-4)。無いときは空けない(素材は独立が基本)。
+   * 空けないと、足したセリフが次のセリフと重なることがあり、重なりの自動振り分けが入っていれば別のレイヤーに置かれる。
+   */
+  openGapOnVoiceInsert?: boolean
+  /** 以前の名前の設定。今は使わない(以前のプロジェクトを読むためだけに残す)。 */
+  rippleOnVoiceChange?: boolean
   /** セリフを消したとき、後ろのセリフを前に詰めるか。無いときは詰めない。 */
   closeGapOnVoiceDelete?: boolean
   /** グループのセリフの長さが変わったとき、グループのうち後ろのものを一緒にずらすか。無いときはずらす。 */

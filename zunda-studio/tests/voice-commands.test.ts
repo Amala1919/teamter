@@ -68,9 +68,21 @@ describe('セリフの並びとリップル編集', () => {
     expect(starts(project)).toEqual([0, 1200, 2400])
   })
 
-  it('途中に挿入すると、後ろのアイテムが挿入した分だけずれる', () => {
+  it('途中に挿入しても、既定では後ろのセリフは動かない(足したセリフは前のセリフの後ろに置かれる)', () => {
     const { project, ids, characterId } = script()
     const next = apply(project, [{ op: 'voice.insert', characterId, text: 'わりこみ', afterItemId: ids[0]! }])
+    const inserted = next.items.find((item) => item.type === 'voice' && item.text === 'わりこみ')!
+    expect(inserted.startMs).toBe(1200)
+    // もとの3行は置いた場所のまま
+    for (const [index, id] of ids.entries()) expect(next.items.find((item) => item.id === id)!.startMs).toBe([0, 1200, 2400][index])
+  })
+
+  it('設定で「間に足したら空ける」にすると、後ろのセリフが挿入した分だけずれる', () => {
+    const { project, ids, characterId } = script()
+    const next = apply(project, [
+      { op: 'project.setEditing', openGapOnVoiceInsert: true },
+      { op: 'voice.insert', characterId, text: 'わりこみ', afterItemId: ids[0]! }
+    ])
     expect(texts(next)).toEqual(['いちぎょうめ', 'わりこみ', 'にぎょうめ', 'さんぎょうめ'])
     const inserted = voiceItemsInOrder(next)[1]!
     expect(inserted.startMs).toBe(1200)
@@ -152,10 +164,9 @@ describe('セリフの並びとリップル編集', () => {
     expect(next.items.find((item) => item.id === 'bgm')!.startMs).toBe(2000)
   })
 
-  it('追従を切ると、尺が変わっても後ろは動かない', () => {
+  it('尺が変わっても、グループに入っていない後ろは動かない', () => {
     const { project, ids } = script()
     const next = apply(project, [
-      { op: 'project.setEditing', rippleOnVoiceChange: false },
       { op: 'voice.setText', itemId: ids[0]!, text: 'かわった' },
       { op: 'voice.applySynthesis', itemId: ids[0]!, expectedText: 'かわった', synthesis: synthesis(500) }
     ])

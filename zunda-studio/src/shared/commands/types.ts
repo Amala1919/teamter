@@ -66,6 +66,8 @@ export interface ProjectSetBriefing {
 
 export interface ProjectSetEditing {
   op: 'project.setEditing'
+  openGapOnVoiceInsert?: boolean
+  /** 以前の名前。指定しても何も起きない。 */
   rippleOnVoiceChange?: boolean
   closeGapOnVoiceDelete?: boolean
   groupFollowsVoice?: boolean

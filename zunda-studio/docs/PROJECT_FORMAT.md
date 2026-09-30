@@ -37,7 +37,7 @@
   "ai":         { /* 11章 */ },
   "editing": {
     // 編集の自動処理(設定の「編集」タブで選ぶ)。素材は独立が基本で、合成で尺が変わってもほかは動かさない
-    "rippleOnVoiceChange": true,   // セリフを間に足したら、後ろのセリフをずらして場所を空ける
+    "openGapOnVoiceInsert": false, // 省略可(既定 false)。セリフを間に足したら、後ろのセリフをずらして場所を空ける。以前の rippleOnVoiceChange は使わない
     "closeGapOnVoiceDelete": false,// 省略可(既定 false)。セリフを消したら後ろのセリフを詰める
     "groupFollowsVoice": true,     // 省略可(既定 true)。グループのセリフの尺が変わったら、グループの後ろのものをずらす
     "autoPortraitTrack": true,     // 省略可(既定 true)。立ち絵を付けたら動画の最後までの表示の区間を置く

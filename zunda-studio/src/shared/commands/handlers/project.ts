@@ -41,7 +41,8 @@ export const projectHandlers: ProjectHandlers = {
   },
 
   'project.setEditing': (draft, command) => {
-    if (command.rippleOnVoiceChange !== undefined) draft.editing.rippleOnVoiceChange = command.rippleOnVoiceChange
+    if (command.openGapOnVoiceInsert !== undefined) draft.editing.openGapOnVoiceInsert = command.openGapOnVoiceInsert
+    // 以前の名前(rippleOnVoiceChange)の指定は、何もしない(以前のコマンドを受け付けるだけ)
     if (command.closeGapOnVoiceDelete !== undefined) draft.editing.closeGapOnVoiceDelete = command.closeGapOnVoiceDelete
     if (command.groupFollowsVoice !== undefined) draft.editing.groupFollowsVoice = command.groupFollowsVoice
     if (command.autoPortraitTrack !== undefined) draft.editing.autoPortraitTrack = command.autoPortraitTrack
