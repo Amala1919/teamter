@@ -65,6 +65,38 @@ test.describe('相方の返答と編集チャット', () => {
     await expect(lines).toHaveCount(1)
   })
 
+  test('返答を書かせるキャラクター(話す人)を選べる', async ({ page }) => {
+    await startWithLines(page, 'ずんだもん:ボスが強すぎるのだ！\n四国めたん:少し休んだら?')
+    const generate = page.getByTestId('cohost-generate')
+    const speaker = page.getByTestId('cohost-speaker')
+    // 既定は相方(AIの役)
+    await expect(speaker.locator('option:checked')).toHaveText('四国めたん(AI)')
+    await expect(generate).toHaveText('相方の返答を生成')
+
+    // ずんだもんを選ぶと、ずんだもんのセリフを書かせる
+    await speaker.selectOption({ label: 'ずんだもん(あなた)' })
+    await expect(generate).toHaveText('ずんだもんのセリフを生成')
+    queueAiResponses([reply(['ずんだもん:もう一回挑むのだ'])])
+    await page.getByTestId('cohost-candidates').selectOption('1')
+    await generate.click()
+    await expect(page.getByTestId('cohost-line-text')).toHaveValue('もう一回挑むのだ')
+    await expect(page.getByTestId('cohost-candidate').locator('.script__role')).toHaveText('ずんだもん')
+    const call = aiCalls().at(-1)!
+    expect(call.system).toContain('「ずんだもん」のセリフの案を出します')
+    expect(call.stdin).toContain('ずんだもんの次のセリフを書いてください')
+
+    // 採用すると、ずんだもんのセリフとして入る
+    await page.getByTestId('cohost-adopt').click()
+    const lines = page.getByTestId('script-line')
+    await expect(lines).toHaveCount(3)
+    await expect(lines.nth(2).getByTestId('script-text')).toHaveValue('もう一回挑むのだ')
+    await expect(lines.nth(2).getByText('あなた', { exact: true })).toBeVisible()
+
+    // 相方に戻せる
+    await speaker.selectOption({ label: '四国めたん(AI)' })
+    await expect(generate).toHaveText('相方の返答を生成')
+  })
+
   test('返答の長さの目安はセリフごとに決められ、数字でも長さ別のボタンでも入れられる(人物像には入れない)', async ({ page }) => {
     await startWithLines(page, 'ずんだもん:ボスが強すぎるのだ！')
     queueAiResponses([reply(['四国めたん:あら']), reply(['四国めたん:そう']), reply(['四国めたん:ええ'])])

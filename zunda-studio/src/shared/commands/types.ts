@@ -319,6 +319,13 @@ export interface VoiceSetSubtitleLines {
   lines: string[] | null
 }
 
+/** 字幕に出す文字を、読み上げる文字とは別にする。null でセリフと同じに戻す。声は変わらない。 */
+export interface VoiceSetDisplayText {
+  op: 'voice.setDisplayText'
+  itemId: ItemId
+  text: string | null
+}
+
 /** 読み方を直す(カタカナとアクセント記号)。null で自動の読みに戻す。 */
 export interface VoiceSetReading {
   op: 'voice.setReading'
@@ -786,6 +793,7 @@ export type Command =
   | VoiceSetSubtitleLines
   | VoiceSetGapAfter
   | VoiceSetReading
+  | VoiceSetDisplayText
   | VoiceInvalidateSynthesis
   | VoiceApplySynthesis
 

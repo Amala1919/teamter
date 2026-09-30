@@ -199,6 +199,8 @@ function VoiceInspector({ item }: { item: VoiceItem }): React.JSX.Element {
         </section>
       )}
 
+      <DisplayTextEditor item={item} run={run} />
+
       <ReadingEditor item={item} run={run} />
 
       <section>
@@ -226,6 +228,53 @@ function VoiceInspector({ item }: { item: VoiceItem }): React.JSX.Element {
         )}
       </section>
     </div>
+  )
+}
+
+/**
+ * 字幕に出す文字。読み上げるセリフとは別の文字を出したいとき(「草」と出して「くさ」と読ませる、など)に使う。
+ * 声は変わらない(読み方は下の「読み方」で直す)。
+ */
+function DisplayTextEditor({ item, run }: { item: VoiceItem; run: (commands: Command[], label: string) => void }): React.JSX.Element {
+  const current = item.displayText ?? item.text
+  const [draft, setDraft] = useState(current)
+  useEffect(() => setDraft(current), [current])
+  const commit = (): void => {
+    if (draft.trim() === '') {
+      setDraft(current)
+      return
+    }
+    if (draft !== current) run([{ op: 'voice.setDisplayText', itemId: item.id, text: draft }], '字幕に出す文字の変更')
+  }
+  return (
+    <section data-testid="display-text-editor">
+      <label className="field field--stacked">
+        <span className="field__label">字幕に出す文字{item.displayText ? '(セリフと別)' : '(セリフと同じ)'}</span>
+        <textarea
+          rows={2}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
+            event.preventDefault()
+            commit()
+          }}
+          data-testid="display-text-input"
+        />
+      </label>
+      <p className="note">字幕だけを変えます(声はセリフのまま)。Enter で反映、Shift+Enter で改行。セリフを書き換えると、セリフと同じに戻ります。</p>
+      {item.displayText && (
+        <button
+          type="button"
+          className="button--small"
+          onClick={() => run([{ op: 'voice.setDisplayText', itemId: item.id, text: null }], '字幕をセリフと同じに戻す')}
+          data-testid="display-text-reset"
+        >
+          セリフと同じに戻す
+        </button>
+      )}
+    </section>
   )
 }
 

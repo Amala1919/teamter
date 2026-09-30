@@ -110,6 +110,7 @@ LLM(tool use) → コマンド列
 | `voice.setExpression` | `itemId`, `expressionId` | 表情を変える |
 | `voice.setVoiceParams` | `itemId`, `speedScale?`, `pitchScale?`, `intonationScale?`, `volumeScale?` | 発話パラメータを上書きする |
 | `voice.setSubtitleOverride` | `itemId`, `color?`, `sizeScale?`, `styleId?` | 字幕の見た目を個別に上書きする |
+| `voice.setDisplayText` | `itemId`, `text`(`null` で戻す) | 字幕に出す文字だけを、読み上げるセリフと別にする(声は変わらない) |
 | `voice.setGapAfter` | `itemId`, `gapMs` | 次のセリフまでの間を指定する |
 | `script.adoptLiveEntry` | `sessionId`, `entryId`, `atMs?` | ライブセッションの発言を台本に採用する。発言者に応じた役のボイスアイテムになる |
 

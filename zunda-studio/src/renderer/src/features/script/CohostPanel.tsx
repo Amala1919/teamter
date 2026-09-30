@@ -68,11 +68,14 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
   const characters = Object.values(project.characters)
   const aiCharacter = characters.find((character) => character.authorRole === 'ai')
   const userCharacter = characters.find((character) => character.authorRole === 'user')
+  // 返答を書かせるキャラクター。選んでいなければ(選んだキャラクターを消したときも)相方(AIの役)。
+  const [speakerId, setSpeakerId] = useState('')
+  const speaker = (speakerId ? project.characters[speakerId] : undefined) ?? aiCharacter
   const configured = (project.ai.conversation ?? defaultModel) !== null
   const disabledReason = !configured
     ? '会話AIが未設定です(設定 → AI)'
-    : !aiCharacter
-      ? '相方(AIの役)のキャラクターがいません'
+    : !speaker
+      ? '相方(AIの役)のキャラクターがいません(「話す人」で選んでください)'
       : null
 
   const visionOptions = {
@@ -80,11 +83,13 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
     ...(visionRegion ? { region: visionRegion } : {})
   }
 
-  const run = (characterId?: string): void => {
+  /** only を渡すと、そのキャラクターのセリフを1つだけ作る(「自分のセリフの案」)。 */
+  const run = (only?: string): void => {
     onError(null)
+    const characterId = only ?? speaker?.id
     void generate({
       candidates,
-      rounds: characterId ? 1 : rounds,
+      rounds: only ? 1 : rounds,
       targetLengthChars: length,
       ...(characterId ? { characterId } : {}),
       ...(instruction.trim() ? { instruction: instruction.trim() } : {}),
@@ -126,8 +131,27 @@ export function CohostControls({ onError }: { onError: (message: string | null) 
           onClick={() => run()}
           data-testid="cohost-generate"
         >
-          {session?.loading ? '考え中…' : '相方の返答を生成'}
+          {session?.loading ? '考え中…' : !speaker || speaker.id === aiCharacter?.id ? '相方の返答を生成' : `${speaker.name}のセリフを生成`}
         </button>
+        {characters.length > 1 && (
+          <label className="field--inline">
+            話す人
+            <select
+              value={speaker?.id ?? ''}
+              onChange={(event) => setSpeakerId(event.target.value)}
+              title="返答を書かせるキャラクター。「続ける数」を2以上にすると、このキャラクターから交互に話します"
+              data-testid="cohost-speaker"
+            >
+              {!speaker && <option value="">選んでください</option>}
+              {characters.map((character) => (
+                <option key={character.id} value={character.id}>
+                  {character.name}
+                  {character.authorRole === 'ai' ? '(AI)' : '(あなた)'}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="field--inline">
           候補
           <select value={candidates} onChange={(event) => setCandidates(Number(event.target.value))} data-testid="cohost-candidates">

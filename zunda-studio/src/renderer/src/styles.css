@@ -1087,6 +1087,16 @@ input[type='color'] {
   padding: 1px 4px;
 }
 
+/* 字幕だけ別の文字にしているセリフ */
+.script__displayText {
+  color: var(--text-dim);
+  font-size: 11px;
+  margin: 2px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .script__lineFooter {
   align-items: center;
   display: flex;

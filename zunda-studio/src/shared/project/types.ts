@@ -412,6 +412,11 @@ export interface VoiceItem extends ItemBase {
    * null ならテキストから自動で読む。テキストを書き換えると外れる(V-6)。
    */
   reading?: string | null
+  /**
+   * 字幕に出す文字(読み上げる text とは別にしたいとき)。null・無しなら text をそのまま出す。
+   * 声は text(と reading)で合成する。text を書き換えると外れる。
+   */
+  displayText?: string | null
 }
 
 export interface VideoItem extends ItemBase {

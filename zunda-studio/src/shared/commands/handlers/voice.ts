@@ -12,6 +12,7 @@ import {
   requireLayer,
   requireNonEmptyText,
   shiftItemsFrom,
+  subtitleText,
   type HandlerTable
 } from '../env'
 
@@ -20,6 +21,7 @@ type VoiceHandlers = Pick<
   | 'voice.insert'
   | 'voice.setText'
   | 'voice.setReading'
+  | 'voice.setDisplayText'
   | 'voice.invalidateSynthesis'
   | 'voice.delete'
   | 'voice.move'
@@ -115,10 +117,27 @@ export const voiceHandlers: VoiceHandlers = {
     if (item.text === command.text) return
     item.text = command.text
     item.subtitleLinesManual = false
-    // 読みの上書きは前のテキストに対するものなので外す。
+    // 読みの上書き・字幕だけの文字は前のテキストに対するものなので外す。
     item.reading = null
+    item.displayText = null
     refreshSubtitleLines(draft, item)
     invalidateSynthesis(item)
+  },
+
+  'voice.setDisplayText': (draft, command, env) => {
+    const item = findVoiceItem(draft, env.resolve(command.itemId), command.op)
+    let text = command.text === null ? null : command.text.replace(/\r\n?/g, '\n')
+    if (text !== null) {
+      if (text.trim() === '') fail(command.op, '字幕に出す文字が空です')
+      if (text.length > 2000) fail(command.op, '字幕に出す文字が長すぎます')
+      // セリフと同じなら、別にしない
+      if (text === item.text) text = null
+    }
+    if ((item.displayText ?? null) === text) return
+    item.displayText = text
+    // 字幕の改行は、新しい文字で自動に戻す(声は変わらないので合成し直さない)。
+    item.subtitleLinesManual = false
+    refreshSubtitleLines(draft, item)
   },
 
   'voice.setReading': (draft, command, env) => {
@@ -242,7 +261,7 @@ export const voiceHandlers: VoiceHandlers = {
       item.subtitleLines = autoSubtitleLines(draft, item)
       return
     }
-    if (command.lines.join('') !== item.text.replace(/\n/g, '')) {
+    if (command.lines.join('') !== subtitleText(item).replace(/\n/g, '')) {
       fail(command.op, '字幕の行を繋げたものがセリフと一致しません。改行位置だけを変えてください')
     }
     item.subtitleLines = command.lines.filter((line) => line !== '')

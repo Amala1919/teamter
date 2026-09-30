@@ -146,6 +146,11 @@ export function ScriptLine(props: ScriptLineProps): React.JSX.Element {
         aria-label={`${props.index + 1}行目のセリフ`}
         data-testid="script-text"
       />
+      {line.displayText && (
+        <p className="script__displayText" title="字幕だけ別の文字を出しています(インスペクタで変えられます)" data-testid="script-display-text">
+          字幕: {line.displayText}
+        </p>
+      )}
 
       <div className="script__lineFooter">
         <SynthesisBadge line={line} status={status} onRetry={props.onRetry} />

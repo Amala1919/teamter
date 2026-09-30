@@ -10,7 +10,7 @@ export function toSrt(project: Project, options: { withSpeaker?: boolean } = {})
     .filter((line) => line.text.trim() !== '')
     .map((line, index) => {
       const speaker = project.characters[line.characterId]?.name
-      const lines = line.subtitleLines.length > 0 ? line.subtitleLines : [line.text]
+      const lines = line.subtitleLines.length > 0 ? line.subtitleLines : [line.displayText ?? line.text]
       const body = options.withSpeaker && speaker ? [`${speaker}: ${lines[0]}`, ...lines.slice(1)] : lines
       return `${index + 1}\n${srtTime(line.startMs)} --> ${srtTime(line.startMs + line.durationMs)}\n${body.join('\n')}\n`
     })

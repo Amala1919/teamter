@@ -66,6 +66,36 @@ test.describe('実用の機能(読み方・辞書・自動保存・SRT・相方�
     expect(overflow).toBeLessThanOrEqual(1)
   })
 
+  test('字幕に出す文字をセリフと別にでき、声は合成し直さない。セリフと同じに戻せる', async ({ page }) => {
+    await openFresh(page)
+    await page.getByRole('button', { name: /ずんだもん\(あなた\)/ }).click()
+    await addLines(page, 'ずんだもん:くさはえるのだ')
+    const line = page.getByTestId('script-line').first()
+    await expect(line.getByTestId('synthesis-status')).toContainText('合成済み', { timeout: 30_000 })
+
+    await line.locator('.script__index').click({ button: 'right' })
+    await page.getByTestId('context-menu').getByTestId('menu-line-inspector').click()
+    const input = page.getByTestId('display-text-input')
+    await expect(input).toHaveValue('くさはえるのだ')
+    await expect(page.getByTestId('display-text-editor')).toContainText('セリフと同じ')
+    await input.fill('草生えるのだ')
+    await input.press('Enter')
+
+    // 台本の行に字幕の文字が出て、画面の字幕も変わる。声はそのまま(合成し直さない)
+    await expect(line.getByTestId('script-display-text')).toHaveText('字幕: 草生えるのだ')
+    await expect(page.getByTestId('display-text-editor')).toContainText('セリフと別')
+    await expect(page.getByTestId('current-subtitle')).toContainText('草生えるのだ')
+    await expect(line.getByTestId('synthesis-status')).toContainText('合成済み')
+    await expect(line.getByTestId('script-text')).toHaveValue('くさはえるのだ')
+
+    // 取り消し・セリフと同じに戻す
+    await page.getByTestId('display-text-reset').click()
+    await expect(line.getByTestId('script-display-text')).toHaveCount(0)
+    await expect(input).toHaveValue('くさはえるのだ')
+    await page.getByRole('button', { name: '元に戻す' }).click()
+    await expect(line.getByTestId('script-display-text')).toHaveText('字幕: 草生えるのだ')
+  })
+
   test('辞書に語を登録すると、その語を含むセリフが新しい読みで合成し直される', async ({ page }) => {
     await openFresh(page)
     await page.getByRole('button', { name: /ずんだもん\(あなた\)/ }).click()

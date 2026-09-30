@@ -98,6 +98,11 @@ export const aiCommandSchema = z.discriminatedUnion('op', [
     itemId: id,
     reading: z.string().max(1000).nullable().describe("読み方(カタカナ。アクセントの位置の後に '、区切りは /)")
   }),
+  z.object({
+    op: z.literal('voice.setDisplayText'),
+    itemId: id,
+    text: z.string().min(1).max(2000).nullable().describe('字幕に出す文字(読み上げとは別にしたいとき)。null でセリフと同じに戻す')
+  }),
   // アイテム共通
   z.object({ op: z.literal('item.setTimeRange'), itemId: id, startMs: ms.optional(), durationMs: ms.optional() }),
   z.object({ op: z.literal('item.trim'), itemId: id, startMs: ms.optional(), endMs: ms.optional() }),
