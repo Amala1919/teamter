@@ -98,7 +98,7 @@ export const aiCommandSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('item.setSpeed'), itemId: id, rate: z.number().min(0.25).max(4) }),
   z.object({ op: z.literal('item.freezeFrame'), itemId: id, atMs: ms, durationMs: ms, mode: z.enum(['insert', 'overwrite']), tempId }),
   // タイムライン全体の間
-  z.object({ op: z.literal('timeline.rippleDelete'), itemIds: z.array(id).min(1).max(200) }),
+  z.object({ op: z.literal('timeline.rippleDelete'), itemIds: z.array(id).min(1).max(200), ignoreOthers: z.boolean().optional() }),
   z.object({ op: z.literal('timeline.closeGap'), atMs: ms }),
   z.object({ op: z.literal('timeline.packLeft'), itemIds: z.array(id).min(1).max(200), keepGaps: z.boolean().optional() }),
   z.object({ op: z.literal('timeline.insertGap'), atMs: ms, durationMs: ms }),

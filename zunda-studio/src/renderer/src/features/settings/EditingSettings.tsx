@@ -10,7 +10,7 @@ import { useSettingsStore } from '../../state/settings'
 import { useEditorStore } from '../../state/store'
 import { NumberField } from '../../ui/NumberField'
 
-type Toggle = 'openGapOnVoiceInsert' | 'closeGapOnVoiceDelete' | 'groupFollowsVoice' | 'autoPortraitTrack' | 'avoidOverlap'
+type Toggle = 'openGapOnVoiceInsert' | 'closeGapOnVoiceDelete' | 'rippleIgnoresOthers' | 'groupFollowsVoice' | 'autoPortraitTrack' | 'avoidOverlap'
 
 /** 編集の自動処理の一覧。値が無いときの扱い(以前のプロジェクト)もここで決める。 */
 const TOGGLES: { key: Toggle; label: string; note: string; fallback: boolean }[] = [
@@ -18,6 +18,12 @@ const TOGGLES: { key: Toggle; label: string; note: string; fallback: boolean }[]
     key: 'closeGapOnVoiceDelete',
     label: 'セリフを消したら、後ろのセリフを前に詰める',
     note: '切ると、消したところは空いたままになります(ほかのものは動きません)。',
+    fallback: false
+  },
+  {
+    key: 'rippleIgnoresOthers',
+    label: '「削除して詰める」(Shift+Delete)では、ほかの素材は考慮せず、消した長さだけ詰める',
+    note: '切っておくと(既定)、ほかのレイヤーに素材が残っている時間は詰めません。右クリックの「削除して詰める」からは、どちらも選べます。',
     fallback: false
   },
   {

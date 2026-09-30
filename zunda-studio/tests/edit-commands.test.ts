@@ -144,6 +144,14 @@ describe('間の編集', () => {
     expect(byType<TextItem>(result, 'text')[0]!.startMs).toBe(12_000)
   })
 
+  it('ほかの素材を考慮しないなら、残った素材があっても消した長さだけ詰める(残った素材は動かない)', () => {
+    const project = base()
+    const clip = byType<VideoItem>(project, 'video')[0]!
+    const result = apply(project, [{ op: 'timeline.rippleDelete', itemIds: [clip.id], ignoreOthers: true }])
+    expect(byType<TextItem>(result, 'text')[0]!.startMs).toBe(2000)
+    expect(byType<AudioItem>(result, 'audio')[0]!.startMs).toBe(0)
+  })
+
   it('何も無い時間を詰める・空ける', () => {
     const project = base()
     const closed = apply(project, [{ op: 'timeline.closeGap', atMs: 11_000 }])
@@ -238,6 +246,7 @@ describe('間の編集', () => {
       { op: 'item.split', itemId: 'itm_1', atMs: 1000 },
       { op: 'item.setSpeed', itemId: 'itm_1', rate: 1.5 },
       { op: 'timeline.rippleDelete', itemIds: ['itm_1'] },
+      { op: 'timeline.rippleDelete', itemIds: ['itm_1'], ignoreOthers: true },
       { op: 'timeline.closeGap', atMs: 1000 },
       { op: 'timeline.packLeft', itemIds: ['itm_1'], keepGaps: true },
       { op: 'timeline.insertGap', atMs: 1000, durationMs: 500 }

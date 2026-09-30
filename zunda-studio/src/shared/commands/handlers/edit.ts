@@ -249,10 +249,11 @@ export const editHandlers: EditHandlers = {
       }
     }
     // 消した範囲をまとめ、後ろの範囲から順に詰める(前を先に詰めると後ろの範囲の位置がずれるため)。
+    // 既定では、残った素材がある時間は詰めない。ignoreOthers なら、ほかの素材は考慮せず消した長さだけ詰める。
     const ranges = mergeRanges(removed.map((item) => [item.startMs, itemEnd(item)] as [Ms, Ms]))
     for (const [start, end] of ranges.reverse()) {
       let occupied = start
-      for (const item of draft.items) {
+      for (const item of command.ignoreOthers ? [] : draft.items) {
         if (item.startMs < end && itemEnd(item) <= end && itemEnd(item) > occupied) occupied = itemEnd(item)
       }
       if (end > occupied) shiftItemsFrom(draft, end, -(end - occupied), new Set())

@@ -161,6 +161,8 @@ const editingSchema = z
     cutFadeOutMs: z.number().int().min(0).max(5000).default(300),
     /** 再生位置から先を静止画にしたとき、静止画の後に続く動画をフェードインさせるか。 */
     freezeFadeIn: z.boolean().default(true),
+    /** 「削除して詰める」(Shift+Delete)で、ほかの素材は考慮せず消した長さだけ詰めるか。 */
+    rippleIgnoresOthers: z.boolean().default(false),
     /** ズームを置くときの既定の寄り方。 */
     zoomMethod: z.enum(['cut', 'smooth', 'linear', 'punch', 'slowPush']).default('smooth'),
     /** ズームを置くとき、その時点のコマを静止画にしてズームとグループにするか。 */

@@ -652,6 +652,11 @@ export interface EditingSettings {
    * 静止画の前はそのコマから続くので、フェードアウトはしない。
    */
   freezeFadeIn?: boolean
+  /**
+   * 「削除して詰める」(Shift+Delete)で、ほかの素材は考慮せず消した長さだけ詰めるか。
+   * 無いときは考慮する(ほかのレイヤーに残った素材がある時間は詰めない)。右クリックのメニューからはどちらも選べる。
+   */
+  rippleIgnoresOthers?: boolean
   /** ズームを置くときの既定の寄り方。無いときは smooth。 */
   zoomMethod?: ZoomMethod
   /**

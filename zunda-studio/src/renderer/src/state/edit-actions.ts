@@ -113,11 +113,17 @@ export function splitAtPlayhead(ids?: readonly ItemId[]): string | null {
   ).error
 }
 
-/** 消して詰める。 */
-export function rippleDeleteSelection(ids?: readonly ItemId[]): string | null {
+/**
+ * 消して詰める。ignoreOthers: ほかの素材は考慮せず、消した長さだけ詰める(省くと設定の「編集」タブで選んだ方)。
+ */
+export function rippleDeleteSelection(ids?: readonly ItemId[], ignoreOthers?: boolean): string | null {
   const items = selectedItems(ids)
   if (items.length === 0) return '消すアイテムを選んでください'
-  const { error } = run([{ op: 'timeline.rippleDelete', itemIds: items.map((item) => item.id) }], '削除して詰める')
+  const ignore = ignoreOthers ?? state().project.editing.rippleIgnoresOthers === true
+  const { error } = run(
+    [{ op: 'timeline.rippleDelete', itemIds: items.map((item) => item.id), ignoreOthers: ignore }],
+    ignore ? '削除して詰める(消した長さだけ)' : '削除して詰める'
+  )
   if (!error) state().setSelection([])
   return error
 }

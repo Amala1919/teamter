@@ -75,6 +75,7 @@ export interface ProjectSetEditing {
   cutFadeInMs?: Ms
   cutFadeOutMs?: Ms
   freezeFadeIn?: boolean
+  rippleIgnoresOthers?: boolean
   zoomMethod?: ZoomMethod
   zoomOnStill?: 'off' | 'overwrite' | 'insert'
   defaultGapMs?: Ms
@@ -529,10 +530,15 @@ export interface ItemSetLocked {
 
 // ------------------------------------------------------------------ タイムライン全体
 
-/** アイテムを消し、空いた時間を詰める(後ろのアイテムを前へずらす)。 */
+/**
+ * アイテムを消し、空いた時間を詰める(後ろのアイテムを前へずらす)。
+ * 既定では、ほかのレイヤーに残った素材がある時間は詰めない。
+ * ignoreOthers: true なら、ほかの素材は考慮せず、消した長さだけ詰める。
+ */
 export interface TimelineRippleDelete {
   op: 'timeline.rippleDelete'
   itemIds: ItemId[]
+  ignoreOthers?: boolean
 }
 
 /** atMs の位置にある「何も置かれていない時間」を詰める。 */

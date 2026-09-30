@@ -88,6 +88,8 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
   // 選んでいるのが1つのグループの仲間だけなら、グループとして1つのものと同じに扱う。
   const oneGroup = item.groupId !== undefined && selected.every((candidate) => candidate.groupId === item.groupId)
   const anyGrouped = selected.some((candidate) => candidate.groupId !== undefined)
+  // Shift+Delete で使う方(設定の「編集」タブで選ぶ)に印を付ける。
+  const rippleIgnoresOthers = project.editing.rippleIgnoresOthers === true
   const splittable = item.type !== 'voice' && item.type !== 'zoom' && item.startMs < playheadMs && playheadMs < itemEndMs(item)
   const entries: MenuEntry[] = [
     {
@@ -119,8 +121,21 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
       shortcut: 'Shift+Delete',
       disabled: locked,
       danger: true,
-      onSelect: report(context, () => rippleDeleteSelection(ids)),
-      testId: 'menu-ripple-delete'
+      testId: 'menu-ripple-delete',
+      submenu: [
+        {
+          label: 'ほかの素材が残っている時間は詰めない',
+          checked: !rippleIgnoresOthers,
+          onSelect: report(context, () => rippleDeleteSelection(ids, false)),
+          testId: 'menu-ripple-delete-respect'
+        },
+        {
+          label: 'ほかの素材は考慮せず、消した長さだけ詰める',
+          checked: rippleIgnoresOthers,
+          onSelect: report(context, () => rippleDeleteSelection(ids, true)),
+          testId: 'menu-ripple-delete-ignore'
+        }
+      ]
     },
     'separator',
     many && !oneGroup
