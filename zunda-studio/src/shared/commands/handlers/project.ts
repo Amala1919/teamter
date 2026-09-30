@@ -10,6 +10,7 @@ type ProjectHandlers = Pick<
   | 'project.setMeta'
   | 'project.setConversationAi'
   | 'project.setEditing'
+  | 'project.setMix'
   | 'project.setBriefing'
   | 'credits.set'
   | 'publish.set'
@@ -21,6 +22,10 @@ type ProjectHandlers = Pick<
 >
 
 const CHAT_LIMIT = 500
+
+const MIX_KEYS = ['master', 'voice', 'music', 'video'] as const
+/** 音量のつまみの上限(倍率)。 */
+export const MAX_MIX = 2
 
 const COLOR_PATTERN = /^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/
 
@@ -38,6 +43,22 @@ export const projectHandlers: ProjectHandlers = {
       fail(command.op, `モデルIDに使えない文字が含まれています: ${command.model.model}`)
     }
     draft.ai.conversation = command.model
+  },
+
+  'project.setMix': (draft, command) => {
+    const mix = { ...(draft.mix ?? {}) }
+    for (const key of MIX_KEYS) {
+      const value = command[key]
+      if (value === undefined) continue
+      if (value === null || value === 1) {
+        delete mix[key]
+        continue
+      }
+      if (!(Number.isFinite(value) && value >= 0 && value <= MAX_MIX)) fail(command.op, `音量は 0〜${MAX_MIX * 100}% で指定してください`)
+      mix[key] = Math.round(value * 100) / 100
+    }
+    if (Object.keys(mix).length === 0) delete draft.mix
+    else draft.mix = mix
   },
 
   'project.setEditing': (draft, command) => {

@@ -1,6 +1,6 @@
 import { open } from 'node:fs/promises'
 
-import { gainEnvelope, sourceSpanMs, type GainPoint } from '@shared/audio/envelope'
+import { gainEnvelope, mixGain, sourceSpanMs, type GainPoint } from '@shared/audio/envelope'
 import type { Item, Ms, Project } from '@shared/project/types'
 
 import { AppError } from '../../core/errors'
@@ -35,7 +35,9 @@ interface Entry {
   toFrame: number
   /** 素材上の読み始め(ms)。 */
   sourceStartMs: Ms
+  /** 音量の折れ線。無ければ constantGain で一定(セリフ)。 */
   gain: GainPoint[] | null
+  constantGain: number
   loop: { buffer: Float32Array; offsetFrames: number } | null
   /** 再生速度(動画の速度変更)。 */
   rate: number
@@ -78,21 +80,25 @@ export async function mixAudio(options: MixOptions): Promise<void> {
     const base = { item, fromFrame: toFrame(from - startMs), toFrame: toFrame(to - startMs), stream: null, done: false }
     if (item.type === 'voice') {
       if (!item.synthesis) throw new AppError('INVALID_ARGUMENT', `音声が合成されていないセリフがあります: ${item.text}`)
-      entries.push({ ...base, path: await options.voicePath(item), sourceStartMs: from - item.startMs, gain: null, loop: null, rate: 1 })
+      // セリフの音量は、全体の音量 × セリフの音量だけ(素材ごとの音量は無い)
+      const constantGain = mixGain(project, 'voice')
+      if (constantGain === 0) continue
+      entries.push({ ...base, path: await options.voicePath(item), sourceStartMs: from - item.startMs, gain: null, constantGain, loop: null, rate: 1 })
     } else if (item.type === 'audio' || item.type === 'video') {
       const asset = project.assets[item.assetId]
       if (!asset || (asset.type === 'video' && !asset.hasAudio) || item.volume === 0) continue
       // 静止画は音を鳴らさない。
       if (item.type === 'video' && item.freeze) continue
       const gain = gainEnvelope(project, item)
+      if (gain.every((point) => point.gain === 0)) continue
       if (item.type === 'audio' && item.loop && sourceSpanMs(item) > 0) {
         const buffer = await decodeAll(options.ffmpeg, options.env, asset.path.absolute, item.inMs, sourceSpanMs(item))
         const spanFrames = buffer.length / CHANNELS
         const offsetFrames = toFrame(from - item.startMs) % spanFrames
-        entries.push({ ...base, path: asset.path.absolute, sourceStartMs: 0, gain, loop: { buffer, offsetFrames }, rate: 1 })
+        entries.push({ ...base, path: asset.path.absolute, sourceStartMs: 0, gain, constantGain: 1, loop: { buffer, offsetFrames }, rate: 1 })
       } else {
         const rate = item.type === 'video' ? item.playbackRate : 1
-        entries.push({ ...base, path: asset.path.absolute, sourceStartMs: item.inMs + (from - item.startMs) * rate, gain, loop: null, rate })
+        entries.push({ ...base, path: asset.path.absolute, sourceStartMs: item.inMs + (from - item.startMs) * rate, gain, constantGain: 1, loop: null, rate })
       }
     }
   }
@@ -119,7 +125,7 @@ export async function mixAudio(options: MixOptions): Promise<void> {
         }
         const itemOffsetMs = startMs - entry.item.startMs
         for (let frame = 0; frame < count; frame++) {
-          const gain = cursor ? cursor.at(((from + frame) / SAMPLE_RATE) * 1000 + itemOffsetMs) : 1
+          const gain = cursor ? cursor.at(((from + frame) / SAMPLE_RATE) * 1000 + itemOffsetMs) : entry.constantGain
           const target = (from - block + frame) * CHANNELS
           mix[target] = mix[target]! + samples[frame * CHANNELS]! * gain
           mix[target + 1] = mix[target + 1]! + samples[frame * CHANNELS + 1]! * gain

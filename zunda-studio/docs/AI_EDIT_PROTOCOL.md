@@ -145,6 +145,7 @@ LLM(tool use) → コマンド列
 | `item.split` | `itemId`, `atMs`, `tempId?` | その時刻で2つに分ける(セリフ・ズームは不可)。後半が新しいアイテムになる |
 | `item.setSpeed` | `itemId`, `rate` | 動画の再生速度(0.25〜4倍)。画面上の長さが変わる |
 | `item.freezeFrame` | `itemId`, `atMs`, `durationMs`, `mode`(`insert`/`overwrite`), `tempId?` | その時刻のコマで動画を止め、静止画として表示する。`insert` は後ろをずらし(かかっているズームは寄ったまま伸ばす)、`overwrite` は動画のその先を静止画で置き換える |
+| `project.setMix` | `master?`, `voice?`, `music?`, `video?`(倍率 0〜2。`null` で 100%) | 全体の音量と、セリフ・BGM/効果音・動画の音の大きさ |
 | `timeline.rippleDelete` | `itemIds`, `ignoreOthers?` | 削除して、空いた時間を詰める(`ignoreOthers` なら、ほかの素材は考慮せず消した長さだけ詰める) |
 | `timeline.packLeft` | `itemIds`, `keepGaps?` | 選んだものを左(前)へ詰める。ほかのものは動かさない。`keepGaps` なら選んだもの同士の間を保つ |
 | `timeline.closeGap` | `atMs` | その位置の何も無い時間を詰める |

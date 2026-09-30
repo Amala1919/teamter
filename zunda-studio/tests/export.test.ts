@@ -144,6 +144,25 @@ describe('書き出し(本物の ffmpeg)', () => {
     expect(rms(output, 1.05, 1.25) / loud).toBeGreaterThan(0.9)
   })
 
+  it('全体の音量と、種類ごとの音量(BGM・セリフ)が書き出しの音に掛かる', async () => {
+    const base = buildProject()
+    const mixTo = async (project: Project, name: string): Promise<string> => {
+      const output = join(directory, name)
+      await mixAudio({ project, startMs: 0, endMs: 3000, ffmpeg: 'ffmpeg', env: process.env, voicePath: () => Promise.resolve(silentVoice), outputPath: output })
+      return output
+    }
+    const normal = rms(await mixTo(base, 'mix-normal.wav'), 0.2, 1.0)
+    // 全体 50%: BGM も半分
+    const half = apply(base, [{ op: 'project.setMix', master: 0.5 }])
+    expect(rms(await mixTo(half, 'mix-half.wav'), 0.2, 1.0) / normal).toBeCloseTo(0.5, 1)
+    // BGM・効果音 0%: 何も鳴らない(セリフは無音の素材)
+    const noMusic = apply(base, [{ op: 'project.setMix', music: 0 }])
+    expect(rms(await mixTo(noMusic, 'mix-nomusic.wav'), 0.2, 1.0)).toBeLessThan(0.001)
+    // 全体 50% × BGM 150% = 75%
+    const combined = apply(base, [{ op: 'project.setMix', master: 0.5, music: 1.5 }])
+    expect(rms(await mixTo(combined, 'mix-combined.wav'), 0.2, 1.0) / normal).toBeCloseTo(0.75, 1)
+  })
+
   it('mp4(H.264/AAC)に書き出し、映像・ズーム・進み具合がプレビューと同じ規則になる', async () => {
     const project = buildProject()
     const output = join(directory, 'out.mp4')

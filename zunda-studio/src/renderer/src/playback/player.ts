@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-import { gainAt, gainEnvelope, sourceSpanMs } from '@shared/audio/envelope'
+import { gainAt, gainEnvelope, mixGain, sourceSpanMs } from '@shared/audio/envelope'
 import { isVoiceItem, itemEndMs, projectDurationMs } from '@shared/project/queries'
 import type { AudioItem, Item, Ms, Project } from '@shared/project/types'
 
@@ -18,6 +18,8 @@ interface ScheduleEntry {
   loop?: { start: number; end: number }
   durationMs?: Ms
   item?: AudioItem
+  /** 一定の音量(セリフ: 全体の音量 × セリフの音量)。 */
+  gain?: number
 }
 
 interface PlaybackState {
@@ -78,6 +80,12 @@ class Player {
     }
   }
 
+  /** 再生中なら、今の位置から鳴らし直す(音量を変えたときなど、予約した音を作り直す)。 */
+  restartIfPlaying(): void {
+    if (!usePlaybackStore.getState().playing) return
+    void this.play(useEditorStore.getState().playheadMs)
+  }
+
   stop(): void {
     this.session++
     cancelAnimationFrame(this.frame)
@@ -120,6 +128,11 @@ class Player {
       }
       source.connect(gain)
       output = gain
+    } else if (entry.gain !== undefined && entry.gain !== 1) {
+      const gain = context.createGain()
+      gain.gain.value = entry.gain
+      source.connect(gain)
+      output = gain
     }
     output.connect(context.destination)
 
@@ -146,7 +159,8 @@ class Player {
         if (!inRange(item)) return null
         if (isVoiceItem(item) && item.synthesis) {
           const buffer = await this.load(project, item)
-          return buffer ? { startMs: item.startMs, buffer } : null
+          const gain = mixGain(project, 'voice')
+          return buffer && gain > 0 ? { startMs: item.startMs, buffer, gain } : null
         }
         if (item.type === 'audio') {
           const asset = project.assets[item.assetId]

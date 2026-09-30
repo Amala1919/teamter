@@ -191,6 +191,13 @@ export const aiCommandSchema = z.discriminatedUnion('op', [
   }),
   z.object({ op: z.literal('project.setMeta'), title: z.string().min(1).max(200).optional(), synopsis: z.string().max(4000).optional() }),
   z.object({
+    op: z.literal('project.setMix'),
+    master: z.number().min(0).max(2).nullable().optional().describe('全体の音量(倍率。1 = 100%)'),
+    voice: z.number().min(0).max(2).nullable().optional().describe('セリフの音量'),
+    music: z.number().min(0).max(2).nullable().optional().describe('BGM・効果音の音量'),
+    video: z.number().min(0).max(2).nullable().optional().describe('動画の音の音量')
+  }),
+  z.object({
     op: z.literal('project.setEditing'),
     openGapOnVoiceInsert: z.boolean().optional(),
     rippleOnVoiceChange: z.boolean().optional(),
