@@ -647,6 +647,11 @@ export interface EditingSettings {
   /** 動画を分けた・端を切ったとき、切った所をフェードさせる長さ(0 ならしない)。無いときは 300ms。 */
   cutFadeInMs?: Ms
   cutFadeOutMs?: Ms
+  /**
+   * 再生位置から先を静止画にしたとき(上書き)、静止画の後に続く動画をフェードインさせるか(長さは cutFadeInMs)。無いときはさせる。
+   * 静止画の前はそのコマから続くので、フェードアウトはしない。
+   */
+  freezeFadeIn?: boolean
   /** ズームを置くときの既定の寄り方。無いときは smooth。 */
   zoomMethod?: ZoomMethod
   /**

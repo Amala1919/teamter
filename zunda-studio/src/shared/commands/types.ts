@@ -74,6 +74,7 @@ export interface ProjectSetEditing {
   autoPortraitTrack?: boolean
   cutFadeInMs?: Ms
   cutFadeOutMs?: Ms
+  freezeFadeIn?: boolean
   zoomMethod?: ZoomMethod
   zoomOnStill?: 'off' | 'overwrite' | 'insert'
   defaultGapMs?: Ms
@@ -540,6 +541,17 @@ export interface TimelineCloseGap {
   atMs: Ms
 }
 
+/**
+ * 選んだアイテムを左(前)へ詰める。前にある同じレイヤーの素材(セリフはほかのレイヤーのセリフも)の終わり、無ければ 0 秒まで。
+ * 選んでいないものは動かさない。グループに入っていれば仲間も一緒に動かす。ロック中のものは動かさない。
+ * keepGaps: true なら選んだもの同士の間を保ったまま、まとめて動かす。false(既定)なら選んだもの同士の間も詰める。
+ */
+export interface TimelinePackLeft {
+  op: 'timeline.packLeft'
+  itemIds: ItemId[]
+  keepGaps?: boolean
+}
+
 /** atMs 以降に始まるアイテムを後ろへずらし、空白を作る。 */
 export interface TimelineInsertGap {
   op: 'timeline.insertGap'
@@ -723,6 +735,7 @@ export type Command =
   | ItemSetLocked
   | TimelineRippleDelete
   | TimelineCloseGap
+  | TimelinePackLeft
   | TimelineInsertGap
   | TimelineArrangeOverlaps
   | ItemSetColor

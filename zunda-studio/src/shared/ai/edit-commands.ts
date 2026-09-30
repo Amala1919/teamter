@@ -100,6 +100,7 @@ export const aiCommandSchema = z.discriminatedUnion('op', [
   // タイムライン全体の間
   z.object({ op: z.literal('timeline.rippleDelete'), itemIds: z.array(id).min(1).max(200) }),
   z.object({ op: z.literal('timeline.closeGap'), atMs: ms }),
+  z.object({ op: z.literal('timeline.packLeft'), itemIds: z.array(id).min(1).max(200), keepGaps: z.boolean().optional() }),
   z.object({ op: z.literal('timeline.insertGap'), atMs: ms, durationMs: ms }),
   // 素材の配置(素材そのものの登録・削除は利用者だけが行う)
   z.object({ op: z.literal('media.placeVideo'), assetId: id, atMs: ms, layerId: id.optional(), inMs: ms.optional(), outMs: ms.optional(), transform: transform.optional(), volume: z.number().min(0).max(4).optional(), tempId }),

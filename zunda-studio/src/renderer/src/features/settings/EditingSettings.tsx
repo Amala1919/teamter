@@ -119,6 +119,20 @@ export function EditingSettings({ settings, onError }: { settings: AppSettings; 
           testId="editing-cutFadeOutMs"
         />
       </div>
+      <label className="field__row field__row--top">
+        <input
+          type="checkbox"
+          checked={editing.freezeFadeIn ?? true}
+          onChange={(event) => change({ freezeFadeIn: event.target.checked })}
+          data-testid="editing-freezeFadeIn"
+        />
+        <span>
+          「再生位置から先を静止画にする」とき、静止画の後に続く動画をフェードインさせる
+          <span className="note note--block">
+            長さは上の「切った後の始まりをフェードイン」と同じです。静止画の前はそのコマから続くので、フェードアウトはしません。
+          </span>
+        </span>
+      </label>
 
       <h3>ズーム</h3>
       <label className="field">

@@ -122,6 +122,16 @@ export function rippleDeleteSelection(ids?: readonly ItemId[]): string | null {
   return error
 }
 
+/**
+ * 選んだものを左(前)へ詰める。ほかのものは動かさない。
+ * keepGaps: 選んだもの同士の間を保ってまとめて動かす(false なら選んだもの同士の間も詰める)。
+ */
+export function packLeftSelection(keepGaps: boolean, ids?: readonly ItemId[]): string | null {
+  const items = selectedItems(ids)
+  if (items.length === 0) return '詰めるアイテムを選んでください'
+  return run([{ op: 'timeline.packLeft', itemIds: items.map((item) => item.id), keepGaps }], keepGaps ? '左に詰める(間を保つ)' : '左に詰める').error
+}
+
 export function closeGapAt(atMs: Ms): string | null {
   return run([{ op: 'timeline.closeGap', atMs }], '空白を詰める').error
 }

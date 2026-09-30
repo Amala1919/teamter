@@ -89,6 +89,22 @@ describe('静止画(フリーズフレーム)', () => {
     expect(videos(long)).toHaveLength(2)
   })
 
+  it('上書きでは、静止画の後に続く動画だけをフェードインさせ(前はフェードアウトしない)、設定で切れる。挟むときは付けない', () => {
+    const project = base()
+    const clip = videos(project)[0]!
+    const [first, still, rest] = videos(apply(project, [{ op: 'item.freezeFrame', itemId: clip.id, atMs: 4000, durationMs: 2000, mode: 'overwrite' }]))
+    expect(first!.effects).toEqual([])
+    expect(still!.effects).toEqual([])
+    expect(rest!.effects).toEqual([{ type: 'fade', inMs: 300, outMs: 0 }])
+
+    const off = apply(project, [{ op: 'project.setEditing', freezeFadeIn: false }])
+    const [, , plain] = videos(apply(off, [{ op: 'item.freezeFrame', itemId: clip.id, atMs: 4000, durationMs: 2000, mode: 'overwrite' }]))
+    expect(plain!.effects).toEqual([])
+
+    const inserted = videos(apply(project, [{ op: 'item.freezeFrame', itemId: clip.id, atMs: 4000, durationMs: 2000, mode: 'insert' }]))
+    expect(inserted.map((item) => item.effects)).toEqual([[], [], []])
+  })
+
   it('動画の終わりちょうどで止めると、最後のコマを後ろに足す(分割はしない)', () => {
     const project = base()
     const clip = videos(project)[0]!

@@ -16,6 +16,7 @@ type EditHandlers = Pick<
   | 'item.setLocked'
   | 'timeline.rippleDelete'
   | 'timeline.closeGap'
+  | 'timeline.packLeft'
   | 'timeline.insertGap'
   | 'timeline.arrangeOverlaps'
   | 'layer.removeEmpty'
@@ -167,6 +168,9 @@ export const editHandlers: EditHandlers = {
         after.inMs = Math.round(after.inMs + length * after.playbackRate)
         after.startMs = at + length
         after.durationMs -= length
+        // 静止画の後は映像が飛ぶので、続きの動画をフェードインさせる(設定で切れる)。
+        // 静止画の前はそのコマから続くので、フェードアウトはしない。
+        if (draft.editing.freezeFadeIn !== false) fadeCutEdge(draft, after, 'in')
       }
     }
 
@@ -270,6 +274,48 @@ export const editHandlers: EditHandlers = {
     shiftItemsFrom(draft, nextStart, -(nextStart - previousEnd), new Set())
   },
 
+  'timeline.packLeft': (draft, command, env) => {
+    const ids = new Set(command.itemIds.map((id) => env.resolve(id)))
+    if (ids.size === 0) fail(command.op, '詰めるアイテムを選んでください')
+    for (const id of ids) {
+      if (!draft.items.some((item) => item.id === id)) fail(command.op, `アイテムが見つかりません: ${id}`)
+    }
+    // グループの仲間も一緒に動かす。ロック中のもの(レイヤーのロックも)は動かさず、ほかを止める側にする。
+    const lockedLayers = new Set(draft.layers.filter((layer) => layer.locked).map((layer) => layer.id))
+    const groups = new Set(draft.items.filter((item) => ids.has(item.id) && item.groupId !== undefined).map((item) => item.groupId))
+    const movable = draft.items.filter(
+      (item) => (ids.has(item.id) || (item.groupId !== undefined && groups.has(item.groupId))) && !item.locked && !lockedLayers.has(item.layerId)
+    )
+    if (movable.length === 0) fail(command.op, '動かせるアイテムがありません(ロックされています)')
+
+    // 一緒に動かす単位。間を保つなら全体で1つ、そうでなければグループごと・1つずつ(前にあるものから順に詰める)。
+    const units: Item[][] = []
+    if (command.keepGaps) units.push(movable)
+    else {
+      const byGroup = new Map<string, Item[]>()
+      for (const item of movable) {
+        if (item.groupId === undefined) units.push([item])
+        else if (byGroup.has(item.groupId)) byGroup.get(item.groupId)!.push(item)
+        else {
+          const unit = [item]
+          byGroup.set(item.groupId, unit)
+          units.push(unit)
+        }
+      }
+      units.sort((a, b) => Math.min(...a.map((item) => item.startMs)) - Math.min(...b.map((item) => item.startMs)))
+    }
+
+    let movedAny = false
+    for (const unit of units) {
+      const members = new Set(unit.map((item) => item.id))
+      const delta = Math.min(...unit.map((item) => roomBefore(draft, item, members)))
+      if (delta <= 0) continue
+      for (const item of unit) item.startMs -= delta
+      movedAny = true
+    }
+    if (!movedAny) fail(command.op, '前に詰められる空白がありません')
+  },
+
   'timeline.insertGap': (draft, command) => {
     const at = requireFinite(command.atMs, command.op, '位置')
     const length = requireFinite(command.durationMs, command.op, '空ける長さ')
@@ -333,6 +379,20 @@ export function dissolveLoneGroups(draft: Project): void {
   const counts = new Map<string, number>()
   for (const item of draft.items) if (item.groupId !== undefined) counts.set(item.groupId, (counts.get(item.groupId) ?? 0) + 1)
   for (const item of draft.items) if (item.groupId !== undefined && (counts.get(item.groupId) ?? 0) < 2) delete item.groupId
+}
+
+/**
+ * アイテムの前にある空き(ms)。同じレイヤーで前にある素材の終わり(無ければ 0 秒)まで。
+ * セリフは声が重ならないよう、ほかのレイヤーのセリフも前の素材として数える。一緒に動かす仲間(unit)は数えない。
+ */
+function roomBefore(draft: Project, item: Item, unit: ReadonlySet<string>): Ms {
+  let limit = 0
+  for (const other of draft.items) {
+    if (unit.has(other.id) || other.startMs >= item.startMs) continue
+    if (other.layerId !== item.layerId && !(item.type === 'voice' && other.type === 'voice')) continue
+    limit = Math.max(limit, itemEnd(other))
+  }
+  return Math.max(0, item.startMs - limit)
 }
 
 function mergeRanges(ranges: [Ms, Ms][]): [Ms, Ms][] {

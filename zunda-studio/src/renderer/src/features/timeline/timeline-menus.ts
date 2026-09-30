@@ -17,6 +17,7 @@ import {
   insertGapAt,
   moveToLayer,
   moveToPlayhead,
+  packLeftSelection,
   pasteAt,
   rippleDeleteSelection,
   selectAll,
@@ -122,6 +123,25 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
       testId: 'menu-ripple-delete'
     },
     'separator',
+    many && !oneGroup
+      ? {
+          label: `選んだ${ids.length}個を左に詰める`,
+          disabled: locked,
+          testId: 'menu-pack-left',
+          submenu: [
+            {
+              label: '空白を埋める(選んだもの同士の間も詰める)',
+              onSelect: report(context, () => packLeftSelection(false, ids)),
+              testId: 'menu-pack-left-fill'
+            },
+            {
+              label: '空白を保つ(間はそのまま、まとめて左へ)',
+              onSelect: report(context, () => packLeftSelection(true, ids)),
+              testId: 'menu-pack-left-keep'
+            }
+          ]
+        }
+      : { label: '左に詰める', disabled: locked, onSelect: report(context, () => packLeftSelection(false, ids)), testId: 'menu-pack-left' },
     { label: '再生位置へ移動', disabled: locked || (many && !oneGroup), onSelect: report(context, () => moveToPlayhead(item.id)), testId: 'menu-move-to-playhead' },
     { label: '再生位置をここの頭へ', onSelect: () => state().setPlayhead(item.startMs) },
     { label: '再生位置をここの終わりへ', onSelect: () => state().setPlayhead(itemEndMs(item)) },
