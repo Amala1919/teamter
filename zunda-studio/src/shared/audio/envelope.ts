@@ -81,7 +81,15 @@ function duckCoverage(intervals: readonly [Ms, Ms][], fadeMs: Ms, timeMs: Ms): n
   return Math.max(0, Math.min(1, coverage))
 }
 
-/** アイテムの音量の折れ線。折れ点は時刻順に並び、最初は 0、最後は尺の位置にある。 */
+/** 音の種類。全体の音量のつまみで、種類ごとに大きさを変えられる。 */
+export type MixGroup = 'voice' | 'music' | 'video'
+
+/** 全体の音量 × 種類ごとの音量(プレビューと書き出しの両方で掛ける)。 */
+export function mixGain(project: Pick<Project, 'mix'>, group: MixGroup): number {
+  return (project.mix?.master ?? 1) * (project.mix?.[group] ?? 1)
+}
+
+/** アイテムの音量の折れ線。折れ点は時刻順に並び、最初は 0、最後は尺の位置にある。全体の音量も含む。 */
 export function gainEnvelope(project: Project, item: SoundItem): GainPoint[] {
   const duration = item.durationMs
   const times = new Set<Ms>([0, duration])
@@ -91,6 +99,7 @@ export function gainEnvelope(project: Project, item: SoundItem): GainPoint[] {
   const duck = item.type === 'audio' && item.duckable && project.editing.duckVolume < 1
   const intervals = duck ? speechIntervals(project) : []
   const fade = project.editing.duckFadeMs
+  const mix = mixGain(project, item.type === 'audio' ? 'music' : 'video')
   for (const [start, end] of intervals) {
     for (const absolute of [start - fade, start, end, end + fade]) {
       const rel = absolute - item.startMs
@@ -101,7 +110,7 @@ export function gainEnvelope(project: Project, item: SoundItem): GainPoint[] {
     .sort((a, b) => a - b)
     .map((atMs) => {
       const duckFactor = duck ? 1 - (1 - project.editing.duckVolume) * duckCoverage(intervals, fade, item.startMs + atMs) : 1
-      return { atMs, gain: item.volume * fadeFactor(item, atMs) * duckFactor }
+      return { atMs, gain: item.volume * mix * fadeFactor(item, atMs) * duckFactor }
     })
 }
 

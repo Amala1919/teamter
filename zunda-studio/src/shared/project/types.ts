@@ -655,6 +655,23 @@ export interface Project {
   editing: EditingSettings
   /** 投稿用の文(タイトル案・概要欄・チャプター)。AIの下書きを利用者が直して使う(A-6, E-4)。 */
   publish?: PublishInfo
+  /** 全体の音量と、音の種類ごとの音量。無い項目は 1(100%)。 */
+  mix?: AudioMix
+}
+
+/**
+ * 音量のつまみ(倍率。1 = 100%、0〜2)。プレビューと書き出しの両方に掛かる。
+ * 素材ごとの音量・フェード・ダッキングは、これとは別にそのまま掛かる。
+ */
+export interface AudioMix {
+  /** 全体の音量。 */
+  master?: number
+  /** セリフ。 */
+  voice?: number
+  /** BGM・効果音(音声の素材)。 */
+  music?: number
+  /** 動画の音。 */
+  video?: number
 }
 
 export interface Chapter {

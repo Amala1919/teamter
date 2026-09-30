@@ -1,4 +1,4 @@
-import { sourceTimeMs } from '@shared/audio/envelope'
+import { mixGain, sourceTimeMs } from '@shared/audio/envelope'
 import type { ItemId, Ms, Project, VideoItem } from '@shared/project/types'
 
 import { api } from '../api'
@@ -109,9 +109,10 @@ class VideoPool {
         continue
       }
       const rate = item.playbackRate > 0 ? item.playbackRate : 1
-      element.muted = muted.has(item.layerId) || item.volume === 0
+      const volume = item.volume * mixGain(project, 'video')
+      element.muted = muted.has(item.layerId) || volume === 0
       // HTML の音量は1が上限。1を超える音量は書き出しでだけ反映される。
-      element.volume = Math.min(1, item.volume)
+      element.volume = Math.min(1, volume)
       // ずれはタイムラインの時間で測る(倍速の動画は、同じ遅れでも動画の時間では大きく見えるため)。
       const driftMs = ((element.currentTime - target) * 1000) / rate
       if (element.paused) {

@@ -24,6 +24,7 @@ import { deleteSelection, useEditorStore } from '../../state/store'
 import { openContextMenu, type MenuEntry } from '../../ui/ContextMenu'
 import { insertZoom } from '../timeline/timeline-menus'
 import { ItemFrameEditor } from './ItemFrameEditor'
+import { MixControl } from './MixControl'
 import { PortraitFrameEditor } from './PortraitFrameEditor'
 import { ZoomFrameEditor } from './ZoomFrameEditor'
 
@@ -437,6 +438,7 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
           }}
           aria-label="再生位置"
         />
+        <MixControl onError={onError} />
         {notice && (
           <span className="preview__notice" role="status" data-testid="preview-notice">
             {notice}

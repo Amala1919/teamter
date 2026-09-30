@@ -65,6 +65,15 @@ export interface ProjectSetBriefing {
   briefing: ProjectBriefing | null
 }
 
+/** 全体の音量と、音の種類ごとの音量(0〜2 の倍率。1 = 100%)。null で 100% に戻す。 */
+export interface ProjectSetMix {
+  op: 'project.setMix'
+  master?: number | null
+  voice?: number | null
+  music?: number | null
+  video?: number | null
+}
+
 export interface ProjectSetEditing {
   op: 'project.setEditing'
   openGapOnVoiceInsert?: boolean
@@ -733,6 +742,7 @@ export type Command =
   | ProjectSetMeta
   | ProjectSetConversationAi
   | ProjectSetEditing
+  | ProjectSetMix
   | ProjectSetBriefing
   | CreditsSet
   | PublishSet

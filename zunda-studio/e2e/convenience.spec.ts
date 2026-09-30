@@ -356,4 +356,35 @@ test.describe('使い勝手の機能', () => {
     await expect.poll(latestFlags).toEqual([false, false, true])
     await expect(lines.last()).toContainText('さんぎょうめ')
   })
+  test('全体の音量と、セリフ・BGM・動画の音の大きさを変えられ、取り消せる', async ({ page }) => {
+    await openFresh(page)
+    const toggle = page.getByTestId('mix-toggle')
+    await expect(toggle).toHaveText('🔊 100%')
+    await toggle.click()
+    const panel = page.getByTestId('mix-panel')
+    await expect(panel).toBeVisible()
+
+    // つまみを動かして離すと反映する(全体 50%)
+    await page.getByTestId('mix-master').fill('50')
+    await expect(page.getByTestId('mix-master-value')).toHaveText('50%')
+    await expect(toggle).toHaveText('🔊 50%')
+    await expect(toggle).toHaveClass(/button--active/)
+    await page.getByTestId('mix-music').fill('0')
+    await expect(page.getByTestId('mix-music-value')).toHaveText('0%')
+
+    // 取り消すと1つずつ戻る
+    await page.keyboard.press('Escape')
+    await expect(panel).toHaveCount(0)
+    await page.getByRole('button', { name: '元に戻す' }).click()
+    await toggle.click()
+    await expect(page.getByTestId('mix-music-value')).toHaveText('100%')
+    await expect(page.getByTestId('mix-master-value')).toHaveText('50%')
+
+    // すべて100%に戻す。全体を0%にすると消音の印になる
+    await page.getByTestId('mix-reset').click()
+    await expect(toggle).toHaveText('🔊 100%')
+    await expect(page.getByTestId('mix-reset')).toBeDisabled()
+    await page.getByTestId('mix-master').fill('0')
+    await expect(toggle).toHaveText('🔇 0%')
+  })
 })
