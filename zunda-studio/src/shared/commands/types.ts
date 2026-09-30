@@ -326,6 +326,13 @@ export interface VoiceSetDisplayText {
   text: string | null
 }
 
+/** セリフの字幕を出す・出さない(声はそのまま)。複数のセリフにまとめて使える。 */
+export interface VoiceSetSubtitleHidden {
+  op: 'voice.setSubtitleHidden'
+  itemIds: ItemId[]
+  hidden: boolean
+}
+
 /** 読み方を直す(カタカナとアクセント記号)。null で自動の読みに戻す。 */
 export interface VoiceSetReading {
   op: 'voice.setReading'
@@ -794,6 +801,7 @@ export type Command =
   | VoiceSetGapAfter
   | VoiceSetReading
   | VoiceSetDisplayText
+  | VoiceSetSubtitleHidden
   | VoiceInvalidateSynthesis
   | VoiceApplySynthesis
 

@@ -3,7 +3,7 @@ import type { Readable } from 'node:stream'
 
 import { AppError } from '../../core/errors'
 import { spawnProcess } from '../../core/process'
-import { ffmpegErrorDetail } from '../media/ffmpeg'
+import { ffmpegErrorDetail, ffmpegFailure } from '../media/ffmpeg'
 
 /** 貯めすぎたら子プロセスからの読み取りを止める量。 */
 const HIGH_WATER_BYTES = 32 * 1024 * 1024
@@ -87,7 +87,7 @@ export class FfmpegOutput {
   /** 最後まで読んだ後に呼ぶ。ffmpeg が失敗していれば例外にする。 */
   async finish(what: string): Promise<void> {
     const code = await this.exit
-    if (code !== 0 && code !== null) throw new AppError('FFMPEG_FAILED', `${what}に失敗しました`, ffmpegErrorDetail(this.stderr))
+    if (code !== 0 && code !== null) throw new AppError('FFMPEG_FAILED', ffmpegFailure(what, this.stderr), ffmpegErrorDetail(this.stderr))
   }
 
   kill(): void {

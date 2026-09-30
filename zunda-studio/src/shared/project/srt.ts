@@ -7,7 +7,7 @@ import type { Ms, Project } from './types'
  */
 export function toSrt(project: Project, options: { withSpeaker?: boolean } = {}): string {
   return voiceItemsInOrder(project)
-    .filter((line) => line.text.trim() !== '')
+    .filter((line) => line.text.trim() !== '' && line.subtitleHidden !== true)
     .map((line, index) => {
       const speaker = project.characters[line.characterId]?.name
       const lines = line.subtitleLines.length > 0 ? line.subtitleLines : [line.displayText ?? line.text]

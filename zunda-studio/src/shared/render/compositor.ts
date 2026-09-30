@@ -49,11 +49,14 @@ export function renderFrame(
   options: RenderOptions = {}
 ): void {
   const { width, height, backgroundColor } = project.canvas
-  context.save()
+  // 全体を消すのは save() の外で行う。書き出しの @napi-rs/canvas は描いた内容を記録として積み、
+  // 保存(save)の外で全体を消したときにだけ記録を捨てる。save() の中で消すと、動画のコマ(1080p で 8MB)を
+  // 描くたびに記録が溜まり、長い動画の書き出しで PC のメモリを使い切っていた。
   context.setTransform(1, 0, 0, 1, 0, 0)
+  context.clearRect(0, 0, width, height)
+  context.save()
   context.globalAlpha = 1
   context.globalCompositeOperation = 'source-over'
-  context.clearRect(0, 0, width, height)
   context.fillStyle = backgroundColor
   context.fillRect(0, 0, width, height)
 
@@ -64,7 +67,8 @@ export function renderFrame(
   for (const item of itemsAt(project, timeMs)) {
     // 立ち絵は、場面ごとの立ち絵をまとめて portraitScenes で決める。
     if (item.type === 'portrait') continue
-    if (item.type === 'voice' && options.subtitles === false) continue
+    // 字幕を出さないセリフ(と、字幕なしで描くとき)は、セリフを描かない(声は書き出しの音声で鳴る)。
+    if (item.type === 'voice' && (options.subtitles === false || item.subtitleHidden === true)) continue
     if (item.type === 'zoom') {
       if (options.applyZoom !== false) drawables.push({ kind: 'zoom', layerId: item.layerId, item })
     } else {

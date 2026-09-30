@@ -1,4 +1,7 @@
+import { createCanvas } from '@napi-rs/canvas'
 import { describe, expect, it } from 'vitest'
+
+import { NodeRenderResources } from '../src/main/render/node-resources'
 
 import { aiCommandSchema } from '@shared/ai/edit-commands'
 import { applyCommands, type CommandContext } from '@shared/commands/apply'
@@ -6,6 +9,8 @@ import type { Command } from '@shared/commands/types'
 import { createEmptyProject } from '@shared/project/factory'
 import { toSrt } from '@shared/project/srt'
 import type { Project, SynthesisResult, VoiceItem } from '@shared/project/types'
+import { renderFrame } from '@shared/render/compositor'
+import type { Ctx2D } from '@shared/render/types'
 
 let counter = 0
 const ctx: CommandContext = { newId: (prefix) => `${prefix}_${++counter}`, now: () => new Date('2026-01-01T00:00:00Z') }
@@ -59,5 +64,43 @@ describe('字幕に出す文字(voice.setDisplayText)', () => {
   it('編集AIも字幕だけを変えられる', () => {
     expect(aiCommandSchema.safeParse({ op: 'voice.setDisplayText', itemId: 'itm_1', text: '草' }).success).toBe(true)
     expect(aiCommandSchema.safeParse({ op: 'voice.setDisplayText', itemId: 'itm_1', text: null }).success).toBe(true)
+  })
+})
+
+describe('字幕を出さない(voice.setSubtitleHidden)', () => {
+  /** 画面の下半分で、背景(黒)でない点の数。 */
+  function litPixels(project: Project, timeMs: number): number {
+    const canvas = createCanvas(project.canvas.width, project.canvas.height)
+    const context = canvas.getContext('2d')
+    renderFrame(context as unknown as Ctx2D, project, timeMs, new NodeRenderResources())
+    const { data } = context.getImageData(0, project.canvas.height / 2, project.canvas.width, project.canvas.height / 2)
+    let count = 0
+    for (let index = 0; index < data.length; index += 16) if (data[index]! + data[index + 1]! + data[index + 2]! > 60) count++
+    return count
+  }
+
+  it('出さないセリフは画面にも SRT にも出ず、声(合成結果)はそのまま。戻せる', () => {
+    const { project, id } = oneLine()
+    expect(litPixels(project, 100)).toBeGreaterThan(0)
+    const hidden = apply(project, [{ op: 'voice.setSubtitleHidden', itemIds: [id], hidden: true }])
+    expect(line(hidden, id).subtitleHidden).toBe(true)
+    expect(line(hidden, id).synthesis).not.toBeNull()
+    expect(litPixels(hidden, 100)).toBe(0)
+    expect(toSrt(hidden)).toBe('')
+    const shown = apply(hidden, [{ op: 'voice.setSubtitleHidden', itemIds: [id], hidden: false }])
+    expect(line(shown, id).subtitleHidden).toBeUndefined()
+    expect(litPixels(shown, 100)).toBeGreaterThan(0)
+  })
+
+  it('複数のセリフにまとめて使え、セリフ以外は断る。編集AIも使える', () => {
+    const { project, id } = oneLine()
+    const characterId = line(project, id).characterId
+    const withSecond = applyCommands(project, [{ op: 'voice.insert', characterId, text: 'ふたつめ', atMs: 5000, tempId: 's' }], ctx)
+    const second = withSecond.resolvedIds['s']!
+    const hidden = apply(withSecond.project, [{ op: 'voice.setSubtitleHidden', itemIds: [id, second], hidden: true }])
+    expect([line(hidden, id).subtitleHidden, line(hidden, second).subtitleHidden]).toEqual([true, true])
+    const withText = applyCommands(project, [{ op: 'media.placeText', text: 'テロップ', atMs: 0, durationMs: 1000, tempId: 't' }], ctx)
+    expect(() => apply(withText.project, [{ op: 'voice.setSubtitleHidden', itemIds: [withText.resolvedIds['t']!], hidden: true }])).toThrow()
+    expect(aiCommandSchema.safeParse({ op: 'voice.setSubtitleHidden', itemIds: ['itm_1'], hidden: true }).success).toBe(true)
   })
 })
