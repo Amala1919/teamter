@@ -19,6 +19,8 @@
   --section-timeline: #17291f;
   --accent-toolbar: #7d8b99;
   --accent-script: #4f8fd6;
+  /* 台本の最新(一番下)のセリフ。選択(緑)・検索(黄)と見分けられる色。 */
+  --latest-line: #f08a5d;
   --accent-preview: #59636e;
   --accent-side: #9a72d6;
   --accent-timeline: #3fa38d;
@@ -344,6 +346,21 @@ body.resizing-y * {
   cursor: pointer;
   margin-bottom: 6px;
   padding: 6px;
+}
+
+/* 最新(一番下)のセリフ。選んだときの枠の色は選択のほうを優先する。 */
+.script__line--latest {
+  background: color-mix(in srgb, var(--latest-line) 12%, transparent);
+  border-color: color-mix(in srgb, var(--latest-line) 55%, var(--border));
+}
+
+.script__latest {
+  background: color-mix(in srgb, var(--latest-line) 30%, transparent);
+  border-radius: 4px;
+  color: var(--latest-line);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 0 5px;
 }
 
 .script__line--selected {

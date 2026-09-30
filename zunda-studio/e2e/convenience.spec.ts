@@ -334,4 +334,25 @@ test.describe('使い勝手の機能', () => {
       await updateSettings(request, { editing: { openGapOnVoiceInsert: false } })
     }
   })
+
+  test('台本の最新(一番下)のセリフは色分けされ、セリフを足すと新しい一番下に移る', async ({ page }) => {
+    await openFresh(page)
+    await addLines(page, 'ずんだもん:いちぎょうめ\n四国めたん:にぎょうめ', 2)
+    const lines = page.getByTestId('script-line')
+    const latestFlags = async (): Promise<boolean[]> =>
+      await lines.evaluateAll((elements) => elements.map((element) => element.classList.contains('script__line--latest')))
+    await expect.poll(latestFlags).toEqual([false, true])
+    await expect(page.getByTestId('script-line-latest')).toHaveCount(1)
+    await expect(lines.last().getByTestId('script-line-latest')).toBeVisible()
+    const background = async (index: number): Promise<string> =>
+      await lines.nth(index).evaluate((element) => (globalThis as unknown as { getComputedStyle: (e: unknown) => { backgroundColor: string } }).getComputedStyle(element).backgroundColor)
+    expect(await background(1)).not.toBe(await background(0))
+
+    await page.getByTestId('open-bulk').click()
+    await page.getByTestId('bulk-text').fill('ずんだもん:さんぎょうめ')
+    await page.getByTestId('bulk-submit').click()
+    await expect(lines).toHaveCount(3)
+    await expect.poll(latestFlags).toEqual([false, false, true])
+    await expect(lines.last()).toContainText('さんぎょうめ')
+  })
 })
