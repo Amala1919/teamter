@@ -8,31 +8,9 @@ import type { Ctx2D } from '@shared/render/types'
 
 import { useEditorStore } from '../../state/store'
 import { useSettingsStore } from '../../state/settings'
+import { FONT_WEIGHTS as WEIGHTS, useFontList } from '../../lib/fonts'
 
 type Run = (commands: Command[], label: string) => unknown
-
-/** よく使われる日本語フォント。入っていないフォントは、見本で代わりのフォントになる。 */
-const COMMON_FONTS = [
-  'Noto Sans JP',
-  'M PLUS Rounded 1c',
-  'BIZ UDPゴシック',
-  'UD デジタル 教科書体 N-B',
-  'Yu Gothic UI',
-  '游ゴシック',
-  'メイリオ',
-  'MS Pゴシック',
-  'Hiragino Sans',
-  'けいふぉんと',
-  'コーポレート・ロゴ',
-  'やさしさゴシック',
-  '源ノ角ゴシック'
-]
-
-const WEIGHTS: [number, string][] = [
-  [400, '標準'],
-  [700, '太字'],
-  [900, '極太']
-]
 
 /** 文字の揃え方。字幕は、指定した点を最後の行の下端として上へ積むので、縦の意味は持たない。 */
 const ALIGNS: [PortraitAnchor, string][] = [
@@ -65,20 +43,11 @@ export function SubtitleStyleEditor({ style, sampleLines, run }: SubtitleStyleEd
   const otherStyles = Object.values(allStyles).filter((other) => other.id !== style.id)
   const subtitleSettings = useSettingsStore((state) => state.settings?.subtitle)
   const updateSettings = useSettingsStore((state) => state.update)
-  const [fonts, setFonts] = useState<string[]>(COMMON_FONTS)
+  const { fonts, load: loadLocalFonts } = useFontList()
   const [notice, setNotice] = useState<string | null>(null)
 
   const set = (props: Partial<Omit<SubtitleStyle, 'id'>>, label: string): void => {
     run([{ op: 'style.upsertSubtitle', styleId: style.id, props }], label)
-  }
-
-  /** PC に入っているフォントの一覧を読む(使える環境だけ)。 */
-  const loadLocalFonts = (): void => {
-    const query = (window as unknown as { queryLocalFonts?: () => Promise<{ family: string }[]> }).queryLocalFonts
-    if (!query) return
-    query()
-      .then((list) => setFonts([...new Set([...COMMON_FONTS, ...list.map((font) => font.family)])].sort((a, b) => a.localeCompare(b, 'ja'))))
-      .catch(() => undefined)
   }
 
   const perCharacter = subtitleSettings?.characterOutlineColors ?? true

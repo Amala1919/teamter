@@ -279,8 +279,12 @@ PSDのレイヤーツリーに対する「役割の割り当て」を保存す�
 { "type": "image", "assetId": "ast_cutin", "transform": { /* 同上 */ } }
 
 // 独立した字幕・テロップ(ボイスに紐づかないもの)
+// look はこのテロップだけの見た目(無い項目は字幕スタイルに従う。outline・shadow の "none" はスタイルにあっても付けない)。
+// background は後ろに敷く帯、typewriterMs は最初のこの時間で1文字ずつ出す文字送り。
 { "type": "text", "text": "衝撃の結末", "styleId": "sty_telop",
-  "transform": { /* 同上 */ } }
+  "transform": { /* 同上 */ },
+  "look": { "color": "#ffe14d", "fontWeight": 900, "align": "center", "outline": { "color": "#000000", "widthPx": 10 },
+            "background": { "color": "#000000", "opacity": 0.65, "paddingPx": 18, "radiusPx": 8 }, "typewriterMs": 1000 } }
 
 // BGM・効果音
 { "type": "audio", "assetId": "ast_bgm_01", "inMs": 0, "outMs": 184000,

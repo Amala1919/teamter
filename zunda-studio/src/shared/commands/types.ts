@@ -37,6 +37,7 @@ import type {
   SubtitleStyle,
   SubtitleStyleId,
   SynthesisResult,
+  TextLook,
   VoiceConfig,
   VoiceParams
 } from '../project/types'
@@ -458,6 +459,17 @@ export interface ItemSetContent {
   shape?: ShapeItem['shape']
 }
 
+/**
+ * テロップだけの見た目を変える(選んだ複数のテロップにまとめて)。look の項目を null にすると、スタイルに戻す。
+ * replace なら、今の見た目を捨てて look だけにする(見た目の貼り付け・ひな形)。
+ */
+export interface ItemSetTextLook {
+  op: 'item.setTextLook'
+  itemIds: ItemId[]
+  look: { [K in keyof TextLook]?: TextLook[K] | null }
+  replace?: boolean
+}
+
 export interface ItemAddEffect {
   op: 'item.addEffect'
   itemId: ItemId
@@ -731,6 +743,7 @@ export type Command =
   | ItemSetTransform
   | ItemSetAudio
   | ItemSetContent
+  | ItemSetTextLook
   | ItemAddEffect
   | ItemUpdateEffect
   | ItemRemoveEffect

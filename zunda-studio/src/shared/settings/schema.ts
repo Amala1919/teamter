@@ -174,7 +174,9 @@ const editingSchema = z
 const uiSchema = z
   .object({
     /** タイムラインやプレビューで素材を選んだら、右の欄をインスペクタに切り替える。 */
-    autoInspectorTab: z.boolean().default(true)
+    autoInspectorTab: z.boolean().default(true),
+    /** プレビューでテロップ・画像・図形をクリックしたら選び、枠で動かせるようにする。 */
+    previewClickSelect: z.boolean().default(true)
   })
   .prefault({})
 

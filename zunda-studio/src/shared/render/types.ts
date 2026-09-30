@@ -35,6 +35,10 @@ export interface Ctx2D {
   setTransform(a: number, b: number, c: number, d: number, e: number, f: number): void
   setLineDash(segments: number[]): void
   beginPath(): void
+  moveTo(x: number, y: number): void
+  lineTo(x: number, y: number): void
+  arcTo(x1: number, y1: number, x2: number, y2: number, radius: number): void
+  closePath(): void
   ellipse(x: number, y: number, rx: number, ry: number, rotation: number, start: number, end: number): void
   fill(): void
   fillStyle: unknown

@@ -62,6 +62,7 @@ export function EditingSettings({ settings, onError }: { settings: AppSettings; 
 
   // 保存の応答を待たずに見た目を切り替える(応答が来るまで押しても変わらないように見えないよう)。
   const [autoInspector, setAutoInspector] = useState(settings.ui.autoInspectorTab)
+  const [clickSelect, setClickSelect] = useState(settings.ui.previewClickSelect)
 
   const value = (key: Toggle, fallback: boolean): boolean => (editing as ProjectEditing)[key] ?? fallback
 
@@ -181,6 +182,22 @@ export function EditingSettings({ settings, onError }: { settings: AppSettings; 
           data-testid="editing-autoInspectorTab"
         />
         タイムラインやプレビューで素材を選んだら、右の欄をインスペクタに切り替える
+      </label>
+      <label className="field__row">
+        <input
+          type="checkbox"
+          checked={clickSelect}
+          onChange={(event) => {
+            const next = event.target.checked
+            setClickSelect(next)
+            update({ ui: { previewClickSelect: next } }).catch((error: unknown) => {
+              setClickSelect(!next)
+              onError(error)
+            })
+          }}
+          data-testid="editing-previewClickSelect"
+        />
+        プレビューでテロップ・画像・図形をクリックしたら選び、枠をドラッグして動かせるようにする
       </label>
     </div>
   )

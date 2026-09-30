@@ -1,6 +1,6 @@
 import type { Command } from '@shared/commands/types'
 import { itemEndMs, projectDurationMs } from '@shared/project/queries'
-import type { Effect, Item, ItemId, Ms } from '@shared/project/types'
+import type { Effect, Item, ItemId, Ms, TextItem, TextLook } from '@shared/project/types'
 
 import { deleteSelection, useEditorStore } from './store'
 
@@ -136,6 +136,36 @@ export function packLeftSelection(keepGaps: boolean, ids?: readonly ItemId[]): s
   const items = selectedItems(ids)
   if (items.length === 0) return '詰めるアイテムを選んでください'
   return run([{ op: 'timeline.packLeft', itemIds: items.map((item) => item.id), keepGaps }], keepGaps ? '左に詰める(間を保つ)' : '左に詰める').error
+}
+
+/** コピーしたテロップの見た目とスタイル(このアプリの中だけで使う)。 */
+let lookClipboard: TextLook | null = null
+let lookStyleId: string | null = null
+
+export function hasTextLook(): boolean {
+  return lookClipboard !== null
+}
+
+/** テロップの見た目(スタイルとこのテロップだけの見た目)をコピーする。 */
+export function copyTextLook(item: TextItem): void {
+  lookClipboard = { ...structuredClone(item.look ?? {}) }
+  lookStyleId = item.styleId
+}
+
+/** コピーした見た目を、選んだテロップに貼る(スタイルも同じにする)。テロップでないものは飛ばす。 */
+export function pasteTextLook(ids: readonly ItemId[]): string | null {
+  if (!lookClipboard) return '先にテロップの見た目をコピーしてください'
+  const targets = selectedItems(ids).filter((item) => item.type === 'text')
+  if (targets.length === 0) return '見た目を貼るテロップを選んでください'
+  const itemIds = targets.map((item) => item.id)
+  const styleId = lookStyleId && state().project.subtitleStyles[lookStyleId] ? lookStyleId : null
+  return run(
+    [
+      ...(styleId ? itemIds.map((itemId) => ({ op: 'item.setContent' as const, itemId, styleId })) : []),
+      { op: 'item.setTextLook', itemIds, look: lookClipboard, replace: true }
+    ],
+    'テロップの見た目の貼り付け'
+  ).error
 }
 
 export function closeGapAt(atMs: Ms): string | null {

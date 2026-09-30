@@ -181,37 +181,6 @@ export function AudioInspector({ item, run }: { item: AudioItem; run: Run }): Re
 
 // ---------------------------------------------------------------- テロップ・図形
 
-export function TextInspector({ project, item, run }: { project: Project; item: TextItem; run: Run }): React.JSX.Element {
-  return (
-    <section>
-      <h3>テロップ</h3>
-      <label className="field">
-        <span className="field__label">文字</span>
-        <textarea
-          rows={2}
-          key={item.text}
-          defaultValue={item.text}
-          onBlur={(event) => {
-            const text = event.target.value
-            if (text.trim() !== '' && text !== item.text) run([{ op: 'item.setContent', itemId: item.id, text }], 'テロップの変更')
-          }}
-          data-testid="inspector-text"
-        />
-      </label>
-      <label className="field field--inline">
-        <span className="field__label">スタイル</span>
-        <select value={item.styleId} onChange={(event) => run([{ op: 'item.setContent', itemId: item.id, styleId: event.target.value }], 'スタイルの変更')}>
-          {Object.values(project.subtitleStyles).map((style) => (
-            <option key={style.id} value={style.id}>
-              {style.name}
-            </option>
-          ))}
-        </select>
-      </label>
-    </section>
-  )
-}
-
 export function ShapeInspector({ item, run }: { item: ShapeItem; run: Run }): React.JSX.Element {
   return (
     <section>

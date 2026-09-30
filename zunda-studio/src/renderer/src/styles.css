@@ -2537,3 +2537,45 @@ input[type='url'] {
 .field--stacked {
   grid-template-columns: 1fr;
 }
+
+/* テロップのインスペクタ */
+.inspector__subhead {
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  margin: 10px 0 4px;
+}
+
+.telop-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.telop-place {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.telop-place .field__label {
+  margin-left: 4px;
+}
+
+/* プレビューで選んだ素材(テロップ・画像など)の枠 */
+.item-frame {
+  border-color: #6ee07a;
+  border-style: dashed;
+  box-shadow: none;
+  pointer-events: auto;
+}
+
+/* テロップは枠いっぱいに文字があるので、説明は枠の外(上)に出す */
+.item-frame .zoom-frame__label {
+  background: rgba(110, 224, 122, 0.9);
+  color: #14181d;
+  left: -2px;
+  top: -20px;
+  white-space: nowrap;
+}

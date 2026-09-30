@@ -440,6 +440,41 @@ export interface TextItem extends ItemBase {
   text: string
   styleId: SubtitleStyleId
   transform: Transform
+  /** このテロップだけの見た目。無い項目は字幕スタイル(styleId)に従う。 */
+  look?: TextLook
+}
+
+/** テロップの文字の揃え方(行の塊の中での揃え)。 */
+export type TextAlign = 'left' | 'center' | 'right'
+
+/** テロップの後ろに敷く帯。 */
+export interface TextBackground {
+  /** #rrggbb */
+  color: string
+  /** 0〜1 */
+  opacity: number
+  /** 文字の周りの余白(px)。 */
+  paddingPx: number
+  /** 角の丸み(px)。 */
+  radiusPx: number
+}
+
+/**
+ * テロップだけの見た目(字幕スタイルの上書き)。無い項目はスタイルに従う。
+ * 縁取り・影の 'none' は「スタイルにあっても付けない」。
+ */
+export interface TextLook {
+  color?: string
+  fontFamily?: string
+  fontWeight?: number
+  fontSizePx?: number
+  align?: TextAlign
+  lineHeight?: number
+  outline?: SubtitleOutline | 'none'
+  shadow?: SubtitleShadow | 'none'
+  background?: TextBackground
+  /** 文字送り: 最初のこの時間で1文字ずつ出す(ms)。無いか0なら、はじめから全部出す。 */
+  typewriterMs?: Ms
 }
 
 export interface AudioItem extends ItemBase {

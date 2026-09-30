@@ -39,6 +39,29 @@ const portraitTransform = z.object({
 
 const nullableNumber = z.number().nullable().optional()
 
+/** テロップだけの見た目(null はスタイルに戻す)。 */
+const textLook = z
+  .object({
+    color: color.nullable(),
+    fontFamily: z.string().min(1).max(100).nullable(),
+    fontWeight: z.number().min(100).max(900).nullable(),
+    fontSizePx: z.number().min(8).max(400).nullable(),
+    align: z.enum(['left', 'center', 'right']).nullable(),
+    lineHeight: z.number().min(0.5).max(4).nullable(),
+    outline: z.union([z.literal('none'), z.object({ color, widthPx: z.number().min(0).max(60) })]).nullable(),
+    shadow: z
+      .union([
+        z.literal('none'),
+        z.object({ color, offsetX: z.number().min(-100).max(100), offsetY: z.number().min(-100).max(100), blurPx: z.number().min(0).max(100) })
+      ])
+      .nullable(),
+    background: z
+      .object({ color, opacity: z.number().min(0).max(1), paddingPx: z.number().min(0).max(200), radiusPx: z.number().min(0).max(200) })
+      .nullable(),
+    typewriterMs: z.number().min(0).max(60_000).nullable()
+  })
+  .partial()
+
 export const aiCommandSchema = z.discriminatedUnion('op', [
   // 台本
   z.object({
@@ -90,6 +113,7 @@ export const aiCommandSchema = z.discriminatedUnion('op', [
     duckable: z.boolean().optional()
   }),
   z.object({ op: z.literal('item.setContent'), itemId: id, text: text.optional(), styleId: id.optional(), fill: color.optional(), shape: z.enum(['rect', 'ellipse']).optional() }),
+  z.object({ op: z.literal('item.setTextLook'), itemIds: z.array(id).min(1).max(200), look: textLook, replace: z.boolean().optional() }),
   z.object({ op: z.literal('item.addEffect'), itemId: id, effect }),
   z.object({ op: z.literal('item.updateEffect'), itemId: id, effectIndex: z.number().int().min(0), effect }),
   z.object({ op: z.literal('item.removeEffect'), itemId: id, effectIndex: z.number().int().min(0) }),

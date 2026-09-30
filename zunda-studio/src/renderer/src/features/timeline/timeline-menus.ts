@@ -10,15 +10,18 @@ import {
   addFade,
   closeGapAt,
   copySelection,
+  copyTextLook,
   cutSelection,
   duplicateSelection,
   freezeAtPlayhead,
   hasClipboard,
+  hasTextLook,
   insertGapAt,
   moveToLayer,
   moveToPlayhead,
   packLeftSelection,
   pasteAt,
+  pasteTextLook,
   rippleDeleteSelection,
   selectAll,
   selectFrom,
@@ -187,6 +190,18 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
   ]
 
   const tools: MenuEntry[] = []
+  if (item.type === 'text') {
+    const texts = selected.filter((candidate) => candidate.type === 'text').length
+    tools.push(
+      { label: '見た目をコピー', onSelect: () => copyTextLook(item), testId: 'menu-copy-look' },
+      {
+        label: texts > 1 ? `選んだ${texts}個のテロップに見た目を貼り付け` : '見た目を貼り付け',
+        disabled: locked || !hasTextLook(),
+        onSelect: report(context, () => pasteTextLook(ids)),
+        testId: 'menu-paste-look'
+      }
+    )
+  }
   if (item.type === 'video' && !item.freeze) {
     const canFreeze = !locked && item.startMs <= playheadMs && playheadMs <= itemEndMs(item)
     const freezeMenu = (mode: 'insert' | 'overwrite'): MenuEntry[] =>

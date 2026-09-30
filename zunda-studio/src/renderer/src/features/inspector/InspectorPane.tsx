@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 import type { Command } from '@shared/commands/types'
 import { effectiveVoice, findItem, itemEndMs, voiceItemsInOrder } from '@shared/project/queries'
-import type { VoiceItem, VoiceParams } from '@shared/project/types'
+import type { TextItem, VoiceItem, VoiceParams } from '@shared/project/types'
 import { accentPhrasesToKana } from '@shared/voice/kana'
 
 import { formatMs } from '../../lib/time'
@@ -16,13 +16,13 @@ import {
   LicenseInspector,
   PreviewQualityInspector,
   ShapeInspector,
-  TextInspector,
   TimingInspector,
   TransformInspector,
   VolumeField,
   ZoomInspector,
   type Run
 } from './ItemInspectors'
+import { TextInspector } from './TextInspector'
 
 export function InspectorPane({ onError }: { onError: (message: string) => void }): React.JSX.Element {
   const project = useEditorStore((state) => state.project)
@@ -92,7 +92,14 @@ export function InspectorPane({ onError }: { onError: (message: string) => void 
           {item.type === 'portrait' && <PortraitSceneInspector project={project} item={item} run={run} />}
           {item.type === 'portrait' && <SpeakerEmphasisSettings project={project} run={run} />}
           {item.type === 'zoom' && <ZoomInspector project={project} item={item} run={run} />}
-          {item.type === 'text' && <TextInspector project={project} item={item} run={run} />}
+          {item.type === 'text' && (
+            <TextInspector
+              project={project}
+              item={item}
+              targets={project.items.filter((candidate): candidate is TextItem => candidate.type === 'text' && selectedItemIds.includes(candidate.id))}
+              run={run}
+            />
+          )}
           {item.type === 'shape' && <ShapeInspector item={item} run={run} />}
           {item.type === 'audio' && <AudioInspector item={item} run={run} />}
           {item.type === 'video' && item.freeze && (
