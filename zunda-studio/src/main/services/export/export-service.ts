@@ -17,7 +17,7 @@ import { AppError, toErrorShape } from '../../core/errors'
 import type { EventBus } from '../../core/events'
 import { spawnProcess } from '../../core/process'
 import { NodeRenderResources } from '../../render/node-resources'
-import { ffmpegErrorDetail, type FfmpegLocator } from '../media/ffmpeg'
+import { ffmpegErrorDetail, ffmpegFailure, type FfmpegLocator } from '../media/ffmpeg'
 import type { PsdService } from '../psd/psd-service'
 import type { SynthesisService } from '../voice/synthesis-service'
 import { mixAudio } from './audio-mix'
@@ -256,7 +256,11 @@ export class ExportService {
       const frame = await video.stream.next()
       if (!frame) continue
       const data = new ImageData(new Uint8ClampedArray(frame.buffer, frame.byteOffset, frame.byteLength), video.width, video.height)
-      video.canvas.getContext('2d').putImageData(data, 0, 0)
+      const videoContext = video.canvas.getContext('2d')
+      // 先に全体を消す。@napi-rs/canvas は描いた内容を記録として積むので、消さずに putImageData を重ねると
+      // 1コマ(1080p で 8MB)ずつ記録が溜まり、長い動画で PC のメモリを使い切っていた。全体を消すと記録が捨てられる。
+      videoContext.clearRect(0, 0, video.width, video.height)
+      videoContext.putImageData(data, 0, 0)
       context.resources.setVideoFrame(item.id, video.canvas)
     }
     for (const [itemId, video] of videos) {
@@ -302,9 +306,7 @@ export class ExportService {
 
 /** エンコードの失敗を伝える文。メモリ不足なら対処も添える。 */
 export function encodeFailure(stderr: string): string {
-  return /Cannot allocate memory|out of memory/i.test(stderr)
-    ? '動画のエンコードに失敗しました(PC のメモリが足りなくなりました。ほかのアプリを閉じるか、書き出しの解像度を下げてもう一度試してください)'
-    : '動画のエンコードに失敗しました'
+  return ffmpegFailure('動画のエンコード', stderr)
 }
 
 /** イベントループを一巡させる(ネイティブのメモリの後片付けを走らせる)。 */

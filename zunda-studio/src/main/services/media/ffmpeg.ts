@@ -34,6 +34,13 @@ export class FfmpegLocator {
   }
 }
 
+/** 「〇〇に失敗しました」の文。ffmpeg がメモリ不足で止まったなら、その旨と対処を添える。 */
+export function ffmpegFailure(what: string, stderr: string): string {
+  return /Cannot allocate memory|out of memory|Failed to allocate/i.test(stderr)
+    ? `${what}に失敗しました(PC のメモリが足りなくなりました。ほかのアプリを閉じるか、書き出しの解像度を下げてもう一度試してください)`
+    : `${what}に失敗しました`
+}
+
 /** ffmpeg の標準エラー出力から、利用者に見せる短い理由を取り出す(最後の数行)。 */
 export function ffmpegErrorDetail(stderr: string): string {
   return stderr.trim().split(/\r?\n/).slice(-8).join('\n')
