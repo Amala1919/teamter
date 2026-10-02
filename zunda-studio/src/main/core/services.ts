@@ -23,6 +23,7 @@ import { MediaAccess } from './media-access'
 import { PLAIN_CIPHER, SecretStore, type SecretCipher } from './secret-store'
 import { createAppPaths, ensureAppDirectories, type AppPaths } from './paths'
 import { SettingsStore } from './settings-store'
+import { CharacterLibraryStore } from './character-library-store'
 import { sevenZipPath } from './seven-zip'
 
 export interface ServicesOptions {
@@ -61,6 +62,8 @@ export interface Services {
   paths: AppPaths
   events: EventBus
   settings: SettingsStore
+  /** アプリに保存したキャラクター。 */
+  characters: CharacterLibraryStore
   secrets: SecretStore
   media: MediaAccess
   picker: FilePicker
@@ -99,6 +102,9 @@ export async function createServices(options: ServicesOptions): Promise<Services
 
   const media = new MediaAccess()
   media.allowRoot(paths.cache.root)
+  // 保存したキャラクターの立ち絵(PSD)は、新しいプロジェクトに足したときに読めるようにしておく。
+  const characters = new CharacterLibraryStore(paths.charactersFile, (path) => media.allowFile(path))
+  await characters.load()
 
   const getSettings = (): ReturnType<SettingsStore['get']> => settings.get()
   const env = options.env ?? process.env
@@ -137,6 +143,7 @@ export async function createServices(options: ServicesOptions): Promise<Services
     paths,
     events,
     settings,
+    characters,
     secrets,
     media,
     picker: options.picker,

@@ -68,6 +68,11 @@ export const characterHandlers: CharacterHandlers = {
       else if (!TIMELINE_COLOR.test(command.timelineColor)) fail(command.op, `色の指定が不正です: ${command.timelineColor}`)
       else character.timelineColor = command.timelineColor.toLowerCase()
     }
+    if (command.libraryId !== undefined) {
+      if (command.libraryId === null) delete character.libraryId
+      else if (command.libraryId.trim() === '' || command.libraryId.length > 100) fail(command.op, 'アプリのキャラクターの指定が不正です')
+      else character.libraryId = command.libraryId
+    }
     if (command.creditText !== undefined) {
       character.creditText = command.creditText
       character.creditRequired = command.creditText !== ''

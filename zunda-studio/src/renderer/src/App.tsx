@@ -30,6 +30,8 @@ import {
 } from './state/edit-actions'
 import { api } from './api'
 import { deleteSelection, guardUnsavedClose, startAutosave, useEditorStore } from './state/store'
+import { loadLibrary, startLibrarySync } from './state/character-library'
+import { useLibraryEntries } from './state/library-entries'
 import { ContextMenuHost } from './ui/ContextMenu'
 import { useLayoutStore } from './state/layout'
 import { Splitter } from './ui/Splitter'
@@ -48,6 +50,20 @@ export function App(): React.JSX.Element {
       .then(() => useVoiceStore.getState().ensureEngine('voicevox'))
       .catch((caught: unknown) => setError(String(caught)))
   }, [loadSettings])
+
+  useEffect(() => {
+    // アプリに保存したキャラクターを読み、プロジェクトで直したらアプリにも反映する。
+    loadLibrary()
+      .then(() => {
+        // 起動直後のまだ何もしていないプロジェクトにも、保存したキャラクターを入れる。
+        const state = useEditorStore.getState()
+        const untouched =
+          state.filePath === null && !state.dirty && state.undoStack.length === 0 && state.project.items.length === 0 && Object.keys(state.project.characters).length === 0
+        if (untouched && useLibraryEntries.getState().entries.some((entry) => entry.autoAdd)) state.newProject()
+      })
+      .catch((caught: unknown) => setError(String(caught)))
+    return startLibrarySync()
+  }, [])
 
   useEffect(() => {
     // テストでは間隔を短くできるようにする。
