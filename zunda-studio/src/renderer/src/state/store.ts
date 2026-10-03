@@ -3,10 +3,12 @@ import { create } from 'zustand'
 
 import { applyCommands, type CommandContext } from '@shared/commands/apply'
 import { CommandError, type Command } from '@shared/commands/types'
+import { addSavedCharacterCommands } from '@shared/project/character-library'
 import { createEmptyProject, DEFAULT_SUBTITLE_STYLE_ID } from '@shared/project/factory'
 import type { ItemId, Ms, Project } from '@shared/project/types'
 
 import { api, AppError } from '../api'
+import { useLibraryEntries } from './library-entries'
 import { useSettingsStore } from './settings'
 import { projectLook } from './subtitle-defaults'
 
@@ -137,7 +139,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   newProject: () => {
     discardAutosave(get().sessionKey)
     set({
-      project: withEditingDefaults(withSubtitleDefaults(createEmptyProject())),
+      project: withLibraryCharacters(withEditingDefaults(withSubtitleDefaults(createEmptyProject()))),
       filePath: null,
       dirty: false,
       sessionKey: newSessionKey(),
@@ -212,6 +214,18 @@ function withSubtitleDefaults(project: Project): Project {
   const standard = project.subtitleStyles[DEFAULT_SUBTITLE_STYLE_ID]
   if (!look || !standard) return project
   return { ...project, subtitleStyles: { ...project.subtitleStyles, [DEFAULT_SUBTITLE_STYLE_ID]: { ...standard, ...structuredClone(look) } } }
+}
+
+/** 新しいプロジェクトに、アプリに保存したキャラクター(「新しいプロジェクトに入れる」もの)を入れる。 */
+function withLibraryCharacters(project: Project): Project {
+  const saved = useLibraryEntries.getState().entries.filter((entry) => entry.autoAdd)
+  if (saved.length === 0) return project
+  try {
+    return applyCommands(project, saved.flatMap((entry, index) => addSavedCharacterCommands(entry, `lib${index}_`)), commandContext).project
+  } catch {
+    // 保存したキャラクターが壊れていても、新しいプロジェクトは作れるようにする(キャラクターの画面から足し直せる)。
+    return project
+  }
 }
 
 /** 新しいプロジェクトの編集の自動処理を、設定の「編集」タブで選んだものにする。 */

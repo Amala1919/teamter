@@ -2635,3 +2635,69 @@ input[type='url'] {
   min-width: 0;
   width: 100%;
 }
+
+/* アプリに保存したキャラクター(キャラクターの画面の左) */
+.character-library {
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 8px;
+}
+
+.character-library__title {
+  color: var(--text-dim);
+  font-size: 12px;
+  margin: 0;
+}
+
+.character-library__item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: grid;
+  gap: 2px 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 4px 6px;
+}
+
+.character-library__name {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  grid-column: 1 / -1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.character-library__actions {
+  display: flex;
+  gap: 4px;
+}
+
+.character-library__auto {
+  align-items: center;
+  color: var(--text-dim);
+  display: flex;
+  font-size: 11px;
+  gap: 4px;
+}
+
+.character-library__link {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.script__library {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 8px;
+}

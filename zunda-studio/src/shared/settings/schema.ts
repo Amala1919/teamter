@@ -176,7 +176,9 @@ const uiSchema = z
     /** タイムラインやプレビューで素材を選んだら、右の欄をインスペクタに切り替える。 */
     autoInspectorTab: z.boolean().default(true),
     /** プレビューでテロップ・画像・図形をクリックしたら選び、枠で動かせるようにする。 */
-    previewClickSelect: z.boolean().default(true)
+    previewClickSelect: z.boolean().default(true),
+    /** アプリに保存したキャラクターをプロジェクトで直したら、アプリに保存したほうにも反映する。 */
+    syncCharactersToLibrary: z.boolean().default(true)
   })
   .prefault({})
 

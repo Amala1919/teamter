@@ -8,6 +8,8 @@ import type { AiPersona, BanterRole, Character, CharacterId, VoiceParams } from 
 import { api, toAppError } from '../../api'
 import { useSettingsStore } from '../../state/settings'
 import { useEditorStore } from '../../state/store'
+import { addFromLibrary, removeFromLibrary, saveToLibrary, setAutoAdd } from '../../state/character-library'
+import { useLibraryEntries } from '../../state/library-entries'
 import { characterLook } from '../../state/subtitle-defaults'
 import { useVoiceStore } from '../../state/voice'
 import { Modal } from '../../ui/Modal'
@@ -115,8 +117,14 @@ export function CharacterDialog({ onClose, initialCharacterId }: CharacterDialog
           <button type="button" onClick={addCharacter} data-testid="add-character">
             キャラクターを追加
           </button>
+          <LibraryList
+            usedIds={new Set(Object.values(characters).map((character) => character.libraryId).filter((id): id is string => id !== undefined))}
+            onAdded={(characterId) => setSelectedId(characterId)}
+            onError={setError}
+          />
         </aside>
         <section className="character-dialog__editor">
+          {selected && <LibraryLink key={`link-${selected.id}`} characterId={selected.id} libraryId={selected.libraryId} onError={setError} />}
           {selected ? (
             <CharacterEditor
               key={selected.id}
@@ -478,5 +486,101 @@ function PersonaTransfer({
         </span>
       )}
     </div>
+  )
+}
+
+/** アプリに保存したキャラクターの一覧。プロジェクトに足す・新しいプロジェクトに入れるか・アプリから消す。 */
+function LibraryList({ usedIds, onAdded, onError }: { usedIds: Set<string>; onAdded: (characterId: string) => void; onError: (message: string | null) => void }): React.JSX.Element {
+  const entries = useLibraryEntries((state) => state.entries)
+  const report = (message: string | null): void => {
+    if (message) onError(message)
+  }
+  return (
+    <div className="character-library" data-testid="character-library">
+      <h4 className="character-library__title">アプリに保存したキャラクター</h4>
+      {entries.length === 0 ? (
+        <p className="note">まだありません。キャラクターを選んで「アプリに保存」すると、ほかの動画でも使えます。</p>
+      ) : (
+        entries.map((entry) => {
+          const used = usedIds.has(entry.id)
+          return (
+            <div key={entry.id} className="character-library__item" data-testid="library-entry">
+              <span className="character-library__name">
+                {entry.name}
+                <span className={`script__role script__role--${entry.authorRole}`}>{entry.authorRole === 'ai' ? 'AI' : 'あなた'}</span>
+              </span>
+              <label className="character-library__auto">
+                <input type="checkbox" checked={entry.autoAdd} onChange={(event) => void setAutoAdd(entry.id, event.target.checked).then(report)} data-testid="library-auto-add" />
+                新しいプロジェクトに入れる
+              </label>
+              <span className="character-library__actions">
+                <button
+                  type="button"
+                  className="button--small"
+                  disabled={used}
+                  title={used ? 'このプロジェクトに入っています' : 'このプロジェクトに足す'}
+                  onClick={() => {
+                    const result = addFromLibrary([entry.id])
+                    if (result.error) onError(result.error)
+                    else if (result.characterIds[0]) onAdded(result.characterIds[0])
+                  }}
+                  data-testid="library-add"
+                >
+                  {used ? '追加済み' : '追加'}
+                </button>
+                <button
+                  type="button"
+                  className="button--small"
+                  title="アプリから消す(このプロジェクトのキャラクターは残ります)"
+                  aria-label={`${entry.name}をアプリから消す`}
+                  onClick={() => void removeFromLibrary(entry.id).then(report)}
+                  data-testid="library-remove"
+                >
+                  ×
+                </button>
+              </span>
+            </div>
+          )
+        })
+      )}
+    </div>
+  )
+}
+
+/** 選んでいるキャラクターをアプリに保存する欄(保存済みなら、その状態)。 */
+function LibraryLink({ characterId, libraryId, onError }: { characterId: string; libraryId: string | undefined; onError: (message: string | null) => void }): React.JSX.Element {
+  const saved = useLibraryEntries((state) => state.entries.find((entry) => entry.id === libraryId))
+  const sync = useSettingsStore((state) => state.settings?.ui.syncCharactersToLibrary !== false)
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
+  const save = (): void => {
+    setBusy(true)
+    void saveToLibrary(characterId)
+      .then((message) => {
+        if (message) onError(message)
+        else setNotice('アプリに保存しました')
+      })
+      .finally(() => setBusy(false))
+  }
+  return (
+    <section className="character-library__link" data-testid="library-link">
+      {saved ? (
+        <>
+          <span className="status status--ok" data-testid="library-status">
+            アプリに保存済み{sync ? '(ここで直すとアプリにも反映)' : ''}
+          </span>
+          {!sync && (
+            <button type="button" className="button--small" disabled={busy} onClick={save} data-testid="library-save">
+              今の内容をアプリに保存
+            </button>
+          )}
+        </>
+      ) : (
+        <button type="button" className="button--small" disabled={busy} onClick={save} title="ほかの動画(プロジェクト)でも使えるように、アプリに保存します" data-testid="library-save">
+          {libraryId ? 'アプリから消えています。もう一度アプリに保存' : 'このキャラクターをアプリに保存'}
+        </button>
+      )}
+      {notice && <span className="note">{notice}</span>}
+    </section>
   )
 }

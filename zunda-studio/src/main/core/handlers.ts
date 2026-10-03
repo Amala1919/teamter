@@ -23,6 +23,7 @@ import { candidateSegments } from '@shared/media/analysis'
 import { buildPublishPrompt, interpretPublishResponse, publishResponseSchema } from '@shared/ai/publish'
 import { PROVIDER_IDS, projectSession } from '@shared/ai/types'
 import type { Channel, ChannelArgs, ChannelResult, IpcResult } from '@shared/ipc/contract'
+import type { SavedCharacter } from '@shared/project/character-library'
 import type { Project } from '@shared/project/types'
 import type { SettingsPatch } from '@shared/settings/schema'
 import { SECRET_NAMES } from '@shared/settings/secrets'
@@ -225,6 +226,10 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
   'live:openWindow': z.tuple([]),
   'autosave:write': z.tuple([z.string().min(1).max(40), pathArg.nullable(), projectArg]) as unknown as z.ZodType<ChannelArgs<'autosave:write'>>,
   'autosave:list': z.tuple([]),
+  'characters:list': z.tuple([]),
+  // 形の検証は保存するときに行う(壊れた値は保存しない)
+  'characters:save': z.tuple([z.record(z.string(), z.unknown())]) as unknown as z.ZodType<[SavedCharacter]>,
+  'characters:remove': z.tuple([z.string().min(1).max(100)]),
   'persona:read': z.tuple([pathArg]),
   'autosave:read': z.tuple([z.string().min(1).max(40)]),
   'autosave:clear': z.tuple([z.string().min(1).max(40)]),
@@ -496,6 +501,9 @@ export function createHandlers(services: Services): HandlerTable {
 
     'autosave:write': (key, filePath, project) => services.autosave.write(key, filePath, project),
     'autosave:list': () => services.autosave.list(),
+    'characters:list': () => Promise.resolve(services.characters.list()),
+    'characters:save': (character) => services.characters.save(character),
+    'characters:remove': (id) => services.characters.remove(id),
     'persona:read': async (path) => {
       if (!services.readableFiles.has(resolve(path))) throw new AppError('ACCESS_DENIED', 'ファイルはファイル選択で選んでください')
       let raw: unknown

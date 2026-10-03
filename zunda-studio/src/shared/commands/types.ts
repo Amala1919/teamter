@@ -222,6 +222,8 @@ export interface CharacterUpdate {
   creditText?: string
   /** タイムラインでの色(#rrggbb)。null で自動の色分けに戻す。 */
   timelineColor?: string | null
+  /** アプリに保存したキャラクターとの結び付き。null で外す。 */
+  libraryId?: string | null
 }
 
 /** 立ち絵の設定を丸ごと置き換える(素材マネージャーで編集した結果を反映する)。null で立ち絵を外す。 */

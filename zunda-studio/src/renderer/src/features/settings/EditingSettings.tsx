@@ -63,6 +63,7 @@ export function EditingSettings({ settings, onError }: { settings: AppSettings; 
   // 保存の応答を待たずに見た目を切り替える(応答が来るまで押しても変わらないように見えないよう)。
   const [autoInspector, setAutoInspector] = useState(settings.ui.autoInspectorTab)
   const [clickSelect, setClickSelect] = useState(settings.ui.previewClickSelect)
+  const [syncLibrary, setSyncLibrary] = useState(settings.ui.syncCharactersToLibrary)
 
   const value = (key: Toggle, fallback: boolean): boolean => (editing as ProjectEditing)[key] ?? fallback
 
@@ -198,6 +199,22 @@ export function EditingSettings({ settings, onError }: { settings: AppSettings; 
           data-testid="editing-previewClickSelect"
         />
         プレビューでテロップ・画像・図形をクリックしたら選び、枠をドラッグして動かせるようにする
+      </label>
+      <label className="field__row">
+        <input
+          type="checkbox"
+          checked={syncLibrary}
+          onChange={(event) => {
+            const next = event.target.checked
+            setSyncLibrary(next)
+            update({ ui: { syncCharactersToLibrary: next } }).catch((error: unknown) => {
+              setSyncLibrary(!next)
+              onError(error)
+            })
+          }}
+          data-testid="editing-syncCharactersToLibrary"
+        />
+        アプリに保存したキャラクターをプロジェクトで直したら、アプリに保存したほうにも反映する
       </label>
     </div>
   )

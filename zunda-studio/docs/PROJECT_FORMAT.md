@@ -81,6 +81,7 @@
       "postPhonemeLength": 0.1
     },
     "subtitle": { "styleId": "sty_zundamon" },
+    "libraryId": "lib_xxxx",       // 省略可。アプリに保存したキャラクター(userData/characters.json)から足した・保存したなら、その ID
     "portrait": {
       "assetId": "ast_zunda_psd",
       "transform": { "x": 1350, "y": 1080, "scale": 1.0, "flipX": false, "anchor": "bottom-center" },

@@ -10,6 +10,8 @@ import { copySelection } from '../../state/edit-actions'
 import { useEditorStore } from '../../state/store'
 import { characterLook } from '../../state/subtitle-defaults'
 import { useVoiceStore } from '../../state/voice'
+import { addFromLibrary } from '../../state/character-library'
+import { useLibraryEntries } from '../../state/library-entries'
 import { openContextMenu } from '../../ui/ContextMenu'
 import { CharacterDialog } from '../characters/CharacterDialog'
 import { BulkInputDialog, type BulkLine } from './BulkInputDialog'
@@ -117,6 +119,8 @@ export function ScriptPane({ onError }: ScriptPaneProps): React.JSX.Element {
     run([{ op: 'voice.move', itemId: line.id, afterItemId: after }], 'セリフの並べ替え')
   }
 
+  const libraryEntries = useLibraryEntries((state) => state.entries)
+
   const createStarterCharacters = (): void => {
     run(
       [
@@ -184,6 +188,21 @@ export function ScriptPane({ onError }: ScriptPaneProps): React.JSX.Element {
       {characters.length === 0 ? (
         <div className="pane__empty">
           <p>キャラクターがまだありません。</p>
+          {libraryEntries.length > 0 && (
+            <div className="script__library" data-testid="script-library">
+              <span className="note">アプリに保存したキャラクター:</span>
+              {libraryEntries.map((entry) => (
+                <button key={entry.id} type="button" className="button--small" onClick={() => onError(addFromLibrary([entry.id]).error)} data-testid="script-library-add">
+                  {entry.name}を追加
+                </button>
+              ))}
+              {libraryEntries.length > 1 && (
+                <button type="button" className="button--small" onClick={() => onError(addFromLibrary(libraryEntries.map((entry) => entry.id)).error)} data-testid="script-library-add-all">
+                  すべて追加
+                </button>
+              )}
+            </div>
+          )}
           <button type="button" onClick={createStarterCharacters}>
             ずんだもん(あなた)と四国めたん(AI)を追加
           </button>
