@@ -14,7 +14,9 @@ function currentTarget(): string {
   return `linux-cpu-${process.arch}`
 }
 
+// Windows では展開したエンジンを run.exe として起動する。模擬のエンジンは exe にできないので、Windows では確かめない。
 test('VOICEVOX が無ければ案内が出て、ボタン1つで入れて起動できる', async ({ page, request }) => {
+  test.skip(process.platform === 'win32', '模擬のエンジンを run.exe にできない')
   const version = '0.99.2'
   const archive = buildEngineArchive({ dir: mkdtempSync(join(tmpdir(), 'zs-e2e-engine-')), target: currentTarget(), version })
   const release = await startMockEngineRelease({ port: ENGINE_RELEASE_PORT, version, archiveDir: archive.dir, parts: archive.parts })

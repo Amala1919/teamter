@@ -1,6 +1,6 @@
 import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 
 import { expect, test, type Page } from '@playwright/test'
 
@@ -78,7 +78,7 @@ test.describe('使い勝手の機能', () => {
     await expect(page.getByLabel('プロジェクト名')).not.toHaveValue('最近のテスト')
     await page.getByTestId('open-recent').click()
     const menu = page.getByTestId('context-menu')
-    await menu.getByText(projectPath.split('/').at(-1)!.replace('.zsproj', ''), { exact: true }).click()
+    await menu.getByText(basename(projectPath, '.zsproj'), { exact: true }).click()
     await expect(page.getByText(projectPath)).toBeVisible()
     await expect(page.getByLabel('プロジェクト名')).toHaveValue('最近のテスト')
   })
