@@ -19,9 +19,12 @@ function parseTime(text: string): number | null {
   return parts.reduce((total, part) => total * 60 + part, 0) * 1000
 }
 
-/** ライブで打った目印からチャプターの下書きを作る。 */
+/** 編集中に置いた目印(メモのあるもの)と、ライブで打った目印からチャプターの下書きを作る。 */
 function chaptersFromMarkers(project: Project): Chapter[] {
   const chapters: Chapter[] = [{ atMs: 0, title: 'オープニング' }]
+  for (const marker of project.markers ?? []) {
+    if (marker.text.trim() !== '') chapters.push({ atMs: marker.atMs, title: marker.text.trim().split('\n')[0]! })
+  }
   for (const session of Object.values(project.liveSessions)) {
     for (const entry of session.entries) {
       if (!entry.bookmarked) continue
@@ -77,8 +80,9 @@ export function PublishSection({ onError }: { onError: (message: string | null) 
           type="button"
           className="button--small"
           onClick={() => save({ ...publish, chapters: chaptersFromMarkers(project) }, 'チャプターを目印から作る')}
-          disabled={Object.keys(project.liveSessions).length === 0}
-          title="ライブで打った目印の位置にチャプターを置きます"
+          disabled={Object.keys(project.liveSessions).length === 0 && !(project.markers ?? []).some((marker) => marker.text.trim() !== '')}
+          title="タイムラインの目印(メモのあるもの)と、ライブで打った目印の位置にチャプターを置きます"
+          data-testid="publish-chapters-from-markers"
         >
           目印からチャプターを作る
         </button>

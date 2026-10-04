@@ -10,6 +10,7 @@ import { dissolveLoneGroups, editHandlers } from './handlers/edit'
 import { itemHandlers } from './handlers/item'
 import { liveHandlers } from './handlers/live'
 import { lookHandlers } from './handlers/look'
+import { markerHandlers } from './handlers/marker'
 import { mediaHandlers } from './handlers/media'
 import { portraitHandlers } from './handlers/portrait'
 import { projectHandlers } from './handlers/project'
@@ -35,6 +36,7 @@ const HANDLERS: HandlerTable = {
   ...editHandlers,
   ...liveHandlers,
   ...lookHandlers,
+  ...markerHandlers,
   ...mediaHandlers,
   ...portraitHandlers,
   ...transitionHandlers,

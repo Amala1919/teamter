@@ -34,6 +34,7 @@ import { loadLibrary, startLibrarySync } from './state/character-library'
 import { useLibraryEntries } from './state/library-entries'
 import { ContextMenuHost } from './ui/ContextMenu'
 import { useLayoutStore } from './state/layout'
+import { addMarker, jumpToMarker } from './state/markers'
 import { Splitter } from './ui/Splitter'
 
 export function App(): React.JSX.Element {
@@ -200,6 +201,12 @@ function timelineShortcut(event: KeyboardEvent, modifier: boolean, report: (mess
         // Ctrl+G: 選んだものをグループにする / Ctrl+Shift+G: グループを解く
         report(event.shiftKey ? ungroupSelection() : groupSelection())
         return true
+      case 'arrowleft':
+        jumpToMarker(-1)
+        return true
+      case 'arrowright':
+        jumpToMarker(1)
+        return true
       default:
         return false
     }
@@ -213,6 +220,11 @@ function timelineShortcut(event: KeyboardEvent, modifier: boolean, report: (mess
     case 's':
     case 'S':
       report(splitAtPlayhead())
+      return true
+    case 'm':
+    case 'M':
+      // 再生位置に目印を置く(Shift+M ならメモも書く)。
+      report(addMarker(undefined, { edit: event.shiftKey }).error)
       return true
     case 'f':
     case 'F':

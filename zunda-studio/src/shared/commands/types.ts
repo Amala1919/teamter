@@ -742,6 +742,31 @@ export interface ZoomUpdate {
   outMs?: Ms
 }
 
+// ------------------------------------------------------------------ 目印(編集中のメモ)
+
+/** 目印を置く。動画には出ない(編集のメモ・チャプターの元)。 */
+export interface MarkerAdd {
+  op: 'marker.add'
+  atMs: Ms
+  text?: string
+  /** #rrggbb */
+  color?: string
+  tempId?: string
+}
+
+export interface MarkerUpdate {
+  op: 'marker.update'
+  markerId: string
+  atMs?: Ms
+  text?: string
+  color?: string
+}
+
+export interface MarkerRemove {
+  op: 'marker.remove'
+  markerId: string
+}
+
 // ------------------------------------------------------------------ ライブの記録
 
 /** ライブの記録をプロジェクトに取り込む。既にあれば発言を足し、採用済みの印や手で直したずれは残す。 */
@@ -842,6 +867,9 @@ export type Command =
   | PortraitUpdate
   | ZoomInsert
   | ZoomUpdate
+  | MarkerAdd
+  | MarkerUpdate
+  | MarkerRemove
   | LiveImportSession
   | LiveSetOffset
   | LiveLinkRecording

@@ -32,6 +32,8 @@ export const SHORTCUT_GROUPS: { title: string; items: [keys: string, action: str
       ['← / →', '1コマ送り(Shift で1秒)'],
       ['↑ / ↓', '前後の編集点へ'],
       ['Home / End', '先頭 / 末尾へ'],
+      ['M / Shift+M', '再生位置に目印を置く / 置いてメモを書く'],
+      ['Ctrl+← / Ctrl+→', '前 / 次の目印へ'],
       ['Ctrl+ホイール(目盛りの上ならホイールだけ)', '拡大・縮小']
     ]
   }

@@ -2822,3 +2822,59 @@ input[type='url'] {
   color: #14181d;
   white-space: nowrap;
 }
+
+/* ------------------------------------------------------------------ 目印(編集中のメモ) */
+
+.timeline__flag {
+  border-left: 2px solid var(--flag-color, #f5c518);
+  bottom: 0;
+  cursor: pointer;
+  position: absolute;
+  top: 0;
+  z-index: 2;
+}
+
+.timeline__flag::before {
+  border-bottom: 6px solid transparent;
+  border-left: 9px solid var(--flag-color, #f5c518);
+  border-top: 6px solid transparent;
+  content: '';
+  left: 0;
+  position: absolute;
+  top: 0;
+}
+
+.timeline__flagText {
+  color: var(--flag-color, #f5c518);
+  font-size: 10px;
+  left: 11px;
+  max-width: 140px;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  text-overflow: ellipsis;
+  top: 0;
+  white-space: nowrap;
+}
+
+.timeline__markerLine {
+  border-left: 1px dashed color-mix(in srgb, var(--flag-color, #f5c518) 70%, transparent);
+  bottom: 0;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  z-index: 3;
+}
+
+.marker-editor__text {
+  width: 100%;
+}
+
+.marker-editor__swatch {
+  border: 1px solid #0006;
+  border-radius: 2px;
+  display: inline-block;
+  height: 10px;
+  vertical-align: middle;
+  width: 10px;
+}

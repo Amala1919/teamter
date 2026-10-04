@@ -35,6 +35,7 @@ import {
   splitAtPlayhead
 } from '../../state/edit-actions'
 import { pickColor } from '../../lib/pick-color'
+import { addMarker } from '../../state/markers'
 import { CORNER_LABELS, crossTransition, makeWipe, resetWipe, setAdjust, setTransitionSide, wipeFromPart, type Corner } from '../../state/look-actions'
 import { ADJUST_PRESETS } from '../inspector/MediaLookInspector'
 import { deleteSelection, useEditorStore } from '../../state/store'
@@ -484,6 +485,7 @@ export function rulerMenu(atMs: Ms, context: MenuContext): MenuEntry[] {
   const at = Math.max(0, Math.round(atMs))
   return [
     { label: '再生位置をここへ', onSelect: () => state().setPlayhead(at) },
+    { label: 'ここに目印を置く', onSelect: report(context, () => addMarker(at).error), testId: 'menu-ruler-marker' },
     { label: 'ここから後ろをすべて選択', onSelect: () => selectFrom(at), testId: 'menu-ruler-select-from' },
     {
       label: 'ここで分割',

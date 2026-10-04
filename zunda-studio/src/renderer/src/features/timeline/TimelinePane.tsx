@@ -15,7 +15,9 @@ import { withGroups } from '../../state/edit-actions'
 import { assetName, importMediaFiles, parsePreview } from '../../state/media'
 import { useSettingsStore } from '../../state/settings'
 import { useEditorStore } from '../../state/store'
-import { openContextMenu } from '../../ui/ContextMenu'
+import { openContextMenu, openMenuAt } from '../../ui/ContextMenu'
+import { addMarker, jumpToMarker } from '../../state/markers'
+import { MarkerEditor, MarkerFlags } from './MarkerFlags'
 import { itemMenu, laneMenu, layerMenu, rulerMenu, type MenuContext } from './timeline-menus'
 import { DecorationPicker } from '../decorations/DecorationPicker'
 import { FreeSourcesDialog } from '../media/FreeSourcesDialog'
@@ -258,6 +260,10 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
     else if (result.resolvedIds['text']) setSelection([result.resolvedIds['text']])
   }
 
+  const reportMarker = (message: string | null): void => {
+    if (message) onError(message)
+  }
+
   const step = labelStepSeconds(pxPerSecond)
   const menuContext: MenuContext = { onError, onAddMedia: () => void addMedia() }
   /** クリックした位置の時刻(レーン・目盛りの左端が 0)。 */
@@ -296,6 +302,31 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
         </button>
         <button type="button" className="button--small" onClick={() => setDecorationsOpen(true)} data-testid="open-decorations" title="矢印・丸・吹き出し・集中線などの装飾を置く">
           装飾
+        </button>
+        <button
+          type="button"
+          className="button--small"
+          onClick={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect()
+            event.stopPropagation()
+            const markers = project.markers ?? []
+            openMenuAt(rect.left, rect.bottom + 2, [
+              { label: '再生位置に目印を置く', shortcut: 'M', onSelect: () => reportMarker(addMarker().error), testId: 'menu-marker-add' },
+              { label: '再生位置に目印を置いてメモを書く', shortcut: 'Shift+M', onSelect: () => reportMarker(addMarker(undefined, { edit: true }).error) },
+              { label: '前の目印へ', shortcut: 'Ctrl+←', disabled: markers.length === 0, onSelect: () => jumpToMarker(-1) },
+              { label: '次の目印へ', shortcut: 'Ctrl+→', disabled: markers.length === 0, onSelect: () => jumpToMarker(1) },
+              ...(markers.length > 0 ? (['separator'] as const) : []),
+              ...markers.map((marker) => ({
+                label: `${formatMs(marker.atMs).replace(/\.\d+$/, '')}  ${marker.text.split('\n')[0] || '(メモなし)'}`,
+                onSelect: () => setPlayhead(marker.atMs),
+                testId: 'menu-marker-item'
+              }))
+            ])
+          }}
+          title="編集中の目印(メモ)。動画には出ません"
+          data-testid="open-markers"
+        >
+          目印{project.markers && project.markers.length > 0 ? `(${project.markers.length})` : ''} ▾
         </button>
         <button type="button" className="button--small" onClick={() => setSourcesOpen(true)} data-testid="open-free-sources" title="フリー BGM・効果音のサイト一覧">
           フリー素材サイト
@@ -343,6 +374,7 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
                   ★
                 </span>
               ))}
+              <MarkerFlags markers={project.markers ?? []} pxPerSecond={pxPerSecond} onError={onError} />
               {Array.from({ length: Math.ceil(visibleMs / 1000 / step) + 1 }, (_, index) => (
                 <span key={index} className="timeline__tick" style={{ left: `${index * step * pxPerSecond}px` }}>
                   {formatMs(index * step * 1000).replace(/\.\d+$/, '')}
@@ -389,6 +421,13 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
             </div>
           ))}
 
+          {(project.markers ?? []).map((marker) => (
+            <div
+              key={marker.id}
+              className="timeline__markerLine"
+              style={{ left: `${HEADER_WIDTH + msToPx(marker.atMs)}px`, '--flag-color': marker.color } as React.CSSProperties}
+            />
+          ))}
           <div
             className="timeline__playhead"
             style={{ left: `${HEADER_WIDTH + msToPx(playheadMs)}px` }}
@@ -398,6 +437,7 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
       </div>
       {sourcesOpen && <FreeSourcesDialog onClose={() => setSourcesOpen(false)} />}
       {decorationsOpen && <DecorationPicker onClose={() => setDecorationsOpen(false)} onError={onError} />}
+      <MarkerEditor onError={onError} />
     </section>
   )
 }
