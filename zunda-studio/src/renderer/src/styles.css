@@ -2925,3 +2925,41 @@ input[type='url'] {
   justify-content: space-between;
   padding: 3px 8px;
 }
+
+/* 効果音のパレット */
+.sound-list {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  margin: 8px 0 0;
+  max-height: 56vh;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.sound-list__item {
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 8px;
+}
+
+.sound-list__key {
+  color: var(--accent);
+  font-weight: bold;
+  text-align: center;
+  width: 14px;
+}
+
+.sound-list__place {
+  flex: 1;
+  min-width: 120px;
+  text-align: left;
+}
+
+.sound-list__name {
+  width: 140px;
+}

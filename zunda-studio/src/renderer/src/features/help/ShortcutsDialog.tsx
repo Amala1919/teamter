@@ -34,6 +34,7 @@ export const SHORTCUT_GROUPS: { title: string; items: [keys: string, action: str
       ['Home / End', '先頭 / 末尾へ'],
       ['M / Shift+M', '再生位置に目印を置く / 置いてメモを書く'],
       ['Ctrl+← / Ctrl+→', '前 / 次の目印へ'],
+      ['1〜9', '効果音のパレットの音を再生位置に置く'],
       ['Ctrl+ホイール(目盛りの上ならホイールだけ)', '拡大・縮小']
     ]
   }

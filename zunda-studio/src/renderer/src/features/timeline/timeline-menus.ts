@@ -38,6 +38,7 @@ import { pickColor } from '../../lib/pick-color'
 import { addVolumeKey, setVolumeKeys } from './VolumeLine'
 import { dipVolume } from '../../state/volume'
 import { addMarker } from '../../state/markers'
+import { registerSoundFromItem } from '../../state/sounds'
 import { CORNER_LABELS, crossTransition, makeWipe, resetWipe, setAdjust, setTransitionSide, wipeFromPart, type Corner } from '../../state/look-actions'
 import { ADJUST_PRESETS } from '../inspector/MediaLookInspector'
 import { deleteSelection, useEditorStore } from '../../state/store'
@@ -289,6 +290,14 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
         onSelect: report(context, () => setVolume(item.id, volume)),
         testId: `menu-volume-${volume}`
       }))
+    })
+  }
+  if (item.type === 'audio') {
+    const audio = item
+    tools.push({
+      label: '効果音のパレットに登録',
+      onSelect: () => void registerSoundFromItem(audio).then((message) => message && context.onError(message)),
+      testId: 'menu-register-sound'
     })
   }
   if ((item.type === 'video' && !item.freeze) || item.type === 'audio') {

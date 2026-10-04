@@ -22,6 +22,7 @@ import { itemMenu, laneMenu, layerMenu, rulerMenu, type MenuContext } from './ti
 import { DecorationPicker } from '../decorations/DecorationPicker'
 import { FreeSourcesDialog } from '../media/FreeSourcesDialog'
 import { LullDialog } from './LullDialog'
+import { SoundPalette } from './SoundPalette'
 import { VolumeLine } from './VolumeLine'
 import { Waveform } from './Waveform'
 
@@ -66,6 +67,7 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
   const [drag, setDrag] = useState<DragState | null>(null)
   const [sourcesOpen, setSourcesOpen] = useState(false)
   const [decorationsOpen, setDecorationsOpen] = useState(false)
+  const [soundsOpen, setSoundsOpen] = useState(false)
   /** 待ち時間を探している動画。 */
   const [lullItemId, setLullItemId] = useState<string | null>(null)
   const lullItem = project.items.find((candidate) => candidate.id === lullItemId)
@@ -308,6 +310,9 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
         <button type="button" className="button--small" onClick={() => setDecorationsOpen(true)} data-testid="open-decorations" title="矢印・丸・吹き出し・集中線などの装飾を置く">
           装飾
         </button>
+        <button type="button" className="button--small" onClick={() => setSoundsOpen(true)} data-testid="open-sounds" title="よく使う効果音を登録して、再生位置に置く(数字キー 1〜9 でも置ける)">
+          効果音
+        </button>
         <button
           type="button"
           className="button--small"
@@ -444,6 +449,7 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
       {sourcesOpen && <FreeSourcesDialog onClose={() => setSourcesOpen(false)} />}
       {decorationsOpen && <DecorationPicker onClose={() => setDecorationsOpen(false)} onError={onError} />}
       <MarkerEditor onError={onError} />
+      {soundsOpen && <SoundPalette onClose={() => setSoundsOpen(false)} onError={onError} />}
       {lullItem?.type === 'video' && <LullDialog item={lullItem} onClose={() => setLullItemId(null)} onError={onError} />}
     </section>
   )

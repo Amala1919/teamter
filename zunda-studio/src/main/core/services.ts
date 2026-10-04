@@ -118,6 +118,8 @@ export async function createServices(options: ServicesOptions): Promise<Services
 
   const media = new MediaAccess()
   media.allowRoot(paths.cache.root)
+  // 効果音のパレットに登録した音は、どのプロジェクトからでも置けるようにしておく(登録はファイルを選んだときだけ)。
+  media.allowFiles(settings.get().sounds.palette.map((entry) => entry.path))
   // 保存したキャラクターの立ち絵(PSD)は、新しいプロジェクトに足したときに読めるようにしておく。
   const characters = new CharacterLibraryStore(paths.charactersFile, (path) => media.allowFile(path))
   await characters.load()

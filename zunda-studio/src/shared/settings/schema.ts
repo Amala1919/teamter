@@ -190,6 +190,29 @@ const uiSchema = z
   })
   .prefault({})
 
+/** 効果音のパレットの1つ。数字キー(1〜9)で再生位置に置ける。 */
+const soundEntrySchema = z.object({
+  id: z.string().min(1).max(64),
+  name: z.string().min(1).max(100),
+  path: z.string().min(1).max(4096),
+  /** 置くときの音量(倍率)。 */
+  volume: z.number().min(0).max(4).default(1),
+  license: z
+    .object({
+      source: z.string().max(2000).default(''),
+      creditRequired: z.boolean().default(false),
+      creditText: z.string().max(2000).optional(),
+      sourceId: z.string().max(100).optional()
+    })
+    .prefault({})
+})
+
+const soundsSchema = z
+  .object({
+    palette: z.array(soundEntrySchema).max(60).default([])
+  })
+  .prefault({})
+
 /** アプリのデータの置き場所。 */
 const storageSchema = z
   .object({
@@ -213,11 +236,13 @@ export const settingsSchema = z.object({
   editing: editingSchema,
   ui: uiSchema,
   storage: storageSchema,
+  sounds: soundsSchema,
   recentProjects: z.array(z.string()).default([])
 })
 
 export type AppSettings = z.infer<typeof settingsSchema>
 export type VoiceEngineSettings = z.infer<typeof voiceEngineSchema>
+export type SoundEntry = z.infer<typeof soundEntrySchema>
 
 type DeepPartial<T> = T extends readonly (infer U)[]
   ? readonly U[]

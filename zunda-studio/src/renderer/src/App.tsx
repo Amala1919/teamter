@@ -35,6 +35,7 @@ import { useLibraryEntries } from './state/library-entries'
 import { ContextMenuHost } from './ui/ContextMenu'
 import { useLayoutStore } from './state/layout'
 import { addMarker, jumpToMarker } from './state/markers'
+import { placeSoundByKey } from './state/sounds'
 import { Splitter } from './ui/Splitter'
 
 export function App(): React.JSX.Element {
@@ -220,6 +221,18 @@ function timelineShortcut(event: KeyboardEvent, modifier: boolean, report: (mess
     case 's':
     case 'S':
       report(splitAtPlayhead())
+      return true
+    case '1':
+    case '2':
+    case '3':
+    case '4':
+    case '5':
+    case '6':
+    case '7':
+    case '8':
+    case '9':
+      // 効果音のパレットの音を再生位置に置く。
+      void placeSoundByKey(Number(event.key) - 1).then(report)
       return true
     case 'm':
     case 'M':
