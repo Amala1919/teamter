@@ -28,6 +28,8 @@ async function stubDialogs(app: ElectronApplication, openPaths: string[], savePa
 }
 
 test('実物の Electron で、合成・動画のプレビュー・ライブのウィンドウ・書き出しが動く', async () => {
+  // Windows の Electron は APPDATA の環境変数を見ずに本物のアプリのデータの場所を使うので、利用者のデータを書き換えてしまう。Windows では流さない。
+  test.skip(process.platform === 'win32', '本物のアプリのデータを書き換えてしまうため')
   const home = mkdtempSync(join(tmpdir(), 'zs-electron-'))
   const config = join(home, '.config')
   // アプリの設定を先に置いて、模擬の音声エンジンにつなぐ。キャッシュは別のドライブ(のつもりのフォルダ)に置く。
