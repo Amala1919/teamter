@@ -1,6 +1,6 @@
 import { validateBriefing } from '../../ai/briefing'
 import { isSafeModelId } from '../../ai/types'
-import { ZOOM_METHODS, type Layer } from '../../project/types'
+import { SUBTITLE_APPEARS, ZOOM_METHODS, type Layer } from '../../project/types'
 import { normalizeChapters } from '../../project/chapters'
 import { TIMELINE_COLOR } from '../../project/timeline-colors'
 import { fail, insertLayer, requireLayer, refreshSubtitleLines, type HandlerTable } from '../env'
@@ -184,6 +184,18 @@ export const projectHandlers: ProjectHandlers = {
     }
     if (props.maxCharsPerLine !== undefined && (props.maxCharsPerLine < 1 || props.maxCharsPerLine > 200)) {
       fail(command.op, '1行の文字数が不正です')
+    }
+    if (props.background) {
+      const background = props.background
+      if (!COLOR_PATTERN.test(background.color)) fail(command.op, '帯の色の指定が不正です')
+      if (!(background.opacity >= 0 && background.opacity <= 1)) fail(command.op, '帯の濃さは0〜1で指定してください')
+      if (!(background.paddingPx >= 0 && background.paddingPx <= 200)) fail(command.op, '帯の余白は0〜200pxで指定してください')
+      if (!(background.radiusPx >= 0 && background.radiusPx <= 200)) fail(command.op, '帯の角の丸みは0〜200pxで指定してください')
+      if (typeof background.fullWidth !== 'boolean') fail(command.op, '帯の幅の指定が不正です')
+    }
+    if (props.appear) {
+      if (!SUBTITLE_APPEARS.includes(props.appear.kind)) fail(command.op, `字幕の出方の指定が不正です: ${String(props.appear.kind)}`)
+      if (!(props.appear.durationMs >= 0 && props.appear.durationMs <= 10_000)) fail(command.op, '字幕の出方の時間は0〜10秒で指定してください')
     }
 
     if (command.styleId === undefined) {

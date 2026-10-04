@@ -157,3 +157,43 @@ describe('前の素材から切り替える', () => {
     expect(project.items.find((item) => item.id === a.id)!.effects.at(-1)).toEqual({ type: 'transition', in: { kind: 'iris', durationMs: 600 }, out: null })
   })
 })
+
+describe('字幕の帯と出方', () => {
+  function withLine(style: Partial<import('@shared/project/types').SubtitleStyle>): Project {
+    let project = createEmptyProject({ width: 640, height: 360 })
+    project = apply(project, [
+      { op: 'character.create', name: 'ずんだもん', engineId: 'voicevox', speakerId: 3, speakerName: 'ずんだもん', tempId: 'c' },
+      { op: 'style.upsertSubtitle', styleId: Object.keys(project.subtitleStyles)[0]!, props: { ...style, fontSizePx: 40, position: { anchor: 'bottom-center', x: 320, y: 300 } } }
+    ])
+    const characterId = Object.keys(project.characters)[0]!
+    const styleId = Object.keys(project.subtitleStyles)[0]!
+    project = apply(project, [{ op: 'character.update', characterId, subtitleStyleId: styleId }])
+    return apply(project, [{ op: 'voice.insert', characterId, text: 'ABCDEFGHIJKLMN', atMs: 0 }])
+  }
+
+  it('帯を画面の横幅いっぱいに敷ける', () => {
+    const project = withLine({ background: { color: '#ff0000', opacity: 1, paddingPx: 10, radiusPx: 0, fullWidth: true } })
+    // 字幕から離れた左端にも、帯の色が出る(文字は書き出し環境に日本語のフォントが無くても測れるよう英字にする)。
+    expect(pixelAt(project, 4, 290)).toEqual([255, 0, 0])
+    expect(pixelAt(project, 4, 100)).toEqual([0, 0, 0])
+  })
+
+  it('1文字ずつ出すと、始めは前の方の文字だけが出る', () => {
+    const project = withLine({ appear: { kind: 'typewriter', durationMs: 1000 }, outline: null, shadow: null, color: '#ffffff' })
+    const canvas = createCanvas(640, 360)
+    const context = canvas.getContext('2d')
+    const whiteIn = (fromX: number, toX: number): number => {
+      const data = context.getImageData(fromX, 260, toX - fromX, 50).data
+      let count = 0
+      for (let index = 0; index < data.length; index += 4) if (data[index]! > 200) count++
+      return count
+    }
+    renderFrame(context as unknown as Ctx2D, project, 200, resources)
+    const earlyRight = whiteIn(330, 540)
+    expect(whiteIn(100, 300)).toBeGreaterThan(0)
+    renderFrame(context as unknown as Ctx2D, project, 1500, resources)
+    expect(earlyRight).toBe(0)
+    expect(whiteIn(330, 540)).toBeGreaterThan(0)
+    expect(() => apply(project, [{ op: 'style.upsertSubtitle', styleId: Object.keys(project.subtitleStyles)[0]!, props: { appear: { kind: 'warp' as never, durationMs: 100 } } }])).toThrow('字幕の出方')
+  })
+})

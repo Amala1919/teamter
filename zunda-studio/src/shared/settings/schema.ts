@@ -135,7 +135,15 @@ const subtitleLookSchema = z.object({
     y: z.number()
   }),
   maxCharsPerLine: z.number().int().min(1).max(200),
-  lineHeight: z.number().min(0.5).max(4)
+  lineHeight: z.number().min(0.5).max(4),
+  background: z
+    .object({ color: z.string(), opacity: z.number().min(0).max(1), paddingPx: z.number().min(0).max(200), radiusPx: z.number().min(0).max(200), fullWidth: z.boolean() })
+    .nullable()
+    .default(null),
+  appear: z
+    .object({ kind: z.enum(['none', 'fade', 'pop', 'slideUp', 'typewriter']), durationMs: z.number().min(0).max(10_000) })
+    .nullable()
+    .default(null)
 })
 
 const subtitleSchema = z
