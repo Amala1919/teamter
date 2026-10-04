@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 
 import { GOOD_KEY, startMockOpenCodeApi } from '../tests/fixtures/mock-opencode-api.mjs'
-import { FIXTURE_BIN, openFresh, queuePick, updateSettings } from './helpers'
+import { FIXTURE_BIN, fixtureCommand, openFresh, queuePick, updateSettings } from './helpers'
 
 test.describe('AIの選択', () => {
   test.beforeEach(async ({ request }) => {
@@ -27,7 +27,7 @@ test.describe('AIの選択', () => {
 
     // CLIの場所を指定すると状態が「利用可能」になる
     const claudePath = page.getByTestId('claude-path')
-    await claudePath.fill(join(FIXTURE_BIN, 'claude'))
+    await claudePath.fill(fixtureCommand('claude'))
     await claudePath.blur()
     await expect(page.getByTestId('provider-claude-code-status')).toContainText('利用可能')
     await expect(page.getByTestId('provider-opencode-status')).toContainText('見つかりません')
@@ -172,7 +172,7 @@ test.describe('AIの選択', () => {
     await updateSettings(request, {
       ai: {
         roles: { conversation: { providerId: 'claude-code', model: 'sonnet' } },
-        providers: { 'claude-code': { executablePath: join(FIXTURE_BIN, 'claude') } }
+        providers: { 'claude-code': { executablePath: fixtureCommand('claude') } }
       }
     })
     await openFresh(page)

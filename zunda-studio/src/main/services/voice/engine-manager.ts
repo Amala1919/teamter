@@ -6,7 +6,7 @@ import type { EngineStatus } from '@shared/voice/types'
 
 import { AppError } from '../../core/errors'
 import type { EventBus } from '../../core/events'
-import { spawnProcess } from '../../core/process'
+import { killTree, spawnProcess } from '../../core/process'
 import { discoverEngineExecutable } from './engine-discovery'
 import { VoicevoxClient } from './voicevox-client'
 
@@ -94,7 +94,7 @@ export class EngineManager {
 
   async shutdown(): Promise<void> {
     for (const [engineId, child] of this.processes) {
-      if (child.exitCode === null) child.kill()
+      if (child.exitCode === null) await killTree(child)
       this.processes.delete(engineId)
     }
   }
@@ -162,7 +162,7 @@ export class EngineManager {
       if (status.state === 'ready') return this.update(engine, { state: 'ready', ...(status.version ? { version: status.version } : {}) })
       await new Promise((resolvePromise) => setTimeout(resolvePromise, POLL_INTERVAL_MS))
     }
-    child.kill()
+    void killTree(child)
     return this.update(engine, { state: 'unavailable', message: `${engine.label} の起動が時間内に終わりませんでした` })
   }
 

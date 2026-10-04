@@ -7,6 +7,11 @@ import { AI_RESPONSE_DIR } from './ports'
 
 export const FIXTURE_BIN = resolve('tests/fixtures/bin')
 
+/** 模擬コマンドの起動に使うパス。Windows は拡張子の無いスクリプトを起動できないので、同じ名前の .cmd を使う。 */
+export function fixtureCommand(name: string): string {
+  return join(FIXTURE_BIN, process.platform === 'win32' ? `${name}.cmd` : name)
+}
+
 /** 次のファイル選択ダイアログの応答を積む。 */
 export async function queuePick(request: APIRequestContext, paths: string[] | null): Promise<void> {
   await request.post('/__test/pick', { data: { response: paths } })
@@ -50,7 +55,7 @@ export async function useFakeAi(request: APIRequestContext): Promise<void> {
   await updateSettings(request, {
     ai: {
       roles: { conversation: { providerId: 'claude-code', model: 'sonnet' }, editor: { providerId: 'claude-code', model: 'opus' } },
-      providers: { 'claude-code': { executablePath: join(FIXTURE_BIN, 'claude') } }
+      providers: { 'claude-code': { executablePath: fixtureCommand('claude') } }
     }
   })
 }

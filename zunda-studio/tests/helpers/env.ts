@@ -20,8 +20,8 @@ export function fakeCliSettings(patch: SettingsPatch = {}): AppSettings {
     settingsWith({
       ai: {
         providers: {
-          'claude-code': { executablePath: join(FIXTURE_BIN, 'claude'), timeoutMs: 20_000 },
-          opencode: { connection: 'cli', executablePath: join(FIXTURE_BIN, 'opencode'), timeoutMs: 20_000 }
+          'claude-code': { executablePath: fixtureCommand('claude'), timeoutMs: 20_000 },
+          opencode: { connection: 'cli', executablePath: fixtureCommand('opencode'), timeoutMs: 20_000 }
         }
       }
     }),
@@ -46,4 +46,9 @@ export async function readCliLog(path: string): Promise<CliLogEntry[]> {
     .split('\n')
     .filter(Boolean)
     .map((line) => JSON.parse(line) as CliLogEntry)
+}
+
+/** 模擬コマンドの起動に使うパス。Windows は拡張子の無いスクリプトを起動できないので、同じ名前の .cmd を使う。 */
+export function fixtureCommand(name: string): string {
+  return join(FIXTURE_BIN, process.platform === 'win32' ? `${name}.cmd` : name)
 }

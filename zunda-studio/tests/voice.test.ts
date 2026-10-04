@@ -23,7 +23,7 @@ import {
 } from '@shared/voice/timing'
 
 import { engineFrames, startMockVoicevox, textToAccentPhrases, type MockVoicevox } from './fixtures/mock-voicevox.mjs'
-import { FIXTURE_BIN, settingsWith, tempDir } from './helpers/env'
+import { fixtureCommand, settingsWith, tempDir } from './helpers/env'
 
 const PARAMS: VoiceParams = {
   speedScale: 1,
@@ -237,7 +237,7 @@ describe('音声エンジンと合成', () => {
   it('実行ファイルが設定されていれば起動して接続し、終了時に止める', async () => {
     const port = await freePort()
     const engines = new EngineManager(
-      () => engineSettings(`http://127.0.0.1:${port}`, { executablePath: join(FIXTURE_BIN, 'fake-engine') }),
+      () => engineSettings(`http://127.0.0.1:${port}`, { executablePath: fixtureCommand('fake-engine') }),
       events
     )
     const [a, b] = await Promise.all([engines.ensure('voicevox'), engines.ensure('voicevox')])
@@ -256,7 +256,7 @@ describe('音声エンジンと合成', () => {
     process.env['FAKE_ENGINE_CRASH'] = '1'
     try {
       const engines = new EngineManager(
-        () => engineSettings(`http://127.0.0.1:${port}`, { executablePath: join(FIXTURE_BIN, 'fake-engine') }),
+        () => engineSettings(`http://127.0.0.1:${port}`, { executablePath: fixtureCommand('fake-engine') }),
         events
       )
       const status = await engines.ensure('voicevox')

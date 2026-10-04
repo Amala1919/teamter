@@ -20,6 +20,7 @@ import { entryTimelineMs, offsetForAlignment } from '@shared/live/timing'
 import { createEmptyProject } from '@shared/project/factory'
 import type { LiveSession, Project } from '@shared/project/types'
 import { defaultSettings } from '@shared/settings/schema'
+import { fixtureCommand } from './helpers/env'
 
 const FIXTURE_BIN = resolve('tests/fixtures/bin')
 
@@ -186,7 +187,7 @@ describe('文字起こし(模擬の whisper.cpp)', () => {
     const settings = defaultSettings()
     const model = join(directory, 'ggml-small.bin')
     writeFileSync(model, 'model')
-    settings.speech.whisperPath = join(FIXTURE_BIN, 'whisper-cli')
+    settings.speech.whisperPath = fixtureCommand('whisper-cli')
     settings.speech.whisperModelPath = model
     const recorded = join(directory, 'talk.ogg')
     execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=300:duration=1', '-ac', '2', '-ar', '48000', '-c:a', 'libopus', recorded])

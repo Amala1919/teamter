@@ -139,8 +139,40 @@ function emitLines(buffer: string, onLine: (line: string) => void): string {
   return rest
 }
 
+/**
+ * 子プロセスを、その子孫ごと止める。Windows の .cmd(npm が置く claude.cmd など)は cmd.exe 経由で動くので、
+ * child.kill() では cmd.exe だけが止まり、中で動いている本体が残る。taskkill /T で木ごと止める。
+ */
+export function killTree(child: ChildProcess, signal: NodeJS.Signals = 'SIGTERM'): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve()
+  // 止まるのを待てるようにする(長くても数秒で諦める)。
+  const exited = new Promise<void>((resolvePromise) => {
+    const timer = setTimeout(resolvePromise, 5000)
+    timer.unref()
+    child.once('exit', () => {
+      clearTimeout(timer)
+      resolvePromise()
+    })
+  })
+  if (process.platform === 'win32' && child.pid !== undefined) {
+    try {
+      const killer = spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' })
+      killer.on('error', () => child.kill(signal))
+      return exited
+    } catch {
+      // taskkill が使えなければ、ふつうに止める。
+    }
+  }
+  child.kill(signal)
+  return exited
+}
+
 function terminate(child: ChildProcess): void {
   if (child.exitCode !== null || child.signalCode !== null) return
+  if (process.platform === 'win32') {
+    void killTree(child)
+    return
+  }
   child.kill('SIGTERM')
   const killer = setTimeout(() => {
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
@@ -230,11 +262,11 @@ export function runProcessBuffer(options: Omit<RunOptions, 'input' | 'onStdoutLi
     const timer = options.timeoutMs
       ? setTimeout(() => {
           timedOut = true
-          child.kill('SIGKILL')
+          void killTree(child, 'SIGKILL')
         }, options.timeoutMs)
       : null
     const onAbort = (): void => {
-      child.kill('SIGKILL')
+      void killTree(child, 'SIGKILL')
     }
     options.signal?.addEventListener('abort', onAbort, { once: true })
     child.on('error', (error) => {

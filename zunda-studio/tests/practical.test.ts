@@ -134,7 +134,8 @@ describe('音声エンジンの自動検出', () => {
     expect(mac).toContain('/Applications/AivisSpeech.app/Contents/Resources/AivisSpeech-Engine/run')
   })
 
-  it('場所を設定しなくても、見つけたエンジンを起動して使える', async () => {
+  // Windows では run.exe を探す。模擬のエンジンは exe にできないので、Windows では確かめない。
+  it.skipIf(process.platform === 'win32')('場所を設定しなくても、見つけたエンジンを起動して使える', async () => {
     const resources = await tempDir('zs-resources-')
     const engineDir = join(resources, 'voicevox-engine')
     await mkdir(engineDir, { recursive: true })

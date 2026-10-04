@@ -99,12 +99,12 @@ export class ExportService {
       await rename(partial, request.outputPath)
       emit({ phase: 'done', ratio: 1, outputPath: request.outputPath })
     } catch (error) {
-      await rm(partial, { force: true })
+      await rm(partial, { force: true, maxRetries: 5, retryDelay: 100 })
       const cancelled = signal?.aborted === true || (error instanceof AppError && error.code === 'CANCELLED')
       emit(cancelled ? { phase: 'cancelled', ratio: 0 } : { phase: 'error', ratio: 0, error: toErrorShape(error) })
       if (!cancelled) throw error
     } finally {
-      await rm(audioPath, { force: true })
+      await rm(audioPath, { force: true, maxRetries: 5, retryDelay: 100 })
     }
   }
 
@@ -223,6 +223,8 @@ export class ExportService {
       if (code !== 0) throw new AppError('FFMPEG_FAILED', encodeFailure(stderr), ffmpegErrorDetail(stderr))
     } catch (error) {
       encoder.kill('SIGKILL')
+      // 終わるのを待つ。Windows では ffmpeg が開いている間、途中のファイルと音声の WAV を消せない。
+      await exited.catch(() => null)
       if (error instanceof AppError && error.code === 'FFMPEG_FAILED') throw error
       // 書き込みの失敗は、ffmpeg が先に異常終了したことが原因であることが多い。その理由を添える。
       if (!(error instanceof AppError) && stderr.trim() !== '') {
