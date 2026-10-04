@@ -2701,3 +2701,23 @@ input[type='url'] {
   justify-content: center;
   margin-bottom: 8px;
 }
+
+/* 設定の「保存場所」 */
+.storage__list {
+  grid-template-columns: 120px minmax(0, 1fr);
+}
+
+.storage__list dd {
+  overflow-wrap: anywhere;
+}
+
+.storage__progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.storage__progress progress {
+  width: 100%;
+}

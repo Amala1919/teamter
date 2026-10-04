@@ -1,3 +1,4 @@
+import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { AiService } from '../services/ai/ai-service'
@@ -21,6 +22,7 @@ import type { FilePicker } from './dialog'
 import { EventBus } from './events'
 import { MediaAccess } from './media-access'
 import { PLAIN_CIPHER, SecretStore, type SecretCipher } from './secret-store'
+import { defaultCacheRoot, finishCacheMove, markCacheRoot } from './cache-location'
 import { createAppPaths, ensureAppDirectories, type AppPaths } from './paths'
 import { SettingsStore } from './settings-store'
 import { CharacterLibraryStore } from './character-library-store'
@@ -51,6 +53,8 @@ export interface WindowControl {
   /** ホットキーを登録する。登録できなかったら false。 */
   registerHotkey(accelerator: string, handler: () => void): boolean
   unregisterHotkeys(): void
+  /** アプリを起動し直す。 */
+  relaunch?(): boolean
 }
 
 /**
@@ -62,6 +66,8 @@ export interface Services {
   paths: AppPaths
   events: EventBus
   settings: SettingsStore
+  /** キャッシュの置き場所。設定の場所が使えず既定に戻したときは fallbackFrom にその場所が入る。 */
+  cache: { root: string; defaultRoot: string; fallbackFrom: string | null }
   /** アプリに保存したキャラクター。 */
   characters: CharacterLibraryStore
   secrets: SecretStore
@@ -91,12 +97,22 @@ export interface Services {
 }
 
 export async function createServices(options: ServicesOptions): Promise<Services> {
-  const paths = createAppPaths(options.userData)
-  await ensureAppDirectories(paths)
-
   const events = new EventBus()
-  const settings = new SettingsStore(paths.settingsFile, events)
+  // キャッシュの置き場所は設定で決まるので、先に設定を読む。
+  await mkdir(options.userData, { recursive: true })
+  const settings = new SettingsStore(createAppPaths(options.userData).settingsFile, events)
   await settings.load()
+  const cache = await openCacheRoot(options.userData, settings.get().storage.cacheDir)
+  const paths = createAppPaths(options.userData, cache.root)
+  await ensureAppDirectories(paths)
+  // 前の起動でキャッシュを移していたら、古い場所を後片付けする(起動は待たせない)。
+  const cleanup = settings.get().storage.cleanupCacheDir
+  if (cleanup && !cache.fallbackFrom) {
+    void finishCacheMove(cleanup, paths.cache.root, defaultCacheRoot(options.userData))
+      .then(() => settings.update({ storage: { cleanupCacheDir: null } }))
+      .catch(() => {})
+  }
+
   const secrets = new SecretStore(paths.secretsFile, options.cipher ?? PLAIN_CIPHER)
   await secrets.load()
 
@@ -143,6 +159,7 @@ export async function createServices(options: ServicesOptions): Promise<Services
     paths,
     events,
     settings,
+    cache: { root: paths.cache.root, defaultRoot: defaultCacheRoot(options.userData), fallbackFrom: cache.fallbackFrom },
     characters,
     secrets,
     media,
@@ -169,4 +186,22 @@ export async function createServices(options: ServicesOptions): Promise<Services
       await engines.shutdown()
     }
   }
+}
+
+/**
+ * 設定のキャッシュの置き場所を開く。使えなければ(ドライブを外した・書き込めないなど)既定の場所に戻し、fallbackFrom で知らせる。
+ */
+async function openCacheRoot(userData: string, configured: string | null): Promise<{ root: string; fallbackFrom: string | null }> {
+  const fallback = defaultCacheRoot(userData)
+  if (configured) {
+    try {
+      await markCacheRoot(configured)
+      return { root: configured, fallbackFrom: null }
+    } catch {
+      await markCacheRoot(fallback)
+      return { root: fallback, fallbackFrom: configured }
+    }
+  }
+  await markCacheRoot(fallback)
+  return { root: fallback, fallbackFrom: null }
 }

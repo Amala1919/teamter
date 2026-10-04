@@ -22,7 +22,7 @@ import { buildPortraitPrompt, filterPortraitCommands, portraitResponseSchema } f
 import { candidateSegments } from '@shared/media/analysis'
 import { buildPublishPrompt, interpretPublishResponse, publishResponseSchema } from '@shared/ai/publish'
 import { PROVIDER_IDS, projectSession } from '@shared/ai/types'
-import type { Channel, ChannelArgs, ChannelResult, IpcResult } from '@shared/ipc/contract'
+import type { CacheInfo, Channel, ChannelArgs, ChannelResult, IpcResult } from '@shared/ipc/contract'
 import type { SavedCharacter } from '@shared/project/character-library'
 import type { Project } from '@shared/project/types'
 import type { SettingsPatch } from '@shared/settings/schema'
@@ -30,6 +30,7 @@ import { SECRET_NAMES } from '@shared/settings/secrets'
 
 import { PROJECT_FILE_EXTENSION } from '../services/project/store'
 import { grabFrames } from '../services/media/frame-grabber'
+import { cacheTargetFor, copyCache, directorySize, finishCacheMove, freeSpace } from './cache-location'
 import { writeFileAtomic } from './fs'
 import { AppError, toErrorShape } from './errors'
 import type { Services } from './services'
@@ -93,6 +94,9 @@ const synthesisRequestSchema = z.object({
 
 const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
   'app:info': z.tuple([]),
+  'app:relaunch': z.tuple([]),
+  'cache:info': z.tuple([]),
+  'cache:move': z.tuple([pathArg.nullable()]),
   'settings:get': z.tuple([]),
   'settings:update': z.tuple([z.record(z.string(), z.unknown())]) as unknown as z.ZodType<[SettingsPatch]>,
   'secrets:status': z.tuple([]),
@@ -112,6 +116,7 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
         'exportText',
         'exportImage',
         'executable',
+        'directory',
         'any'
       ]),
       defaultName: z.string().max(255).optional(),
@@ -253,7 +258,37 @@ export function createHandlers(services: Services): HandlerTable {
         projectFileExtension: PROJECT_FILE_EXTENSION
       }),
 
+    'app:relaunch': () => Promise.resolve(services.windows?.relaunch?.() ?? false),
+    'cache:info': () => cacheInfo(services),
+    'cache:move': async (directory) => {
+      if (cacheMoving) throw new AppError('INVALID_ARGUMENT', 'キャッシュを移している途中です')
+      // 移す先は、ファイル選択で選んだフォルダに限る(任意の場所へ書かせない)。
+      if (directory !== null && !services.readableFiles.has(resolve(directory))) {
+        throw new AppError('ACCESS_DENIED', '移す先はフォルダの選択で選んでください')
+      }
+      cacheMoving = true
+      try {
+        const current = services.cache.root
+        const target = directory === null ? services.cache.defaultRoot : await cacheTargetFor(directory)
+        const pending = services.settings.get().storage.cacheDir
+        if (resolve(target) !== resolve(current)) {
+          await copyCache(current, target, (copiedBytes, totalBytes) => services.events.emit('cache:move-progress', { copiedBytes, totalBytes }))
+        }
+        // 前に移した先(まだ起動し直していない)を使わなくなったなら消す。
+        if (pending && resolve(pending) !== resolve(target) && resolve(pending) !== resolve(current)) {
+          await finishCacheMove(pending, target, services.cache.defaultRoot).catch(() => undefined)
+        }
+        const isDefault = resolve(target) === resolve(services.cache.defaultRoot)
+        await services.settings.update({
+          storage: { cacheDir: isDefault ? null : target, cleanupCacheDir: resolve(target) === resolve(current) ? null : current }
+        })
+        return await cacheInfo(services)
+      } finally {
+        cacheMoving = false
+      }
+    },
     'settings:get': () => Promise.resolve(services.settings.get()),
+
     'settings:update': (patch) => services.settings.update(patch),
     'secrets:status': () => Promise.resolve(services.secrets.statuses()),
     'secrets:set': async (name, value) => {
@@ -269,7 +304,7 @@ export function createHandlers(services: Services): HandlerTable {
       if (picked && ['video', 'audio', 'image', 'media', 'psd'].includes(request.kind)) {
         services.media.allowFiles(picked)
       }
-      if (picked && request.kind === 'persona') {
+      if (picked && (request.kind === 'persona' || request.kind === 'directory')) {
         for (const path of picked) services.readableFiles.add(resolve(path))
       }
       // 書き出し先は、保存ダイアログで選ばれた場所だけを受け付ける。
@@ -580,5 +615,19 @@ export async function dispatch(
     return { ok: true, value }
   } catch (error) {
     return { ok: false, error: toErrorShape(error) }
+  }
+}
+
+let cacheMoving = false
+
+async function cacheInfo(services: Services): Promise<CacheInfo> {
+  const { root, defaultRoot, fallbackFrom } = services.cache
+  return {
+    path: root,
+    defaultPath: defaultRoot,
+    nextPath: services.settings.get().storage.cacheDir ?? defaultRoot,
+    bytes: await directorySize(root),
+    freeBytes: await freeSpace(root),
+    fallbackFrom
   }
 }

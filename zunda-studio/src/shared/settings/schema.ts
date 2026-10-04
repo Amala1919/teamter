@@ -182,6 +182,16 @@ const uiSchema = z
   })
   .prefault({})
 
+/** アプリのデータの置き場所。 */
+const storageSchema = z
+  .object({
+    /** キャッシュ(プロキシ・合成した音声など)の置き場所。null なら既定(アプリのデータの中)。次の起動から使う。 */
+    cacheDir: z.string().max(4096).nullable().default(null),
+    /** 移したあと、次の起動で後片付けする古いキャッシュの場所。 */
+    cleanupCacheDir: z.string().max(4096).nullable().default(null)
+  })
+  .prefault({})
+
 export const settingsSchema = z.object({
   version: z.literal(1).default(1),
   ai: aiSchema,
@@ -194,6 +204,7 @@ export const settingsSchema = z.object({
   subtitle: subtitleSchema,
   editing: editingSchema,
   ui: uiSchema,
+  storage: storageSchema,
   recentProjects: z.array(z.string()).default([])
 })
 

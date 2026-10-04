@@ -30,11 +30,15 @@ async function stubDialogs(app: ElectronApplication, openPaths: string[], savePa
 test('実物の Electron で、合成・動画のプレビュー・ライブのウィンドウ・書き出しが動く', async () => {
   const home = mkdtempSync(join(tmpdir(), 'zs-electron-'))
   const config = join(home, '.config')
-  // アプリの設定を先に置いて、模擬の音声エンジンにつなぐ。
+  // アプリの設定を先に置いて、模擬の音声エンジンにつなぐ。キャッシュは別のドライブ(のつもりのフォルダ)に置く。
   mkdirSync(join(config, 'zunda-studio'), { recursive: true })
+  const cacheDir = join(home, 'D-drive', 'zunda-studio-cache')
   writeFileSync(
     join(config, 'zunda-studio', 'settings.json'),
-    JSON.stringify({ voice: { engines: [{ id: 'voicevox', label: 'VOICEVOX', url: 'http://127.0.0.1:50131', executablePath: null, autoLaunch: false }] } })
+    JSON.stringify({
+      voice: { engines: [{ id: 'voicevox', label: 'VOICEVOX', url: 'http://127.0.0.1:50131', executablePath: null, autoLaunch: false }] },
+      storage: { cacheDir }
+    })
   )
   const video = makeTestVideo(home, { name: 'gameplay.mp4', seconds: 4, width: 640, height: 360 })
 
@@ -68,6 +72,11 @@ test('実物の Electron で、合成・動画のプレビュー・ライブの�
     await page.getByTestId('bulk-text').fill('ずんだもん:本物のElectronなのだ\n四国めたん:そうね')
     await page.getByTestId('bulk-submit').click()
     await expect(page.getByTestId('synthesis-status').filter({ hasText: '合成済み' })).toHaveCount(2, { timeout: 60_000 })
+    // 合成した音声は、設定したキャッシュの場所に置かれる
+    const cacheInfo = await page.evaluate(() => (globalThis as unknown as Bridge).zunda.invoke('cache:info', []))
+    expect(cacheInfo).toMatchObject({ ok: true, value: { path: cacheDir, fallbackFrom: null } })
+    expect(readdirSync(join(cacheDir, 'voice'), { recursive: true }).some((name) => String(name).endsWith('.wav'))).toBe(true)
+    expect(existsSync(join(config, 'zunda-studio', 'cache', 'voice'))).toBe(false)
 
     // H.264 はプロキシ無しで直接再生し、zs-media: から配信した動画がプレビューに描かれる
     await page.getByTestId('timeline-ruler').click({ position: { x: 1, y: 5 } })
