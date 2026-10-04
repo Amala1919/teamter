@@ -126,7 +126,7 @@ export function InspectorPane({ onError }: { onError: (message: string) => void 
                 label="速度(倍)"
                 value={item.playbackRate}
                 min={0.25}
-                max={4}
+                max={16}
                 step={0.25}
                 onCommit={(rate) => run([{ op: 'item.setSpeed', itemId: item.id, rate }], '速度の変更')}
                 testId="inspector-speed"

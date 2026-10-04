@@ -2905,3 +2905,23 @@ input[type='url'] {
   stroke: #14181d;
   stroke-width: 1;
 }
+
+/* 待ち時間の候補の一覧 */
+.lull-list {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  margin: 10px 0 0;
+  max-height: 46vh;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.lull-list__item {
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 8px;
+}

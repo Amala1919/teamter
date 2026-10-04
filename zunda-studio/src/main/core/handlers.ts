@@ -193,6 +193,7 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
   'media:probe': z.tuple([pathArg]),
   'media:proxy': z.union([z.tuple([pathArg, z.enum(['mp4', 'webm'])]), z.tuple([pathArg, z.enum(['mp4', 'webm']), z.number().int().min(0).max(4320)])]),
   'media:peaks': z.tuple([pathArg]),
+  'media:activity': z.tuple([pathArg]),
   'export:start': z.tuple([
     z
       .object({
@@ -505,6 +506,7 @@ export function createHandlers(services: Services): HandlerTable {
     'media:probe': (path) => requireAllowed(services, path).then(() => services.mediaTools.probe(path)),
     'media:proxy': (path, format, maxHeight) => requireAllowed(services, path).then(() => services.mediaTools.proxy(path, format, maxHeight)),
     'media:peaks': (path) => requireAllowed(services, path).then(() => services.mediaTools.peaks(path)),
+    'media:activity': (path) => requireAllowed(services, path).then(() => services.analysis.activity(path)),
 
     'export:start': (request) => {
       // 書き出し先は保存ダイアログで選ばれた場所に限る(任意の場所へ書かせない)。

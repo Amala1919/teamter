@@ -1,7 +1,7 @@
 import { zoomCommands } from '@shared/commands/zoom-still'
 import type { Command } from '@shared/commands/types'
 import { itemEndMs } from '@shared/project/queries'
-import { TRANSITION_KINDS, type Item, type Layer, type Ms, type Project, type TransitionKind } from '@shared/project/types'
+import { TRANSITION_KINDS, type Item, type Layer, type Ms, type Project, type TransitionKind, type VideoItem } from '@shared/project/types'
 import { TRANSITION_LABELS } from '@shared/render/effects'
 import { TIMELINE_PALETTE } from '@shared/project/timeline-colors'
 import { clampRegion, regionHeight } from '@shared/render/zoom'
@@ -47,6 +47,8 @@ import type { MenuEntry } from '../../ui/ContextMenu'
 export interface MenuContext {
   onError: (message: string) => void
   onAddMedia: () => void
+  /** 待ち時間を探す画面を開く(動画)。 */
+  onFindLulls?: (item: VideoItem) => void
 }
 
 const report =
@@ -56,7 +58,7 @@ const report =
     if (error) context.onError(error)
   }
 
-const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
+const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 8, 16]
 const VOLUMES: [number, string][] = [
   [0, 'ミュート'],
   [0.25, '25%'],
@@ -257,6 +259,11 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
         submenu: freezeMenu('overwrite')
       }
     )
+  }
+  if (item.type === 'video' && !item.freeze && context.onFindLulls) {
+    const video = item
+    const open = context.onFindLulls
+    tools.push({ label: '待ち時間を探して詰める・早送り…', disabled: locked, onSelect: () => open(video), testId: 'menu-find-lulls' })
   }
   if (item.type === 'video' && !item.freeze) {
     tools.push({

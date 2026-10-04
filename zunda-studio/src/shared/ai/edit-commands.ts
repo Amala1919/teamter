@@ -125,7 +125,7 @@ export const aiCommandSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('item.removeEffect'), itemId: id, effectIndex: z.number().int().min(0) }),
   z.object({ op: z.literal('item.delete'), itemId: id }),
   z.object({ op: z.literal('item.split'), itemId: id, atMs: ms, tempId }),
-  z.object({ op: z.literal('item.setSpeed'), itemId: id, rate: z.number().min(0.25).max(4) }),
+  z.object({ op: z.literal('item.setSpeed'), itemId: id, rate: z.number().min(0.25).max(16) }),
   z.object({ op: z.literal('item.freezeFrame'), itemId: id, atMs: ms, durationMs: ms, mode: z.enum(['insert', 'overwrite']), tempId }),
   // タイムライン全体の間
   z.object({ op: z.literal('timeline.rippleDelete'), itemIds: z.array(id).min(1).max(200), ignoreOthers: z.boolean().optional() }),

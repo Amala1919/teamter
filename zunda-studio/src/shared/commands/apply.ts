@@ -8,6 +8,7 @@ import { assetHandlers } from './handlers/asset'
 import { characterHandlers } from './handlers/character'
 import { dissolveLoneGroups, editHandlers } from './handlers/edit'
 import { itemHandlers } from './handlers/item'
+import { condenseHandlers } from './handlers/condense'
 import { liveHandlers } from './handlers/live'
 import { lookHandlers } from './handlers/look'
 import { markerHandlers } from './handlers/marker'
@@ -34,6 +35,7 @@ const HANDLERS: HandlerTable = {
   ...characterHandlers,
   ...itemHandlers,
   ...editHandlers,
+  ...condenseHandlers,
   ...liveHandlers,
   ...lookHandlers,
   ...markerHandlers,

@@ -629,6 +629,21 @@ export interface TimelineCrossTransition {
   durationMs: Ms
 }
 
+/**
+ * 動画の中の区間(タイムラインの時刻)をまとめて詰める。待ち時間(相手のターン・ロード)を飛ばすのに使う。
+ * cut: その区間を切り取る / speed: その区間だけ rate 倍で早送りにする(label なら「▶▶ ×4」のテロップも置く)。
+ * ripple(既定 true)なら、短くなった分だけ後ろの素材を前へ詰める。
+ */
+export interface VideoCondense {
+  op: 'video.condense'
+  itemId: ItemId
+  ranges: { fromMs: Ms; toMs: Ms }[]
+  mode: 'cut' | 'speed'
+  rate?: number
+  ripple?: boolean
+  label?: boolean
+}
+
 /** atMs の位置にある「何も置かれていない時間」を詰める。 */
 export interface TimelineCloseGap {
   op: 'timeline.closeGap'
@@ -857,6 +872,7 @@ export type Command =
   | TimelineRippleDelete
   | TimelineCloseGap
   | TimelineCrossTransition
+  | VideoCondense
   | TimelinePackLeft
   | TimelineInsertGap
   | TimelineArrangeOverlaps

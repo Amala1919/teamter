@@ -29,7 +29,8 @@ type EditHandlers = Pick<
 /** 分けたときに両側に残す最短の尺。 */
 const MIN_PART_MS = 10
 export const MIN_SPEED = 0.25
-export const MAX_SPEED = 4
+/** 速度の上限。待ち時間の早送りに使えるよう 16 倍まで(プレビューでは 4 倍を超えると音が出ない)。 */
+export const MAX_SPEED = 16
 
 const ITEM_TYPES: readonly Item['type'][] = ['voice', 'video', 'image', 'text', 'audio', 'shape', 'portrait', 'zoom']
 
@@ -70,7 +71,7 @@ function splitEffects(effects: readonly Effect[]): { first: Effect[]; second: Ef
  * アイテムを at で2つに分け、後半(新しいアイテム)を返す。前半は元のアイテムのまま短くなる。
  * 動画・音声は素材の区間も分け、フェードは前半に入り・後半に出だけを残す。
  */
-function splitItem(draft: Project, item: Item, at: Ms, newId: string): Item {
+export function splitItem(draft: Project, item: Item, at: Ms, newId: string): Item {
   const second = clone(item)
   second.id = newId
   second.startMs = at

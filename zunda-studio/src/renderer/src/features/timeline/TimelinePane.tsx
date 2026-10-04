@@ -21,6 +21,7 @@ import { MarkerEditor, MarkerFlags } from './MarkerFlags'
 import { itemMenu, laneMenu, layerMenu, rulerMenu, type MenuContext } from './timeline-menus'
 import { DecorationPicker } from '../decorations/DecorationPicker'
 import { FreeSourcesDialog } from '../media/FreeSourcesDialog'
+import { LullDialog } from './LullDialog'
 import { VolumeLine } from './VolumeLine'
 import { Waveform } from './Waveform'
 
@@ -65,6 +66,9 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
   const [drag, setDrag] = useState<DragState | null>(null)
   const [sourcesOpen, setSourcesOpen] = useState(false)
   const [decorationsOpen, setDecorationsOpen] = useState(false)
+  /** 待ち時間を探している動画。 */
+  const [lullItemId, setLullItemId] = useState<string | null>(null)
+  const lullItem = project.items.find((candidate) => candidate.id === lullItemId)
   const scrollRef = useRef<HTMLDivElement>(null)
   const rulerRef = useRef<HTMLDivElement>(null)
   const zoomRef = useRef(pxPerSecond)
@@ -266,7 +270,7 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
   }
 
   const step = labelStepSeconds(pxPerSecond)
-  const menuContext: MenuContext = { onError, onAddMedia: () => void addMedia() }
+  const menuContext: MenuContext = { onError, onAddMedia: () => void addMedia(), onFindLulls: (item) => setLullItemId(item.id) }
   /** クリックした位置の時刻(レーン・目盛りの左端が 0)。 */
   const timeAt = (event: React.MouseEvent<HTMLElement>): Ms =>
     ((event.clientX - event.currentTarget.getBoundingClientRect().left) / pxPerSecond) * 1000
@@ -440,6 +444,7 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
       {sourcesOpen && <FreeSourcesDialog onClose={() => setSourcesOpen(false)} />}
       {decorationsOpen && <DecorationPicker onClose={() => setDecorationsOpen(false)} onError={onError} />}
       <MarkerEditor onError={onError} />
+      {lullItem?.type === 'video' && <LullDialog item={lullItem} onClose={() => setLullItemId(null)} onError={onError} />}
     </section>
   )
 }

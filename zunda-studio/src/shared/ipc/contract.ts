@@ -4,6 +4,7 @@ import type { PortraitRequest } from '../ai/portraits'
 import type { EditorRequest } from '../ai/editor'
 import type { Command } from '../commands/types'
 import type { ExportProgress, ExportRequest } from '../export/types'
+import type { MediaActivity } from '../media/activity'
 import type { MediaProbe, ProxyFormat, WaveformPeaks } from '../media/types'
 import type { GeneratedBy, ModelInfo, ProviderId, ProviderStatus } from '../ai/types'
 import type { AppErrorShape } from '../errors'
@@ -143,6 +144,8 @@ export interface IpcContract {
   'media:proxy': { args: [path: string, format: ProxyFormat, maxHeight?: number]; result: string }
   /** 波形の表示用データ。 */
   'media:peaks': { args: [path: string]; result: WaveformPeaks }
+  /** 動きと音の時間変化(待ち時間を探すのに使う)。 */
+  'media:activity': { args: [path: string]; result: MediaActivity }
 
   /** mp4 の書き出しを始めてジョブIDを返す。進み具合は export:progress で届く。 */
   'export:start': { args: [request: ExportRequest]; result: string }

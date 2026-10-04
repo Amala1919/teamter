@@ -238,7 +238,7 @@ describe('間の編集', () => {
     const bgm = byType<AudioItem>(project, 'audio')[0]!
     const clip = byType<VideoItem>(project, 'video')[0]!
     expect(() => apply(project, [{ op: 'item.setSpeed', itemId: bgm.id, rate: 2 }])).toThrow('動画だけ')
-    expect(() => apply(project, [{ op: 'item.setSpeed', itemId: clip.id, rate: 8 }])).toThrow('0.25〜4倍')
+    expect(() => apply(project, [{ op: 'item.setSpeed', itemId: clip.id, rate: 20 }])).toThrow('0.25〜16倍')
   })
 
   it('編集AIも同じ操作を提案できる', () => {
