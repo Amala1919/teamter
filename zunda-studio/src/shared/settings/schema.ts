@@ -118,7 +118,14 @@ const exportSchema = z
   .object({
     crf: z.number().int().min(0).max(51).default(20),
     preset: z.string().default('veryfast'),
-    audioBitrateKbps: z.number().int().positive().default(192)
+    audioBitrateKbps: z.number().int().positive().default(192),
+    /** 音の大きさをそろえる目標(LUFS)。'off' ならそろえない。YouTube は -14。 */
+    loudness: z.union([z.literal('off'), z.number().min(-40).max(-5)]).default(-14),
+    /**
+     * 映像のエンコーダ。auto は使える GPU(NVIDIA・Intel・AMD)、無ければ CPU。
+     * 既定は CPU(画質が良く、書き出しの時間は1コマずつ描く方で決まるので、GPU にしてもほとんど速くならない)。
+     */
+    encoder: z.enum(['auto', 'cpu', 'nvenc', 'qsv', 'amf']).default('cpu')
   })
   .prefault({})
 

@@ -204,7 +204,9 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
         endMs: z.number().min(0).optional(),
         fps: z.number().int().min(1).max(120).optional(),
         height: z.number().int().min(144).max(4320).optional(),
-        crf: z.number().int().min(0).max(51).optional()
+        crf: z.number().int().min(0).max(51).optional(),
+        loudness: z.union([z.literal('off'), z.number().min(-40).max(-5)]).optional(),
+        encoder: z.enum(['auto', 'cpu', 'nvenc', 'qsv', 'amf']).optional()
       })
       .loose()
   ]) as unknown as z.ZodType<ChannelArgs<'export:start'>>,
