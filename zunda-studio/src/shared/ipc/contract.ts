@@ -52,6 +52,8 @@ export type PickKind =
   /** 今の画面の画像(サムネイル用)。 */
   | 'exportImage'
   | 'executable'
+  /** フォルダ(キャッシュの置き場所など)。 */
+  | 'directory'
   | 'any'
 
 export interface PickRequest {
@@ -63,6 +65,16 @@ export interface PickRequest {
 
 export interface IpcContract {
   'app:info': { args: []; result: AppInfo }
+  /** アプリを起動し直す(キャッシュの場所を変えたときなど)。起動し直せない環境(テスト用ホスト)なら false。 */
+  'app:relaunch': { args: []; result: boolean }
+
+  /** キャッシュの置き場所・大きさ・空き。 */
+  'cache:info': { args: []; result: CacheInfo }
+  /**
+   * キャッシュを選んだフォルダ(ファイル選択で選んだもの)へ移す。null なら既定の場所へ戻す。
+   * 今のキャッシュをコピーし、次の起動から新しい場所を使う(古い場所は次の起動で消す)。進み具合は cache:move-progress で知らせる。
+   */
+  'cache:move': { args: [directory: string | null]; result: CacheInfo }
 
   'settings:get': { args: []; result: AppSettings }
   'settings:update': { args: [patch: SettingsPatch]; result: AppSettings }
@@ -169,6 +181,21 @@ export interface IpcContract {
   'autosave:clear': { args: [key: string]; result: void }
 }
 
+export interface CacheInfo {
+  /** 今使っているキャッシュの場所。 */
+  path: string
+  /** 既定の場所(アプリのデータの中)。 */
+  defaultPath: string
+  /** 次の起動から使う場所(移したあと、まだ起動し直していなければ path と違う)。 */
+  nextPath: string
+  /** 今のキャッシュの大きさ(バイト)。 */
+  bytes: number
+  /** 今の場所のドライブの空き(バイト)。分からなければ null。 */
+  freeBytes: number | null
+  /** 設定の場所が使えず、既定の場所に戻したときの、設定の場所。 */
+  fallbackFrom: string | null
+}
+
 export interface AutosaveEntry {
   key: string
   /** 元のプロジェクトファイル。未保存の新規なら null。 */
@@ -191,6 +218,8 @@ export interface AppEvents {
   /** プロキシ作成の進み具合(0〜1)。 */
   'media:proxy-progress': { path: string; ratio: number }
   'export:progress': ExportProgress
+  /** キャッシュを移す進み具合。 */
+  'cache:move-progress': { copiedBytes: number; totalBytes: number }
   'live:state': LiveState
   'live:entry': { sessionId: string; entry: LiveEntry }
   /** ライブ中のホットキー(押しながら話すの開始・終了)。 */

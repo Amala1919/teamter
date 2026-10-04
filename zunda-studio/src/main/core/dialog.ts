@@ -25,6 +25,7 @@ export const PICK_FILTERS: Record<PickRequest['kind'], { name: string; extension
   exportText: [{ name: 'テキスト', extensions: ['txt', 'srt', 'json'] }],
   exportImage: [{ name: 'PNG 画像', extensions: ['png'] }],
   executable: [{ name: 'すべてのファイル', extensions: ['*'] }],
+  directory: [],
   any: [{ name: 'すべてのファイル', extensions: ['*'] }]
 }
 

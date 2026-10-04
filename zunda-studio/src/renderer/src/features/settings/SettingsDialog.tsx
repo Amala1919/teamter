@@ -6,15 +6,17 @@ import { Modal } from '../../ui/Modal'
 import { AiSettings } from './AiSettings'
 import { EditingSettings } from './EditingSettings'
 import { LiveSettings } from './LiveSettings'
+import { StorageSettings } from './StorageSettings'
 import { VoiceSettings } from './VoiceSettings'
 
-type Tab = 'ai' | 'voice' | 'editing' | 'live'
+type Tab = 'ai' | 'voice' | 'editing' | 'live' | 'storage'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'ai', label: 'AI' },
   { id: 'voice', label: '音声エンジン' },
   { id: 'editing', label: '編集' },
-  { id: 'live', label: 'ライブ・外部ツール' }
+  { id: 'live', label: 'ライブ・外部ツール' },
+  { id: 'storage', label: '保存場所' }
 ]
 
 interface SettingsDialogProps {
@@ -70,6 +72,8 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): React.JSX.Elem
         <VoiceSettings settings={settings} onError={onError} />
       ) : tab === 'editing' ? (
         <EditingSettings settings={settings} onError={onError} />
+      ) : tab === 'storage' ? (
+        <StorageSettings onError={onError} />
       ) : (
         <LiveSettings settings={settings} onError={onError} />
       )}

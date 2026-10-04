@@ -67,9 +67,8 @@ export class ElectronFilePicker implements FilePicker {
       const result = window ? await dialog.showSaveDialog(window, options) : await dialog.showSaveDialog(options)
       return result.canceled || !result.filePath ? null : [result.filePath]
     }
-    const properties: OpenDialogOptions['properties'] = request.multiple
-      ? ['openFile', 'multiSelections']
-      : ['openFile']
+    const properties: OpenDialogOptions['properties'] =
+      request.kind === 'directory' ? ['openDirectory', 'createDirectory'] : request.multiple ? ['openFile', 'multiSelections'] : ['openFile']
     const options: OpenDialogOptions = { filters, properties }
     const result = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options)
     return result.canceled || result.filePaths.length === 0 ? null : result.filePaths

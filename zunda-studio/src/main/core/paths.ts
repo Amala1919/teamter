@@ -25,8 +25,9 @@ export interface AppPaths {
   }
 }
 
-export function createAppPaths(userData: string): AppPaths {
-  const root = join(userData, 'cache')
+/** cacheRoot を渡すと、キャッシュをそこに置く(無ければアプリのデータの中)。 */
+export function createAppPaths(userData: string, cacheRoot?: string | null): AppPaths {
+  const root = cacheRoot ?? join(userData, 'cache')
   return {
     userData,
     settingsFile: join(userData, 'settings.json'),

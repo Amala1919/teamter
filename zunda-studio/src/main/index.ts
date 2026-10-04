@@ -100,7 +100,13 @@ const windowControl: WindowControl = {
       return false
     }
   },
-  unregisterHotkeys: () => globalShortcut.unregisterAll()
+  unregisterHotkeys: () => globalShortcut.unregisterAll(),
+  relaunch: () => {
+    // 終了前の後始末(before-quit)を通してから起動し直す。
+    app.relaunch()
+    app.quit()
+    return true
+  }
 }
 
 function createMainWindow(): BrowserWindow {
