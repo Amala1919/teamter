@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { findItem, isVoiceItem, itemsAt, projectDurationMs } from '@shared/project/queries'
+import type { Command } from '@shared/commands/types'
 import { zoomCommands } from '@shared/commands/zoom-still'
 import { renderFrame } from '@shared/render/compositor'
 import type { PsdManifest } from '@shared/psd/types'
@@ -9,7 +10,8 @@ import { defaultRegion, zoomProgress } from '@shared/render/zoom'
 import { portraitScenes, type PortraitScene } from '@shared/portrait/scene'
 import type { Ms, PortraitTransform, Project, VoiceItem } from '@shared/project/types'
 import { portraitPlacement } from '@shared/render/portrait'
-import { isPlacedItem, itemBox, type PlacedItem } from '@shared/render/item-box'
+import { centerForCrop, isPlacedItem, itemBox, uncroppedPlacement, type PlacedItem } from '@shared/render/item-box'
+import { produce } from 'immer'
 
 import { measureContext } from '../../lib/fonts'
 import { formatMs } from '../../lib/time'
@@ -18,11 +20,14 @@ import { browserResources, useResourceStore } from '../../render/browser-resourc
 import { useMediaStore } from '../../state/media'
 import { hasClipboard, pasteAt, splitAtPlayhead } from '../../state/edit-actions'
 import { changeEditing } from '../../state/editing'
+import { usePreviewTools } from '../../state/preview-tools'
 import { useSettingsStore } from '../../state/settings'
 import { saveFrameImage } from '../../state/snapshot'
 import { deleteSelection, useEditorStore } from '../../state/store'
 import { openContextMenu, type MenuEntry } from '../../ui/ContextMenu'
+import { DecorationPicker } from '../decorations/DecorationPicker'
 import { insertZoom } from '../timeline/timeline-menus'
+import { CropFrameEditor } from './CropFrameEditor'
 import { ItemFrameEditor } from './ItemFrameEditor'
 import { MixControl } from './MixControl'
 import { PortraitFrameEditor } from './PortraitFrameEditor'
@@ -54,6 +59,8 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
   const [overlayBox, setOverlayBox] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   /** プレビューで動かしている立ち絵のキャラクター。 */
   const [portraitTarget, setPortraitTarget] = useState<string | null>(null)
+  /** 装飾のひな形を選ぶ画面を開いているとき、置く場所。 */
+  const [decorationPoint, setDecorationPoint] = useState<{ x: number; y: number } | null>(null)
 
   const selected = selectedItemIds[0] === undefined ? undefined : findItem(project, selectedItemIds[0])
   const zoomItem = selected?.type === 'zoom' ? selected : null
@@ -88,8 +95,20 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
   /** 画面いっぱいの動画(背景のゲーム映像など)。枠を出すと下の素材を触れなくなるので、枠もクリックでの選択もしない。 */
   const fillsScreen = ({ rect }: { rect: { x: number; y: number; width: number; height: number } }): boolean =>
     rect.x <= 1 && rect.y <= 1 && rect.x + rect.width >= project.canvas.width - 1 && rect.y + rect.height >= project.canvas.height - 1
+  // 切り抜きの編集中の動画・画像(再生位置に映っているときだけ)。
+  const cropItemId = usePreviewTools((state) => state.cropItemId)
+  const setCropItem = usePreviewTools((state) => state.setCropItem)
+  const cropping =
+    cropItemId !== null && selected?.id === cropItemId && (selected.type === 'video' || selected.type === 'image') && placedItems.some((entry) => entry.item.id === cropItemId)
+      ? selected
+      : null
+  const cropWhole = cropping ? uncroppedPlacement(project, cropping, measureContext()) : null
+  // ほかの素材を選んだら、切り抜きの編集は終える。
+  useEffect(() => {
+    if (cropItemId !== null && !selectedItemIds.includes(cropItemId)) setCropItem(null)
+  }, [cropItemId, selectedItemIds, setCropItem])
   const framed =
-    zoomItem || !selected || !isPlacedItem(selected) || selected.locked || lockedLayers.has(selected.layerId)
+    zoomItem || cropping || !selected || !isPlacedItem(selected) || selected.locked || lockedLayers.has(selected.layerId)
       ? undefined
       : placedItems.find((entry) => entry.item.id === selected.id && !(entry.item.type === 'video' && fillsScreen(entry)))
   const editingPortrait = zoomItem || framed ? undefined : placedPortraits.find((entry) => entry.scene.character.id === portraitTarget)
@@ -124,8 +143,20 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
     if (!canvas) return
     const context = canvas.getContext('2d')
     if (!context) return
-    renderFrame(context as unknown as Ctx2D, project, playheadMs, browserResources.bind(project), { applyZoom })
-  }, [project, playheadMs, resourceVersion, mediaSources, applyZoom])
+    // 切り抜きの編集中は、その素材を切り抜く前の姿で、元の場所に出す。
+    const shown =
+      cropping && cropWhole
+        ? produce(project, (draft) => {
+            const target = draft.items.find((candidate) => candidate.id === cropping.id)
+            if (target && (target.type === 'video' || target.type === 'image')) {
+              delete target.crop
+              target.transform.x = cropWhole.center.x
+              target.transform.y = cropWhole.center.y
+            }
+          })
+        : project
+    renderFrame(context as unknown as Ctx2D, shown, playheadMs, browserResources.bind(project), { applyZoom })
+  }, [project, playheadMs, resourceVersion, mediaSources, applyZoom, cropping?.id])
 
   // 枠は表示中の canvas にぴったり重ねる。
   useLayoutEffect(() => {
@@ -283,6 +314,11 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
         testId: 'menu-preview-zoom'
       },
       {
+        label: 'ここに装飾を置く…',
+        onSelect: () => setDecorationPoint(point),
+        testId: 'menu-preview-decoration'
+      },
+      {
         label: 'この画面を画像で保存(PNG)',
         submenu: [
           { label: '字幕あり', onSelect: () => saveImage(true), testId: 'menu-preview-image' },
@@ -378,16 +414,47 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
             />
           </div>
         )}
+        {cropping && cropWhole && overlayBox && (
+          <div className="preview__overlay preview__overlay--passthrough" style={overlayBox}>
+            <CropFrameEditor
+              canvas={project.canvas}
+              center={cropWhole.center}
+              size={cropWhole.size}
+              rotation={cropping.transform.rotation}
+              crop={cropping.crop ?? { left: 0, top: 0, right: 0, bottom: 0 }}
+              scale={project.canvas.width / Math.max(1, overlayBox.width)}
+              onClose={() => setCropItem(null)}
+              onCommit={(crop) => {
+                // 残った部分が画面の同じ場所に残るよう、置く位置も合わせて変える。
+                const center = centerForCrop(cropWhole, cropping.transform.rotation, crop)
+                const result = dispatch(
+                  [
+                    { op: 'item.setMediaLook', itemIds: [cropping.id], crop },
+                    { op: 'item.setTransform', itemId: cropping.id, x: center.x, y: center.y }
+                  ],
+                  '切り抜きの変更'
+                )
+                if (!result.ok) onError(result.message)
+              }}
+            />
+          </div>
+        )}
         {framed && overlayBox && (
           <div className="preview__overlay preview__overlay--passthrough" style={overlayBox}>
             <ItemFrameEditor
               canvas={project.canvas}
-              size={{ width: framed.rect.width, height: framed.rect.height }}
-              placement={{ x: framed.item.transform.x, y: framed.item.transform.y, scale: framed.item.transform.scale }}
+              base={{ width: framed.rect.width / framed.item.transform.scale, height: framed.rect.height / framed.item.transform.scale }}
+              placement={{ x: framed.item.transform.x, y: framed.item.transform.y, scale: framed.item.transform.scale, rotation: framed.item.transform.rotation }}
               scale={project.canvas.width / Math.max(1, overlayBox.width)}
               label={FRAME_LABELS[framed.item.type]}
-              onCommit={(placement) => {
-                const result = dispatch([{ op: 'item.setTransform', itemId: framed.item.id, ...placement }], `${FRAME_LABELS[framed.item.type]}の位置・大きさ`)
+              resizable={framed.item.type === 'shape'}
+              onCommit={({ x, y, scale, rotation, width, height }) => {
+                const commands: Command[] = [{ op: 'item.setTransform', itemId: framed.item.id, x, y, scale, rotation }]
+                // 図形は辺で幅・高さを別々に変えられる。
+                if (framed.item.type === 'shape' && width !== undefined && height !== undefined) {
+                  commands.push({ op: 'item.setShape', itemIds: [framed.item.id], props: { width, height } })
+                }
+                const result = dispatch(commands, `${FRAME_LABELS[framed.item.type]}の位置・大きさ`)
                 if (!result.ok) onError(result.message)
               }}
               onContextMenu={onCanvasContextMenu}
@@ -439,6 +506,7 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
           aria-label="再生位置"
         />
         <MixControl onError={onError} />
+        {decorationPoint && <DecorationPicker point={decorationPoint} onClose={() => setDecorationPoint(null)} onError={onError} />}
         {notice && (
           <span className="preview__notice" role="status" data-testid="preview-notice">
             {notice}

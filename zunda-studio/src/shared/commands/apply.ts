@@ -9,9 +9,11 @@ import { characterHandlers } from './handlers/character'
 import { dissolveLoneGroups, editHandlers } from './handlers/edit'
 import { itemHandlers } from './handlers/item'
 import { liveHandlers } from './handlers/live'
+import { lookHandlers } from './handlers/look'
 import { mediaHandlers } from './handlers/media'
 import { portraitHandlers } from './handlers/portrait'
 import { projectHandlers } from './handlers/project'
+import { transitionHandlers } from './handlers/transition'
 import { voiceHandlers } from './handlers/voice'
 import { zoomHandlers } from './handlers/zoom'
 import type { Command } from './types'
@@ -32,8 +34,10 @@ const HANDLERS: HandlerTable = {
   ...itemHandlers,
   ...editHandlers,
   ...liveHandlers,
+  ...lookHandlers,
   ...mediaHandlers,
   ...portraitHandlers,
+  ...transitionHandlers,
   ...voiceHandlers,
   ...zoomHandlers
 }

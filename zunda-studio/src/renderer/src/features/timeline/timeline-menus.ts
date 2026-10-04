@@ -1,7 +1,8 @@
 import { zoomCommands } from '@shared/commands/zoom-still'
 import type { Command } from '@shared/commands/types'
 import { itemEndMs } from '@shared/project/queries'
-import type { Item, Layer, Ms, Project } from '@shared/project/types'
+import { TRANSITION_KINDS, type Item, type Layer, type Ms, type Project, type TransitionKind } from '@shared/project/types'
+import { TRANSITION_LABELS } from '@shared/render/effects'
 import { TIMELINE_PALETTE } from '@shared/project/timeline-colors'
 import { clampRegion, regionHeight } from '@shared/render/zoom'
 
@@ -34,6 +35,8 @@ import {
   splitAtPlayhead
 } from '../../state/edit-actions'
 import { pickColor } from '../../lib/pick-color'
+import { CORNER_LABELS, crossTransition, makeWipe, resetWipe, setAdjust, setTransitionSide, wipeFromPart, type Corner } from '../../state/look-actions'
+import { ADJUST_PRESETS } from '../inspector/MediaLookInspector'
 import { deleteSelection, useEditorStore } from '../../state/store'
 import type { MenuEntry } from '../../ui/ContextMenu'
 
@@ -72,6 +75,18 @@ const FREEZE_LENGTHS: [Ms, string][] = [
   [2000, '2秒'],
   [3000, '3秒'],
   [5000, '5秒']
+]
+
+/** 前の素材から切り替えるときの、よく使う切り替え方。 */
+const CROSS_KINDS: [TransitionKind, string][] = [
+  ['fade', 'クロスフェード(0.5秒)'],
+  ['wipeRight', 'ワイプ(左から右へ)'],
+  ['wipeDown', 'ワイプ(上から下へ)'],
+  ['iris', '円が広がる'],
+  ['slideLeft', 'スライド(右から)'],
+  ['zoom', 'ズーム'],
+  ['blur', 'ぼかし'],
+  ['blinds', 'ブラインド']
 ]
 
 const VISUAL_TYPES: Item['type'][] = ['video', 'image', 'text', 'shape', 'portrait']
@@ -305,6 +320,73 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
         }
       ]
     })
+  }
+  if (item.type === 'video' || item.type === 'image' || item.type === 'text' || item.type === 'shape') {
+    const transition = item.effects.find((effect) => effect.type === 'transition')
+    const current = transition?.type === 'transition' ? transition : null
+    const sideMenu = (side: 'in' | 'out'): MenuEntry[] => [
+      { label: 'なし', checked: !current?.[side], onSelect: report(context, () => setTransitionSide(item, side, null)) },
+      ...TRANSITION_KINDS.map((kind) => ({
+        label: TRANSITION_LABELS[kind],
+        checked: current?.[side]?.kind === kind,
+        onSelect: report(context, () => setTransitionSide(item, side, kind)),
+        testId: `menu-transition-${side}-${kind}`
+      }))
+    ]
+    tools.push(
+      {
+        label: '前の素材から切り替える(重ねる)',
+        disabled: locked,
+        testId: 'menu-cross-transition',
+        submenu: CROSS_KINDS.map(([kind, label]) => ({
+          label,
+          onSelect: report(context, () => crossTransition(item.id, kind, 500)),
+          testId: `menu-cross-${kind}`
+        }))
+      },
+      { label: '登場の動き', disabled: locked, testId: 'menu-transition-in', submenu: sideMenu('in') },
+      { label: '退場の動き', disabled: locked, testId: 'menu-transition-out', submenu: sideMenu('out') }
+    )
+  }
+  if (item.type === 'video' || item.type === 'image') {
+    const media = item
+    tools.push(
+      {
+        label: '小窓(ワイプ)',
+        disabled: locked,
+        testId: 'menu-wipe',
+        submenu: [
+          ...(Object.keys(CORNER_LABELS) as Corner[]).map((corner) => ({
+            label: `${CORNER_LABELS[corner]}の小窓にする`,
+            onSelect: report(context, () => makeWipe(media, corner)),
+            testId: `menu-wipe-${corner}`
+          })),
+          'separator' as const,
+          {
+            label: '一部を切り抜いて小窓で見せる(複製)',
+            onSelect: report(context, () => wipeFromPart(media)),
+            testId: 'menu-wipe-part'
+          },
+          { label: '小窓をやめる(画面いっぱいに戻す)', onSelect: report(context, () => resetWipe(media)), testId: 'menu-wipe-reset' }
+        ]
+      },
+      {
+        label: '色の調整',
+        disabled: locked,
+        testId: 'menu-adjust',
+        submenu: ADJUST_PRESETS.map((preset) => ({
+          label: preset.name,
+          onSelect: report(context, () =>
+            setAdjust(
+              selected.filter((candidate) => candidate.type === 'video' || candidate.type === 'image').map((candidate) => candidate.id),
+              preset.id === 'none' ? null : preset.adjust,
+              `色の調整「${preset.name}」`
+            )
+          ),
+          testId: `menu-adjust-${preset.id}`
+        }))
+      }
+    )
   }
   if (item.type === 'video' || item.type === 'image') {
     tools.push({

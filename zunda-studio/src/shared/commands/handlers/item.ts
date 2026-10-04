@@ -1,6 +1,7 @@
-import type { Effect, Project, TextLook } from '../../project/types'
+import { TRANSITION_KINDS, type Effect, type Project, type TextLook, type TransitionSide } from '../../project/types'
 import { fadeCutEdge, fail, findMutableItem, requireFinite, requireLayer, type HandlerTable } from '../env'
 import type { CommandOp, ItemSetTextLook } from '../types'
+import { validateShapeKind } from './look'
 import { COLOR_PATTERN, validateTransform, validateVolume } from './media'
 
 type ItemHandlers = Pick<
@@ -28,6 +29,10 @@ export function validateEffect(effect: Effect, op: CommandOp): Effect {
     requireFinite(value, op, label)
     if (value < 0) fail(op, `${label}は0以上にしてください`)
   }
+  const period = (value: number): void => {
+    requireFinite(value, op, '周期')
+    if (value < 50 || value > 60_000) fail(op, '周期は0.05〜60秒にしてください')
+  }
   switch (effect.type) {
     case 'fade':
       nonNegative(effect.inMs, 'フェードインの時間')
@@ -48,6 +53,39 @@ export function validateEffect(effect: Effect, op: CommandOp): Effect {
       nonNegative(effect.durationMs, '時間')
       if (!(effect.frequencyHz > 0 && effect.frequencyHz <= 60)) fail(op, '揺れの速さは0〜60Hzにしてください')
       return { ...effect }
+    case 'pulse':
+      nonNegative(effect.amount, '振れ幅')
+      if (effect.amount > 2) fail(op, '振れ幅は2以下にしてください')
+      period(effect.periodMs)
+      return { type: 'pulse', amount: effect.amount, periodMs: effect.periodMs }
+    case 'blink':
+      period(effect.periodMs)
+      if (!(effect.minOpacity >= 0 && effect.minOpacity <= 1)) fail(op, '一番薄いときの濃さは0〜1にしてください')
+      return { type: 'blink', periodMs: effect.periodMs, minOpacity: effect.minOpacity }
+    case 'spin':
+      requireFinite(effect.degreesPerSecond, op, '回る速さ')
+      if (Math.abs(effect.degreesPerSecond) > 7200) fail(op, '回る速さが大きすぎます')
+      return { type: 'spin', degreesPerSecond: effect.degreesPerSecond }
+    case 'swing':
+      requireFinite(effect.degrees, op, '傾きの大きさ')
+      if (Math.abs(effect.degrees) > 180) fail(op, '傾きは180度以下にしてください')
+      period(effect.periodMs)
+      return { type: 'swing', degrees: effect.degrees, periodMs: effect.periodMs }
+    case 'float':
+      nonNegative(effect.amplitudePx, '浮く高さ')
+      period(effect.periodMs)
+      return { type: 'float', amplitudePx: effect.amplitudePx, periodMs: effect.periodMs }
+    case 'transition': {
+      const side = (value: TransitionSide | null | undefined, label: string): TransitionSide | null => {
+        if (value === null || value === undefined) return null
+        if (!TRANSITION_KINDS.includes(value.kind)) fail(op, `${label}の切り替え方の指定が不正です: ${String(value.kind)}`)
+        nonNegative(value.durationMs, `${label}の時間`)
+        return { kind: value.kind, durationMs: value.durationMs }
+      }
+      const result = { type: 'transition' as const, in: side(effect.in, '登場'), out: side(effect.out, '退場') }
+      if (!result.in && !result.out) fail(op, '登場か退場のどちらかを指定してください')
+      return result
+    }
     default:
       return fail(op, `未対応のエフェクトです: ${(effect as { type: string }).type}`)
   }
@@ -180,7 +218,7 @@ export const itemHandlers: ItemHandlers = {
         if (!COLOR_PATTERN.test(command.fill)) fail(command.op, `色の指定が不正です: ${command.fill}`)
         item.fill = command.fill
       }
-      if (command.shape !== undefined) item.shape = command.shape
+      if (command.shape !== undefined) item.shape = validateShapeKind(command.shape, command.op)
       return
     }
     fail(command.op, 'テロップか図形のアイテムではありません')

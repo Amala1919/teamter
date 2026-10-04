@@ -1,7 +1,9 @@
 import { DEFAULT_LAYER_IDS } from '../../project/factory'
-import type { Asset, AssetType, Item, Project, Transform } from '../../project/types'
+import type { Asset, AssetType, Item, Project, ShapeProps, Transform } from '../../project/types'
 import { fail, layerOrDefault, requireFinite, type ApplyEnv, type HandlerTable } from '../env'
 import type { CommandOp } from '../types'
+import { validateEffect } from './item'
+import { validateShapeKind, validateShapeProps } from './look'
 
 type MediaHandlers = Pick<
   HandlerTable,
@@ -186,17 +188,20 @@ export const mediaHandlers: MediaHandlers = {
   'media.placeShape': (draft, command, env) => {
     if (!COLOR_PATTERN.test(command.fill)) fail(command.op, `色の指定が不正です: ${command.fill}`)
     validateTiming(command.atMs, command.durationMs, command.op)
+    const props = validateShapeProps(command.props ?? {}, command.op)
     push(
       draft,
       {
+        // 見た目の調整(大きさ・縁取り・影など)を先に置き、決まった項目で上書きする。
+        ...(JSON.parse(JSON.stringify(props)) as ShapeProps),
         id: env.ctx.newId('itm'),
         type: 'shape',
         layerId: layerOrDefault(draft, command.layerId, BACKGROUND, command.op, env.resolve),
         startMs: Math.round(command.atMs),
         durationMs: Math.round(command.durationMs),
-        effects: [],
+        effects: (command.effects ?? []).map((effect) => validateEffect(effect, command.op)),
         locked: false,
-        shape: command.shape,
+        shape: validateShapeKind(command.shape, command.op),
         fill: command.fill,
         transform: makeTransform(draft, command.transform, command.op)
       },

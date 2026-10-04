@@ -20,9 +20,15 @@ import type {
   PortraitItemKind,
   PortraitTransform,
   CharacterAuthorRole,
+  ColorAdjust,
+  Crop,
   Effect,
   Item,
+  MediaFrame,
   ShapeItem,
+  ShapeKind,
+  ShapeProps,
+  TransitionKind,
   Transform,
   ZoomMethod,
   ZoomRegion,
@@ -429,6 +435,7 @@ export interface MediaPlaceText {
   tempId?: string
 }
 
+/** 図形・装飾を置く。props の width・height を省くと画面いっぱいの大きさになる(以前の図形と同じ)。 */
 export interface MediaPlaceShape {
   op: 'media.placeShape'
   shape: ShapeItem['shape']
@@ -437,7 +444,31 @@ export interface MediaPlaceShape {
   atMs: Ms
   durationMs: Ms
   transform?: Partial<Transform>
+  props?: ShapeProps
+  effects?: Effect[]
   tempId?: string
+}
+
+/**
+ * 図形の形・色・見た目を変える(選んだ複数の図形にまとめて)。props の項目を null にすると形ごとの既定に戻す。
+ * replace なら今の見た目の調整を捨てて props だけにする(大きさは残す。ひな形を当てるとき)。
+ */
+export interface ItemSetShape {
+  op: 'item.setShape'
+  itemIds: ItemId[]
+  shape?: ShapeKind
+  fill?: string
+  props?: { [K in keyof ShapeProps]?: ShapeProps[K] | null }
+  replace?: boolean
+}
+
+/** 動画・画像の切り抜き・枠(ワイプの見た目)・色の調整を変える(複数にまとめて)。null で外す。 */
+export interface ItemSetMediaLook {
+  op: 'item.setMediaLook'
+  itemIds: ItemId[]
+  crop?: Crop | null
+  frame?: MediaFrame | null
+  adjust?: ColorAdjust | null
 }
 
 // ------------------------------------------------------------------ アイテム共通(続き)
@@ -576,6 +607,18 @@ export interface TimelineRippleDelete {
   op: 'timeline.rippleDelete'
   itemIds: ItemId[]
   ignoreOthers?: boolean
+}
+
+/**
+ * 前の素材から切り替える(クロスフェード・ワイプなど)。直前で終わる画面の素材と durationMs だけ重ね、この素材に登場の切り替えを付ける。
+ * 重ねる分は前の素材の続きを使う(足りなければこの素材の手前を使う)。この素材は前の素材より上のレイヤーへ移す。
+ * 直前に素材が無ければ、登場の切り替えだけを付ける。
+ */
+export interface TimelineCrossTransition {
+  op: 'timeline.crossTransition'
+  itemId: ItemId
+  kind: TransitionKind
+  durationMs: Ms
 }
 
 /** atMs の位置にある「何も置かれていない時間」を詰める。 */
@@ -780,6 +823,7 @@ export type Command =
   | ItemSetLocked
   | TimelineRippleDelete
   | TimelineCloseGap
+  | TimelineCrossTransition
   | TimelinePackLeft
   | TimelineInsertGap
   | TimelineArrangeOverlaps
@@ -792,6 +836,8 @@ export type Command =
   | MediaPlaceAudio
   | MediaPlaceText
   | MediaPlaceShape
+  | ItemSetShape
+  | ItemSetMediaLook
   | PortraitInsert
   | PortraitUpdate
   | ZoomInsert

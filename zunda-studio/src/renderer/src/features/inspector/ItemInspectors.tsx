@@ -2,8 +2,8 @@ import type { Command } from '@shared/commands/types'
 import { FREE_SOURCES, freeSource, licenseFromSource } from '@shared/media/free-sources'
 import { DEFAULT_LAYER_IDS } from '@shared/project/factory'
 import { timelineColor } from '@shared/project/timeline-colors'
-import { PREVIEW_RESOLUTIONS, ZOOM_METHODS, type AssetLicense, type AudioItem, type Effect, type Item, type Project, type ShapeItem, type TextItem, type Transform, type VideoItem, type ZoomItem } from '@shared/project/types'
-import { defaultEffect, EFFECT_LABELS } from '@shared/render/effects'
+import { PREVIEW_RESOLUTIONS, TRANSITION_KINDS, ZOOM_METHODS, type AssetLicense, type AudioItem, type Effect, type Item, type Project, type TextItem, type TransitionSide, type Transform, type VideoItem, type ZoomItem } from '@shared/project/types'
+import { defaultEffect, EFFECT_LABELS, TRANSITION_LABELS } from '@shared/render/effects'
 import { defaultZoomTiming, ZOOM_METHOD_LABELS } from '@shared/render/zoom'
 
 import { moveCommands } from '../../state/edit-actions'
@@ -175,29 +175,6 @@ export function AudioInspector({ item, run }: { item: AudioItem; run: Run }): Re
         />
         セリフの間は音量を下げる
       </label>
-    </section>
-  )
-}
-
-// ---------------------------------------------------------------- テロップ・図形
-
-export function ShapeInspector({ item, run }: { item: ShapeItem; run: Run }): React.JSX.Element {
-  return (
-    <section>
-      <h3>図形</h3>
-      <div className="field__row field__row--wrap">
-        <label className="field field--inline">
-          <span className="field__label">形</span>
-          <select value={item.shape} onChange={(event) => run([{ op: 'item.setContent', itemId: item.id, shape: event.target.value as ShapeItem['shape'] }], '形の変更')}>
-            <option value="rect">四角</option>
-            <option value="ellipse">楕円</option>
-          </select>
-        </label>
-        <label className="field field--inline">
-          <span className="field__label">色</span>
-          <input type="color" value={item.fill.slice(0, 7)} onChange={(event) => run([{ op: 'item.setContent', itemId: item.id, fill: event.target.value }], '色の変更')} />
-        </label>
-      </div>
     </section>
   )
 }
@@ -374,7 +351,94 @@ function EffectFields({ effect, onChange }: { effect: Effect; onChange: (effect:
           <NumberField label="時間(秒)" value={effect.durationMs} {...seconds} onCommit={(durationMs) => onChange({ ...effect, durationMs })} />
         </div>
       )
+    case 'pulse':
+      return (
+        <div className="field__row field__row--wrap">
+          <NumberField label="振れ幅(%)" value={effect.amount} displayScale={100} min={0} max={200} step={2} onCommit={(amount) => onChange({ ...effect, amount })} />
+          <NumberField label="周期(秒)" value={effect.periodMs} displayScale={0.001} step={0.1} min={0.05} onCommit={(periodMs) => onChange({ ...effect, periodMs })} />
+        </div>
+      )
+    case 'blink':
+      return (
+        <div className="field__row field__row--wrap">
+          <NumberField label="周期(秒)" value={effect.periodMs} displayScale={0.001} step={0.1} min={0.05} onCommit={(periodMs) => onChange({ ...effect, periodMs })} />
+          <NumberField label="一番薄いとき(%)" value={effect.minOpacity} displayScale={100} min={0} max={100} step={10} onCommit={(minOpacity) => onChange({ ...effect, minOpacity })} />
+        </div>
+      )
+    case 'spin':
+      return (
+        <div className="field__row field__row--wrap">
+          <NumberField label="1秒に回る角度(度)" value={effect.degreesPerSecond} step={15} onCommit={(degreesPerSecond) => onChange({ ...effect, degreesPerSecond })} />
+        </div>
+      )
+    case 'swing':
+      return (
+        <div className="field__row field__row--wrap">
+          <NumberField label="傾き(度)" value={effect.degrees} min={-180} max={180} onCommit={(degrees) => onChange({ ...effect, degrees })} />
+          <NumberField label="周期(秒)" value={effect.periodMs} displayScale={0.001} step={0.1} min={0.05} onCommit={(periodMs) => onChange({ ...effect, periodMs })} />
+        </div>
+      )
+    case 'float':
+      return (
+        <div className="field__row field__row--wrap">
+          <NumberField label="高さ(px)" value={effect.amplitudePx} min={0} onCommit={(amplitudePx) => onChange({ ...effect, amplitudePx })} />
+          <NumberField label="周期(秒)" value={effect.periodMs} displayScale={0.001} step={0.1} min={0.05} onCommit={(periodMs) => onChange({ ...effect, periodMs })} />
+        </div>
+      )
+    case 'transition':
+      return (
+        <div className="field__row field__row--wrap">
+          <TransitionSideField label="登場" side={effect.in} onChange={(side) => onChange({ ...effect, in: side })} testId="transition-in" />
+          <TransitionSideField label="退場" side={effect.out} onChange={(side) => onChange({ ...effect, out: side })} testId="transition-out" />
+        </div>
+      )
   }
+}
+
+/** 登場・退場の片方。なしにもできる(両方なしにはできないので、もう片方があるときだけ)。 */
+function TransitionSideField({
+  label,
+  side,
+  onChange,
+  testId
+}: {
+  label: string
+  side: TransitionSide | null
+  onChange: (side: TransitionSide | null) => void
+  testId: string
+}): React.JSX.Element {
+  return (
+    <>
+      <label className="field field--inline">
+        <span className="field__label">{label}</span>
+        <select
+          value={side?.kind ?? ''}
+          onChange={(event) => {
+            const kind = event.target.value as TransitionSide['kind'] | ''
+            onChange(kind === '' ? null : { kind, durationMs: side?.durationMs ?? 400 })
+          }}
+          data-testid={testId}
+        >
+          <option value="">なし</option>
+          {TRANSITION_KINDS.map((kind) => (
+            <option key={kind} value={kind}>
+              {TRANSITION_LABELS[kind]}
+            </option>
+          ))}
+        </select>
+      </label>
+      {side && (
+        <NumberField
+          label="時間(秒)"
+          value={side.durationMs}
+          displayScale={0.001}
+          step={0.1}
+          min={0}
+          onCommit={(durationMs) => onChange({ ...side, durationMs })}
+        />
+      )}
+    </>
+  )
 }
 
 // ---------------------------------------------------------------- 素材の権利

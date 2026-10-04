@@ -2721,3 +2721,104 @@ input[type='url'] {
 .storage__progress progress {
   width: 100%;
 }
+
+/* ------------------------------------------------------------------ 装飾のひな形 */
+
+.decoration-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+  max-height: 62vh;
+  overflow-y: auto;
+}
+
+.decoration-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 4px;
+  text-align: left;
+}
+
+.decoration-card:hover {
+  border-color: var(--accent);
+}
+
+.decoration-card__thumb {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 3px;
+  display: block;
+}
+
+.decoration-card__name {
+  font-size: 12px;
+  padding: 0 2px 2px;
+}
+
+/* 押して切り替えるボタンが入っている状態 */
+.button--active {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+/* 小さなボタンを横に並べる(ひな形など) */
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0 6px;
+}
+
+/* プレビューの枠の、向きを変えるつまみ(上の丸) */
+.item-frame__rotate {
+  background: #6ee07a;
+  border: 1px solid #14181d;
+  border-radius: 50%;
+  cursor: grab;
+  height: 14px;
+  left: calc(50% - 7px);
+  position: absolute;
+  top: -36px;
+  width: 14px;
+}
+
+.item-frame__rotate::after {
+  background: #6ee07a;
+  content: '';
+  height: 22px;
+  left: 6px;
+  position: absolute;
+  top: 13px;
+  width: 1px;
+}
+
+/* 図形の幅・高さだけを変える辺のつまみ */
+.item-frame__edge {
+  background: #6ee07a;
+  border-radius: 2px;
+}
+
+/* 切り抜きの編集。切り抜く前の素材全体と、残す範囲の枠 */
+.crop-frame__whole {
+  outline: 1px dashed rgba(255, 255, 255, 0.6);
+  pointer-events: none;
+  position: absolute;
+}
+
+.crop-frame {
+  border-color: #ffb347;
+  pointer-events: auto;
+}
+
+.crop-frame .zoom-frame__handle {
+  background: #ffb347;
+}
+
+.crop-frame .zoom-frame__label {
+  background: rgba(255, 179, 71, 0.9);
+  color: #14181d;
+  white-space: nowrap;
+}

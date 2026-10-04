@@ -52,9 +52,14 @@ function splitEffects(effects: readonly Effect[]): { first: Effect[]; second: Ef
     if (effect.type === 'fade') {
       if (effect.inMs > 0) first.push({ type: 'fade', inMs: effect.inMs, outMs: 0 })
       if (effect.outMs > 0) second.push({ type: 'fade', inMs: 0, outMs: effect.outMs })
+    } else if (effect.type === 'transition') {
+      // 登場は前半に、退場は後半に残す。
+      if (effect.in) first.push({ type: 'transition', in: { ...effect.in }, out: null })
+      if (effect.out) second.push({ type: 'transition', in: null, out: { ...effect.out } })
     } else {
       first.push({ ...effect })
-      if (effect.type === 'shake') second.push({ ...effect })
+      // 揺れと、繰り返しの動き(ドクンドクン・点滅・回転など)は両方に残す。
+      if (['shake', 'pulse', 'blink', 'spin', 'swing', 'float'].includes(effect.type)) second.push({ ...effect })
     }
   }
   return { first, second }

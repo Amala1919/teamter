@@ -5,6 +5,7 @@ import { entryTimelineMs } from '@shared/live/timing'
 import { itemEndMs, projectDurationMs } from '@shared/project/queries'
 import { timelineColor } from '@shared/project/timeline-colors'
 import { PREVIEW_RESOLUTIONS, type Item, type Layer, type Ms, type Project } from '@shared/project/types'
+import { SHAPE_DEFAULTS } from '@shared/render/shapes'
 import { ZOOM_METHOD_LABELS } from '@shared/render/zoom'
 
 import { pickColor } from '../../lib/pick-color'
@@ -16,6 +17,7 @@ import { useSettingsStore } from '../../state/settings'
 import { useEditorStore } from '../../state/store'
 import { openContextMenu } from '../../ui/ContextMenu'
 import { itemMenu, laneMenu, layerMenu, rulerMenu, type MenuContext } from './timeline-menus'
+import { DecorationPicker } from '../decorations/DecorationPicker'
 import { FreeSourcesDialog } from '../media/FreeSourcesDialog'
 import { Waveform } from './Waveform'
 
@@ -59,6 +61,7 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
   const [pxPerSecond, setPxPerSecond] = useState(60)
   const [drag, setDrag] = useState<DragState | null>(null)
   const [sourcesOpen, setSourcesOpen] = useState(false)
+  const [decorationsOpen, setDecorationsOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const rulerRef = useRef<HTMLDivElement>(null)
   const zoomRef = useRef(pxPerSecond)
@@ -291,6 +294,9 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
         <button type="button" className="button--small" onClick={addCaption} data-testid="add-caption">
           テロップ
         </button>
+        <button type="button" className="button--small" onClick={() => setDecorationsOpen(true)} data-testid="open-decorations" title="矢印・丸・吹き出し・集中線などの装飾を置く">
+          装飾
+        </button>
         <button type="button" className="button--small" onClick={() => setSourcesOpen(true)} data-testid="open-free-sources" title="フリー BGM・効果音のサイト一覧">
           フリー素材サイト
         </button>
@@ -391,6 +397,7 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
         </div>
       </div>
       {sourcesOpen && <FreeSourcesDialog onClose={() => setSourcesOpen(false)} />}
+      {decorationsOpen && <DecorationPicker onClose={() => setDecorationsOpen(false)} onError={onError} />}
     </section>
   )
 }
@@ -507,7 +514,7 @@ function itemLabel(project: Project, item: Item): string {
     case 'text':
       return item.text
     case 'shape':
-      return item.shape === 'ellipse' ? '図形(楕円)' : '図形'
+      return SHAPE_DEFAULTS[item.shape]?.label ?? '図形'
     case 'zoom':
       return `ズーム(${ZOOM_METHOD_LABELS[item.method]})`
     case 'portrait': {
