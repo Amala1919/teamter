@@ -37,6 +37,8 @@
   "ai":         { /* 11章 */ },
   // 省略可。全体の音量と、音の種類ごとの音量(倍率 0〜2。無い項目は 1 = 100%)。プレビューと書き出しの両方に掛かる
   "mix": { "master": 0.8, "voice": 1.0, "music": 0.6, "video": 1.0 },
+  // 省略可。編集中の目印(メモ付き)。動画には出ない。メモのある目印はチャプターの下書きと投稿文の依頼に使う
+  "markers": [{ "id": "mrk_1", "atMs": 65000, "text": "ここで逆転", "color": "#f5c518" }],
   "editing": {
     // 編集の自動処理(設定の「編集」タブで選ぶ)。素材は独立が基本で、合成で尺が変わってもほかは動かさない
     "openGapOnVoiceInsert": false, // 省略可(既定 false)。セリフを間に足したら、後ろのセリフをずらして場所を空ける。以前の rippleOnVoiceChange は使わない
@@ -283,6 +285,14 @@ PSDのレイヤーツリーに対する「役割の割り当て」を保存す�
 // 画像
 { "type": "image", "assetId": "ast_cutin", "transform": { /* 同上 */ } }
 
+// 動画・画像の見た目(どれも省略可)。crop は上下左右から切り落とす割合(0〜0.95)で、残った部分の中心が置いた位置になる。
+// frame は枠(rect / rounded / circle、縁、影)、adjust は色の調整(元のままは 1。色相は度、ぼかしは px)。
+{ "type": "video", /* … */ "crop": { "left": 0.3, "top": 0.3, "right": 0.3, "bottom": 0.3 },
+  "frame": { "shape": "rounded", "radiusPx": 20, "border": { "color": "#ffffff", "widthPx": 6 }, "shadow": null },
+  "adjust": { "brightness": 1, "contrast": 1.1, "saturation": 0, "hue": 0, "sepia": 0, "blurPx": 0 },
+  // 音量の時間変化(アイテム内の時刻と倍率)。点の間はまっすぐつなぐ。端を切る・分ける・速度を変えても素材の同じ場所に付いたまま
+  "volumeKeys": [{ "atMs": 2000, "gain": 1 }, { "atMs": 2300, "gain": 0.3 }] }
+
 // 独立した字幕・テロップ(ボイスに紐づかないもの)
 // look はこのテロップだけの見た目(無い項目は字幕スタイルに従う。outline・shadow の "none" はスタイルにあっても付けない)。
 // background は後ろに敷く帯、typewriterMs は最初のこの時間で1文字ずつ出す文字送り。
@@ -295,8 +305,16 @@ PSDのレイヤーツリーに対する「役割の割り当て」を保存す�
 { "type": "audio", "assetId": "ast_bgm_01", "inMs": 0, "outMs": 184000,
   "volume": 0.25, "loop": true, "fadeInMs": 1000, "fadeOutMs": 2000, "duckable": true }
 
-// 図形・単色背景
-{ "type": "shape", "shape": "rect", "fill": "#101820", "transform": { /* 同上 */ } }
+// 図形・装飾。shape は rect / roundRect / ellipse / triangle / diamond / star / burst / heart / arrow / curveArrow / line / wave /
+// check / cross / handCircle / corners / bubble / shout / cloud / band / focusLines / speedLines / spotlight / confetti / sparkles。
+// width・height が無い(以前の)図形は画面いっぱいの大きさ。そのほかの見た目はどれも省略可(src/shared/render/shapes.ts)。
+{ "type": "shape", "shape": "bubble", "fill": "#ffffff", "transform": { /* 同上 */ },
+  "width": 560, "height": 240, "fillOpacity": 1, "gradient": { "color": "#dddddd", "angle": 90, "radial": false },
+  "thickness": 12, "dash": "solid", "stroke": { "color": "#222222", "widthPx": 5 }, "outerStroke": null,
+  "shadow": { "color": "#00000088", "offsetX": 6, "offsetY": 8, "blurPx": 10 }, "cornerRadius": 100,
+  "tail": { "x": -140, "y": 200 },          // 吹き出しのしっぽの先(図形の中心から)
+  "drawMs": 400, "roughness": 0.3, "wiggle": false,  // 描いていく時間・手書き風のゆらぎ・線をゆらゆら動かす
+  "points": 5, "innerRatio": 0.45, "headSize": 1, "bend": 0.45, "density": 1, "speed": 1 }
 
 // 場面ごとの立ち絵。kind は show(この区間だけ出す。無ければ show)/ hide(この区間だけ隠す)/ adjust(位置・表情だけ変える)
 // untilEnd: true の show は「動画の最後まで」出す区間で、動画の長さに合わせて伸びる(尺には数えない)
@@ -362,6 +380,22 @@ PSDのレイヤーツリーに対する「役割の割り当て」を保存す�
 
 `shake` は乱数を使うが、`meta.renderSeed` とアイテムIDと相対時刻から決定論的に生成する。
 
+繰り返しの動きと、登場・退場の切り替え:
+
+```jsonc
+{ "type": "pulse", "amount": 0.08, "periodMs": 700 }          // 拡大縮小の繰り返し(ドクンドクン)
+{ "type": "blink", "periodMs": 600, "minOpacity": 0 }         // 点滅
+{ "type": "spin", "degreesPerSecond": 90 }                    // 回り続ける
+{ "type": "swing", "degrees": 8, "periodMs": 1200 }           // 左右に傾く
+{ "type": "float", "amplitudePx": 12, "periodMs": 1600 }      // ふわふわ浮く
+// 登場(in)・退場(out)。kind は fade / wipeRight / wipeLeft / wipeDown / wipeUp / iris / slideLeft / slideRight / slideUp / slideDown /
+// zoom / pop / blur / spin / blinds。ワイプ・円・ブラインドはアイテムの枠を切り抜いて見せる範囲を絞る
+{ "type": "transition", "in": { "kind": "wipeRight", "durationMs": 500 }, "out": null }
+```
+
+前の素材に重ねて置いた素材に `transition` の `in` を付けると、場面の切り替え(クロスフェード・ワイプ)になる(`timeline.crossTransition`)。
+装飾の集中線・流線・紙吹雪・キラキラも、時刻と `renderSeed` とアイテムIDから決定論的に描く。
+
 ## 8. 字幕スタイルとクレジット
 
 ```jsonc
@@ -376,7 +410,10 @@ PSDのレイヤーツリーに対する「役割の割り当て」を保存す�
     "shadow": { "color": "#00000080", "offsetX": 4, "offsetY": 4, "blurPx": 4 },
     "position": { "anchor": "bottom-center", "x": 960, "y": 980 },
     "maxCharsPerLine": 22,
-    "lineHeight": 1.2
+    "lineHeight": 1.2,
+    // 省略可。字幕の後ろの帯(fullWidth なら画面の横幅いっぱい)と、出方(none / fade / pop / slideUp / typewriter)
+    "background": { "color": "#000000", "opacity": 0.55, "paddingPx": 14, "radiusPx": 10, "fullWidth": false },
+    "appear": { "kind": "pop", "durationMs": 250 }
   }
 },
 "credits": {

@@ -192,3 +192,28 @@ function differs(data: Uint8ClampedArray): number {
   }
   return count
 }
+
+describe('編集AIからの装飾', () => {
+  it('AI が出した装飾・切り替え・目印のコマンドは形の検証を通り、そのまま適用できる', async () => {
+    const { aiCommandSchema, toCommands } = await import('@shared/ai/edit-commands')
+    const proposal = [
+      {
+        op: 'media.placeShape',
+        shape: 'handCircle',
+        fill: '#ff2d2d',
+        atMs: 1000,
+        durationMs: 2000,
+        transform: { x: 400, y: 300 },
+        props: { width: 300, height: 200, thickness: 10, drawMs: 400 },
+        effects: [{ type: 'transition', in: null, out: { kind: 'fade', durationMs: 200 } }]
+      },
+      { op: 'media.placeShape', shape: 'focusLines', fill: '#000000', atMs: 0, durationMs: 1000, props: { width: 900, height: 500 } },
+      { op: 'marker.add', atMs: 1500, text: 'ここで逆転' }
+    ]
+    const parsed = proposal.map((command) => aiCommandSchema.parse(command))
+    const project = apply(createEmptyProject(), toCommands(parsed))
+    expect(project.items.map((item) => (item as ShapeItem).shape)).toEqual(['handCircle', 'focusLines'])
+    expect(project.markers?.[0]?.text).toBe('ここで逆転')
+    expect(() => aiCommandSchema.parse({ op: 'media.placeShape', shape: 'hexagon', fill: '#ffffff', atMs: 0, durationMs: 1 })).toThrow()
+  })
+})

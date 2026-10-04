@@ -123,7 +123,7 @@ LLM(tool use) → コマンド列
 | `media.placeImage` | `assetId`, `atMs`, `durationMs`, `layerId?`, `transform?`, `tempId?` | 画像を配置する |
 | `media.placeAudio` | `assetId`, `atMs`, `layerId?`, `inMs?`, `outMs?`, `durationMs?`, `volume?`, `loop?`, `duckable?`, `tempId?` | BGM・SEを配置する。ループするなら素材より長くできる。既定のレイヤーは BGM |
 | `media.placeText` | `text`, `atMs`, `durationMs`, `layerId?`, `styleId?`, `transform?`, `tempId?` | 独立したテロップを置く |
-| `media.placeShape` | `shape`, `fill`, `atMs`, `durationMs`, `layerId?`, `transform?`, `tempId?` | 図形を置く(等倍で画面全体の大きさ) |
+| `media.placeShape` | `shape`, `fill`, `atMs`, `durationMs`, `layerId?`, `transform?`, `props?`, `effects?`, `tempId?` | 図形・装飾を置く(手書きの丸・矢印・吹き出し・集中線・スポットライト・紙吹雪など)。`props` の `width`・`height` を省くと画面全体の大きさ |
 
 変形(`transform`)の `x`, `y` はアイテムの中心の位置(キャンバス座標)。等倍(`scale: 1`)の大きさは、動画は画面に収まる最大の大きさ、画像は素材の画素数、図形は画面全体。
 
@@ -143,7 +143,13 @@ LLM(tool use) → コマンド列
 | `item.removeEffect` | `itemId`, `effectIndex` | エフェクトを外す |
 | `item.delete` | `itemId` | 削除する |
 | `item.split` | `itemId`, `atMs`, `tempId?` | その時刻で2つに分ける(セリフ・ズームは不可)。後半が新しいアイテムになる |
-| `item.setSpeed` | `itemId`, `rate` | 動画の再生速度(0.25〜4倍)。画面上の長さが変わる |
+| `item.setSpeed` | `itemId`, `rate` | 動画の再生速度(0.25〜16倍)。画面上の長さが変わる |
+| `item.setShape` | `itemIds`, `shape?`, `fill?`, `props?`, `replace?` | 図形の形・色・見た目(縁取り・影・描いていく時間など)をまとめて変える。項目を `null` にすると形ごとの既定に戻す |
+| `item.setMediaLook` | `itemIds`, `crop?`, `frame?`, `adjust?` | 動画・画像の切り抜き・枠(小窓の見た目)・色の調整。`null` で外す |
+| `item.setVolumeKeys` | `itemId`, `keys`(`null` で一定) | 音量の時間変化(アイテム内の時刻と倍率の点) |
+| `timeline.crossTransition` | `itemId`, `kind`, `durationMs` | 前の素材から重ねて切り替える(クロスフェード・ワイプなど)。重ねる続きが無ければ、前をフェードで消してから出す |
+| `video.condense` | `itemId`, `ranges`, `mode`(`cut`/`speed`), `rate?`, `ripple?`, `label?` | 動画の中の区間(待ち時間など)をまとめて切り取る・早送りにする。後ろは詰める |
+| `marker.add` / `marker.update` / `marker.remove` | `atMs`, `text?`, `color?` / `markerId`, … | 編集中の目印(メモ) |
 | `item.freezeFrame` | `itemId`, `atMs`, `durationMs`, `mode`(`insert`/`overwrite`), `tempId?` | その時刻のコマで動画を止め、静止画として表示する。`insert` は後ろをずらし(かかっているズームは寄ったまま伸ばす)、`overwrite` は動画のその先を静止画で置き換える |
 | `project.setMix` | `master?`, `voice?`, `music?`, `video?`(倍率 0〜2。`null` で 100%) | 全体の音量と、セリフ・BGM/効果音・動画の音の大きさ |
 | `timeline.rippleDelete` | `itemIds`, `ignoreOthers?` | 削除して、空いた時間を詰める(`ignoreOthers` なら、ほかの素材は考慮せず消した長さだけ詰める) |

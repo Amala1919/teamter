@@ -90,24 +90,36 @@ export const transitionHandlers: TransitionHandlers = {
 
     const previous = previousVisual(draft, item)
     let duration = Math.round(Math.min(command.durationMs, item.durationMs / 2))
+    const kind: TransitionKind = command.kind
     if (previous) {
       if (previous.locked) fail(command.op, '前の素材がロックされています')
       duration = Math.round(Math.min(duration, previous.durationMs / 2))
       // 重なっている分(つながりの誤差)を除いて、あと何ms重ねればよいか。
       const gap = item.startMs - itemEnd(previous)
       const needed = duration + gap
-      if (needed > 0) {
-        // 前の素材を後ろへ伸ばす(この素材の始まりは動かさない。セリフとの合わせがずれないように)。
-        // 前の素材の続きが足りなければ、この素材の頭を前へ伸ばす。
-        if (sourceRoomAfter(draft, previous) >= needed) extendEnd(previous, needed)
-        else if (sourceRoomBefore(item) >= needed) extendStart(item, needed)
-        else fail(command.op, '前の素材の続きも、この素材の手前も足りないため、重ねて切り替えられません')
+      // 前の素材を後ろへ伸ばす(この素材の始まりは動かさない。セリフとの合わせがずれないように)。
+      // 前の素材の続きが足りなければ、この素材の頭を前へ伸ばす。
+      const canOverlap = needed <= 0 || sourceRoomAfter(draft, previous) >= needed || sourceRoomBefore(item) >= needed
+      if (canOverlap) {
+        if (needed > 0) {
+          if (sourceRoomAfter(draft, previous) >= needed) extendEnd(previous, needed)
+          else extendStart(item, needed)
+        }
+        dropFade(previous, 'outMs')
+        placeAbove(draft, item, previous, env)
+      } else {
+        // どちらの素材にも重ねる分の続きが無ければ、重ねずに、前の素材を消していってからこの素材を出す
+        // (クロスフェードなら、いったん暗くなってから明るくなる)。
+        duration = Math.round(duration / 2)
+        const fadeOut = { kind: 'fade' as const, durationMs: duration }
+        const existingOut = previous.effects.find((effect) => effect.type === 'transition')
+        if (existingOut && existingOut.type === 'transition') existingOut.out = fadeOut
+        else previous.effects.push({ type: 'transition', in: null, out: fadeOut })
+        dropFade(previous, 'outMs')
       }
-      dropFade(previous, 'outMs')
-      placeAbove(draft, item, previous, env)
     }
     dropFade(item, 'inMs')
-    const side = { kind: command.kind, durationMs: duration }
+    const side = { kind, durationMs: duration }
     const existing = item.effects.find((effect) => effect.type === 'transition')
     if (existing && existing.type === 'transition') existing.in = side
     else item.effects.push({ type: 'transition', in: side, out: null })

@@ -74,15 +74,19 @@ export function ContextMenuHost(): React.JSX.Element | null {
       if (!(event.target instanceof Node) || !document.querySelector('.context-menu-root')?.contains(event.target)) close()
     }
     const onDismiss = (): void => close()
+    // メニューの外でホイールを回したら閉じる(長いメニューの中では、ホイールでメニューを送る)。
+    const onWheel = (event: WheelEvent): void => {
+      if (!(event.target instanceof Node) || !document.querySelector('.context-menu-root')?.contains(event.target)) close()
+    }
     window.addEventListener('pointerdown', onPointerDown, true)
     window.addEventListener('resize', onDismiss)
     window.addEventListener('blur', onDismiss)
-    window.addEventListener('wheel', onDismiss, { passive: true })
+    window.addEventListener('wheel', onWheel, { passive: true })
     return () => {
       window.removeEventListener('pointerdown', onPointerDown, true)
       window.removeEventListener('resize', onDismiss)
       window.removeEventListener('blur', onDismiss)
-      window.removeEventListener('wheel', onDismiss)
+      window.removeEventListener('wheel', onWheel)
     }
   }, [menu, close])
 

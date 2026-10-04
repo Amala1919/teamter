@@ -332,12 +332,10 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
       ]
     })
   }
+  // 動き(寄る・揺らすなど)と、登場・退場・前の素材からの切り替えは、メニューが長くならないよう1つにまとめる。
+  const motion: MenuEntry[] = []
   if (VISUAL_TYPES.includes(item.type)) {
-    tools.push({
-      label: '動きを付ける',
-      disabled: locked,
-      testId: 'menu-motion',
-      submenu: [
+    motion.push(
         {
           label: 'じわっと寄る',
           onSelect: report(context, () =>
@@ -357,8 +355,7 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
           ),
           testId: 'menu-shake'
         }
-      ]
-    })
+    )
   }
   if (item.type === 'video' || item.type === 'image' || item.type === 'text' || item.type === 'shape') {
     const transition = item.effects.find((effect) => effect.type === 'transition')
@@ -372,7 +369,8 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
         testId: `menu-transition-${side}-${kind}`
       }))
     ]
-    tools.push(
+    motion.push(
+      'separator',
       {
         label: '前の素材から切り替える(重ねる)',
         disabled: locked,
@@ -387,6 +385,7 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
       { label: '退場の動き', disabled: locked, testId: 'menu-transition-out', submenu: sideMenu('out') }
     )
   }
+  if (motion.length > 0) tools.push({ label: '動き・切り替え', disabled: locked, testId: 'menu-motion', submenu: motion })
   if (item.type === 'video' || item.type === 'image') {
     const media = item
     tools.push(

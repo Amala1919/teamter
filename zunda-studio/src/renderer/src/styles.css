@@ -1942,6 +1942,9 @@ input[type='url'] {
   z-index: 1000;
   min-width: 200px;
   max-width: 360px;
+  /* 画面に収まらない長さのメニューは、中で送れるようにする */
+  max-height: calc(100vh - 8px);
+  overflow-y: auto;
   padding: 4px 0;
   background: var(--bg-raised);
   border: 1px solid var(--border);

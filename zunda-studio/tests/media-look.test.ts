@@ -197,3 +197,24 @@ describe('字幕の帯と出方', () => {
     expect(() => apply(project, [{ op: 'style.upsertSubtitle', styleId: Object.keys(project.subtitleStyles)[0]!, props: { appear: { kind: 'warp' as never, durationMs: 100 } } }])).toThrow('字幕の出方')
   })
 })
+
+describe('前の素材から切り替える(重ねられないとき)', () => {
+  it('どちらにも続きが無ければ、前の素材を消してからこの素材を出す', () => {
+    let project = apply(createEmptyProject(), [
+      {
+        op: 'asset.add',
+        asset: { type: 'video', path: { absolute: '/x/clip.mp4', relative: null }, durationMs: 4000, width: 1920, height: 1080, fps: 30, hasAudio: true, license: { source: '録画', creditRequired: false } },
+        tempId: 'v'
+      },
+      { op: 'media.placeVideo', assetId: 'v', atMs: 0 },
+      { op: 'media.placeVideo', assetId: 'v', atMs: 4000 }
+    ])
+    const [a, b] = project.items
+    project = apply(project, [{ op: 'timeline.crossTransition', itemId: b!.id, kind: 'fade', durationMs: 600 }])
+    const after = new Map(project.items.map((item) => [item.id, item]))
+    expect(after.get(a!.id)).toMatchObject({ startMs: 0, durationMs: 4000 })
+    expect(after.get(b!.id)).toMatchObject({ startMs: 4000, durationMs: 4000 })
+    expect(after.get(a!.id)!.effects).toContainEqual({ type: 'transition', in: null, out: { kind: 'fade', durationMs: 300 } })
+    expect(after.get(b!.id)!.effects).toContainEqual({ type: 'transition', in: { kind: 'fade', durationMs: 300 }, out: null })
+  })
+})
