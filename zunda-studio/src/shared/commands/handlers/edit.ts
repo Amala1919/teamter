@@ -1,3 +1,4 @@
+import { scaleKeys, splitKeys } from '../../audio/volume-keys'
 import { DEFAULT_LAYER_IDS } from '../../project/factory'
 import type { Effect, Item, Ms, Project, VideoItem } from '../../project/types'
 import { TIMELINE_COLOR } from '../../project/timeline-colors'
@@ -74,6 +75,14 @@ function splitItem(draft: Project, item: Item, at: Ms, newId: string): Item {
   second.id = newId
   second.startMs = at
   second.durationMs = itemEnd(item) - at
+  // 音量の折れ点も、分けた所で前半と後半に分ける。
+  if ((item.type === 'audio' || item.type === 'video') && (second.type === 'audio' || second.type === 'video') && item.volumeKeys) {
+    const keys = splitKeys(item.volumeKeys, at - item.startMs, item.durationMs)
+    if (keys.first) item.volumeKeys = keys.first
+    else delete item.volumeKeys
+    if (keys.second) second.volumeKeys = keys.second
+    else delete second.volumeKeys
+  }
   item.durationMs = at - item.startMs
   const effects = splitEffects(item.effects)
   item.effects = effects.first
@@ -229,7 +238,11 @@ export const editHandlers: EditHandlers = {
     requireFinite(command.rate, command.op, '速度')
     if (command.rate < MIN_SPEED || command.rate > MAX_SPEED) fail(command.op, `速度は${MIN_SPEED}〜${MAX_SPEED}倍にしてください`)
     item.playbackRate = command.rate
+    const before = item.durationMs
     item.durationMs = Math.max(MIN_PART_MS, Math.round((item.outMs - item.inMs) / command.rate))
+    // 音量の折れ点は、素材の同じ場所に付いたままにする(長さに合わせて伸び縮みさせる)。
+    const keys = scaleKeys(item.volumeKeys, item.durationMs / Math.max(1, before))
+    if (keys) item.volumeKeys = keys
   },
 
   'item.setLocked': (draft, command, env) => {

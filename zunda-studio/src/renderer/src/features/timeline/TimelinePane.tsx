@@ -21,6 +21,7 @@ import { MarkerEditor, MarkerFlags } from './MarkerFlags'
 import { itemMenu, laneMenu, layerMenu, rulerMenu, type MenuContext } from './timeline-menus'
 import { DecorationPicker } from '../decorations/DecorationPicker'
 import { FreeSourcesDialog } from '../media/FreeSourcesDialog'
+import { VolumeLine } from './VolumeLine'
 import { Waveform } from './Waveform'
 
 const MIN_VISIBLE_MS = 10_000
@@ -414,6 +415,7 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
                       locked={item.locked || layer.locked}
                       onPointerDown={beginDrag}
                       onContextMenu={onItemContextMenu}
+                      onError={onError}
                     />
                   )
                 })}
@@ -578,6 +580,7 @@ interface TimelineItemProps {
   locked: boolean
   onPointerDown: (event: React.PointerEvent, item: Item, mode: DragMode) => void
   onContextMenu: (event: React.MouseEvent, item: Item) => void
+  onError: (message: string) => void
 }
 
 function TimelineItem(props: TimelineItemProps): React.JSX.Element {
@@ -622,6 +625,9 @@ function TimelineItem(props: TimelineItemProps): React.JSX.Element {
       aria-pressed={props.selected}
     >
       {waveform && (item.type === 'audio' || item.type === 'video') && <Waveform item={item} path={asset.path.absolute} />}
+      {(item.type === 'audio' || (item.type === 'video' && !item.freeze)) && (
+        <VolumeLine item={item} width={props.width} editable={props.selected && !props.locked} onError={props.onError} />
+      )}
       {item.groupId !== undefined && <span className="timeline__groupMark" aria-label="グループ" />}
       <span className="timeline__itemLabel">{itemLabel(project, item)}</span>
       {trimmable && (

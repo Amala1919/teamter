@@ -1,6 +1,7 @@
 import { TRANSITION_KINDS, type Effect, type Project, type TextLook, type TransitionSide } from '../../project/types'
 import { fadeCutEdge, fail, findMutableItem, requireFinite, requireLayer, type HandlerTable } from '../env'
 import type { CommandOp, ItemSetTextLook } from '../types'
+import { shiftKeys } from '../../audio/volume-keys'
 import { validateShapeKind } from './look'
 import { COLOR_PATTERN, validateTransform, validateVolume } from './media'
 
@@ -153,6 +154,12 @@ export const itemHandlers: ItemHandlers = {
     }
     const cutStart = start !== item.startMs
     const cutEnd = end !== item.startMs + item.durationMs
+    // 音量の折れ点は、素材の同じ場所に付いたままにする(左端を切ったら、その分だけ前へずらす)。
+    if ((item.type === 'audio' || item.type === 'video') && item.volumeKeys) {
+      const keys = shiftKeys(item.volumeKeys, start - item.startMs, end - start)
+      if (keys) item.volumeKeys = keys
+      else delete item.volumeKeys
+    }
     item.startMs = start
     item.durationMs = end - start
     if (item.type === 'portrait' && command.endMs !== undefined) delete item.untilEnd

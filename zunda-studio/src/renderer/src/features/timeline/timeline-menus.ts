@@ -35,6 +35,8 @@ import {
   splitAtPlayhead
 } from '../../state/edit-actions'
 import { pickColor } from '../../lib/pick-color'
+import { addVolumeKey, setVolumeKeys } from './VolumeLine'
+import { dipVolume } from '../../state/volume'
 import { addMarker } from '../../state/markers'
 import { CORNER_LABELS, crossTransition, makeWipe, resetWipe, setAdjust, setTransitionSide, wipeFromPart, type Corner } from '../../state/look-actions'
 import { ADJUST_PRESETS } from '../inspector/MediaLookInspector'
@@ -280,6 +282,26 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
         onSelect: report(context, () => setVolume(item.id, volume)),
         testId: `menu-volume-${volume}`
       }))
+    })
+  }
+  if ((item.type === 'video' && !item.freeze) || item.type === 'audio') {
+    const sound = item
+    const relMs = playheadMs - item.startMs
+    const inside = relMs > 0 && relMs < item.durationMs
+    tools.push({
+      label: '音量の点(時間で音量を変える)',
+      disabled: locked,
+      testId: 'menu-volume-keys',
+      submenu: [
+        { label: '再生位置に点を足す', disabled: !inside, onSelect: report(context, () => addVolumeKey(sound, relMs)), testId: 'menu-volume-key-add' },
+        {
+          label: '再生位置の前後1秒だけ下げる(30%)',
+          disabled: !inside,
+          onSelect: report(context, () => dipVolume(sound, relMs)),
+          testId: 'menu-volume-dip'
+        },
+        { label: 'すべての点を消す(一定に戻す)', disabled: !sound.volumeKeys?.length, onSelect: report(context, () => setVolumeKeys(sound, null, '音量の点を消す')) }
+      ]
     })
   }
   if (item.type !== 'voice' && item.type !== 'zoom') {

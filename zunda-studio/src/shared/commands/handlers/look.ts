@@ -1,9 +1,10 @@
 import { SHAPE_KINDS, type ColorAdjust, type Crop, type MediaFrame, type ShapeItem, type ShapeProps } from '../../project/types'
+import { MAX_KEY_GAIN, normalizeKeys } from '../../audio/volume-keys'
 import { fail, findMutableItem, requireFinite, type HandlerTable } from '../env'
 import type { CommandOp, ItemSetShape } from '../types'
 import { COLOR_PATTERN } from './media'
 
-type LookHandlers = Pick<HandlerTable, 'item.setShape' | 'item.setMediaLook'>
+type LookHandlers = Pick<HandlerTable, 'item.setShape' | 'item.setMediaLook' | 'item.setVolumeKeys'>
 
 function range(value: unknown, min: number, max: number, label: string, op: CommandOp): number {
   if (typeof value !== 'number' || !(Number.isFinite(value) && value >= min && value <= max)) fail(op, `${label}は ${min}〜${max} で指定してください`)
@@ -127,6 +128,22 @@ const SHAPE_LOOK_KEYS: (keyof ShapeProps)[] = [
 ]
 
 export const lookHandlers: LookHandlers = {
+  'item.setVolumeKeys': (draft, command, env) => {
+    const item = findMutableItem(draft, env.resolve(command.itemId), command.op)
+    if (item.type !== 'audio' && item.type !== 'video') fail(command.op, '音のあるアイテムではありません')
+    if (command.keys === null || command.keys.length === 0) {
+      delete item.volumeKeys
+      return
+    }
+    if (command.keys.length > 500) fail(command.op, '音量の点は500個までです')
+    for (const key of command.keys) {
+      requireFinite(key.atMs, command.op, '音量の点の時刻')
+      range(key.gain, 0, MAX_KEY_GAIN, '音量の点の大きさ', command.op)
+    }
+    const keys = normalizeKeys(command.keys.map((key) => ({ atMs: Math.min(item.durationMs, Math.max(0, key.atMs)), gain: key.gain })))
+    item.volumeKeys = keys
+  },
+
   'item.setShape': (draft, command, env) => {
     if (command.itemIds.length === 0) fail(command.op, '図形を選んでください')
     const shape = command.shape === undefined ? undefined : validateShapeKind(command.shape, command.op)

@@ -2878,3 +2878,30 @@ input[type='url'] {
   vertical-align: middle;
   width: 10px;
 }
+
+/* 音量の線(タイムラインの音のある素材の上) */
+.volume-line {
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+}
+
+.volume-line--editable {
+  pointer-events: auto;
+}
+
+.volume-line__path {
+  fill: none;
+  stroke: #ffd24a;
+  stroke-width: 1.5;
+}
+
+.volume-line__point {
+  cursor: ns-resize;
+  fill: #ffd24a;
+  pointer-events: auto;
+  stroke: #14181d;
+  stroke-width: 1;
+}

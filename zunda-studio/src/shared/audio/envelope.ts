@@ -1,5 +1,6 @@
 import { itemEndMs } from '../project/queries'
 import type { AudioItem, Ms, Project, VideoItem } from '../project/types'
+import { keyGainAt } from './volume-keys'
 
 /**
  * 音の大きさの時間変化(音量 × フェード × ダッキング)。
@@ -100,6 +101,10 @@ export function gainEnvelope(project: Project, item: SoundItem): GainPoint[] {
   const intervals = duck ? speechIntervals(project) : []
   const fade = project.editing.duckFadeMs
   const mix = mixGain(project, item.type === 'audio' ? 'music' : 'video')
+  // 音量の折れ点(利用者が置いた点)も折れ線の点にする。
+  for (const key of item.volumeKeys ?? []) {
+    if (key.atMs > 0 && key.atMs < duration) times.add(key.atMs)
+  }
   for (const [start, end] of intervals) {
     for (const absolute of [start - fade, start, end, end + fade]) {
       const rel = absolute - item.startMs
@@ -110,7 +115,7 @@ export function gainEnvelope(project: Project, item: SoundItem): GainPoint[] {
     .sort((a, b) => a - b)
     .map((atMs) => {
       const duckFactor = duck ? 1 - (1 - project.editing.duckVolume) * duckCoverage(intervals, fade, item.startMs + atMs) : 1
-      return { atMs, gain: item.volume * mix * fadeFactor(item, atMs) * duckFactor }
+      return { atMs, gain: item.volume * mix * fadeFactor(item, atMs) * duckFactor * keyGainAt(item.volumeKeys, atMs) }
     })
 }
 

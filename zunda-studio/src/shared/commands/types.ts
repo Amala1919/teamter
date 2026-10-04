@@ -45,6 +45,7 @@ import type {
   SynthesisResult,
   TextLook,
   VoiceConfig,
+  VolumeKey,
   VoiceParams
 } from '../project/types'
 
@@ -462,6 +463,13 @@ export interface ItemSetShape {
   replace?: boolean
 }
 
+/** 音量の折れ点を置き換える(アイテム内の時刻と倍率)。null か空で一定に戻す。 */
+export interface ItemSetVolumeKeys {
+  op: 'item.setVolumeKeys'
+  itemId: ItemId
+  keys: VolumeKey[] | null
+}
+
 /** 動画・画像の切り抜き・枠(ワイプの見た目)・色の調整を変える(複数にまとめて)。null で外す。 */
 export interface ItemSetMediaLook {
   op: 'item.setMediaLook'
@@ -863,6 +871,7 @@ export type Command =
   | MediaPlaceShape
   | ItemSetShape
   | ItemSetMediaLook
+  | ItemSetVolumeKeys
   | PortraitInsert
   | PortraitUpdate
   | ZoomInsert
