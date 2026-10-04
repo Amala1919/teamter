@@ -107,12 +107,12 @@ export function splitItem(draft: Project, item: Item, at: Ms, newId: string): It
   return second
 }
 
-function clone<T>(value: T): T {
+export function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
 
 /** 貼り付けるアイテムが、このプロジェクトで成り立つか確かめる(別のプロジェクトからの貼り付けに備える)。 */
-function validatePasted(draft: Project, item: Item, op: CommandOp): void {
+export function validatePasted(draft: Project, item: Item, op: CommandOp): void {
   if (!ITEM_TYPES.includes(item.type)) fail(op, `未対応のアイテムです: ${String(item.type)}`)
   requireFinite(item.startMs, op, '開始時刻')
   requireFinite(item.durationMs, op, '尺')

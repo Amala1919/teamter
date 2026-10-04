@@ -7,6 +7,7 @@
  */
 
 import type { GeneratedBy, ModelRef } from '../ai/types'
+import type { ProjectTemplate } from '../project/templates'
 import type {
   AiPersona,
   ProjectBriefing,
@@ -765,6 +766,21 @@ export interface ZoomUpdate {
   outMs?: Ms
 }
 
+// ------------------------------------------------------------------ ひな形
+
+/**
+ * ひな形(オープニング・エンディングなど)を atMs に入れる。ripple なら後ろをずらして場所を空ける。
+ * 素材・字幕スタイル・レイヤーは入れる先のものに合わせ(無ければ足す)、キャラクターがいないセリフは入れない。
+ * 入れたアイテムの ID は tempIdPrefix + 番号で受け取れる。アプリの内部処理だけが発行する。
+ */
+export interface TemplateInsert {
+  op: 'template.insert'
+  template: ProjectTemplate
+  atMs: Ms
+  ripple?: boolean
+  tempIdPrefix?: string
+}
+
 // ------------------------------------------------------------------ 目印(編集中のメモ)
 
 /** 目印を置く。動画には出ない(編集のメモ・チャプターの元)。 */
@@ -892,6 +908,7 @@ export type Command =
   | PortraitUpdate
   | ZoomInsert
   | ZoomUpdate
+  | TemplateInsert
   | MarkerAdd
   | MarkerUpdate
   | MarkerRemove

@@ -12,6 +12,7 @@ import type { LiveProfile, LiveSessionSummary, LiveState } from '../live/types'
 import type { AiPersona, LiveEntry, LiveSession, Project, ProjectBriefing, PublishInfo } from '../project/types'
 import type { PsdManifest } from '../psd/types'
 import type { SavedCharacter } from '../project/character-library'
+import type { ProjectTemplate } from '../project/templates'
 import type { AppSettings, SettingsPatch } from '../settings/schema'
 import type { SecretName, SecretStatus } from '../settings/secrets'
 import type {
@@ -173,6 +174,10 @@ export interface IpcContract {
   'characters:list': { args: []; result: SavedCharacter[] }
   'characters:save': { args: [character: SavedCharacter]; result: SavedCharacter[] }
   'characters:remove': { args: [id: string]; result: SavedCharacter[] }
+  /** アプリに保存したひな形(オープニング・エンディングなど)。 */
+  'templates:list': { args: []; result: ProjectTemplate[] }
+  'templates:save': { args: [template: ProjectTemplate]; result: ProjectTemplate[] }
+  'templates:remove': { args: [id: string]; result: ProjectTemplate[] }
 
   /** 書き出した相方の設定(ペルソナ)を読み込む(B-9)。ファイル選択で選んだものに限る。 */
   'persona:read': { args: [path: string]; result: AiPersona }

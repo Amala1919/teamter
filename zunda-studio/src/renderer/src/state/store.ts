@@ -9,6 +9,7 @@ import type { ItemId, Ms, Project } from '@shared/project/types'
 
 import { api, AppError } from '../api'
 import { useLibraryEntries } from './library-entries'
+import { autoTemplateCommands } from './template-entries'
 import { useSettingsStore } from './settings'
 import { projectLook } from './subtitle-defaults'
 
@@ -139,7 +140,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   newProject: () => {
     discardAutosave(get().sessionKey)
     set({
-      project: withLibraryCharacters(withEditingDefaults(withSubtitleDefaults(createEmptyProject()))),
+      project: withTemplates(withLibraryCharacters(withEditingDefaults(withSubtitleDefaults(createEmptyProject())))),
       filePath: null,
       dirty: false,
       sessionKey: newSessionKey(),
@@ -224,6 +225,18 @@ function withLibraryCharacters(project: Project): Project {
     return applyCommands(project, saved.flatMap((entry, index) => addSavedCharacterCommands(entry, `lib${index}_`)), commandContext).project
   } catch {
     // 保存したキャラクターが壊れていても、新しいプロジェクトは作れるようにする(キャラクターの画面から足し直せる)。
+    return project
+  }
+}
+
+/** 新しいプロジェクトに、自動で入れるひな形(オープニングなど)を入れる。 */
+function withTemplates(project: Project): Project {
+  const commands = autoTemplateCommands(project)
+  if (commands.length === 0) return project
+  try {
+    return applyCommands(project, commands, commandContext).project
+  } catch {
+    // ひな形が壊れていても、新しいプロジェクトは作れるようにする(タイムラインの「ひな形」から入れ直せる)。
     return project
   }
 }

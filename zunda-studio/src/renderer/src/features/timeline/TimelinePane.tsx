@@ -23,6 +23,9 @@ import { DecorationPicker } from '../decorations/DecorationPicker'
 import { FreeSourcesDialog } from '../media/FreeSourcesDialog'
 import { LullDialog } from './LullDialog'
 import { SoundPalette } from './SoundPalette'
+import { TemplateSaveDialog } from './TemplateSaveDialog'
+import { templateMenu } from './template-menu'
+import { useTemplateEntries } from '../../state/template-entries'
 import { VolumeLine } from './VolumeLine'
 import { Waveform } from './Waveform'
 
@@ -68,6 +71,8 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
   const [sourcesOpen, setSourcesOpen] = useState(false)
   const [decorationsOpen, setDecorationsOpen] = useState(false)
   const [soundsOpen, setSoundsOpen] = useState(false)
+  const [templateSaveOpen, setTemplateSaveOpen] = useState(false)
+  const templates = useTemplateEntries((state) => state.entries)
   /** 待ち時間を探している動画。 */
   const [lullItemId, setLullItemId] = useState<string | null>(null)
   const lullItem = project.items.find((candidate) => candidate.id === lullItemId)
@@ -319,6 +324,19 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
           onClick={(event) => {
             const rect = event.currentTarget.getBoundingClientRect()
             event.stopPropagation()
+            openMenuAt(rect.left, rect.bottom + 2, templateMenu(templates, selectedItemIds.length, () => setTemplateSaveOpen(true), onError))
+          }}
+          title="オープニング・エンディングなど、毎回使う並びを保存して入れる"
+          data-testid="open-templates"
+        >
+          ひな形 ▾
+        </button>
+        <button
+          type="button"
+          className="button--small"
+          onClick={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect()
+            event.stopPropagation()
             const markers = project.markers ?? []
             openMenuAt(rect.left, rect.bottom + 2, [
               { label: '再生位置に目印を置く', shortcut: 'M', onSelect: () => reportMarker(addMarker().error), testId: 'menu-marker-add' },
@@ -450,6 +468,7 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
       {decorationsOpen && <DecorationPicker onClose={() => setDecorationsOpen(false)} onError={onError} />}
       <MarkerEditor onError={onError} />
       {soundsOpen && <SoundPalette onClose={() => setSoundsOpen(false)} onError={onError} />}
+      {templateSaveOpen && <TemplateSaveDialog count={selectedItemIds.length} onClose={() => setTemplateSaveOpen(false)} onError={onError} />}
       {lullItem?.type === 'video' && <LullDialog item={lullItem} onClose={() => setLullItemId(null)} onError={onError} />}
     </section>
   )

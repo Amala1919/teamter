@@ -15,6 +15,7 @@ import { markerHandlers } from './handlers/marker'
 import { mediaHandlers } from './handlers/media'
 import { portraitHandlers } from './handlers/portrait'
 import { projectHandlers } from './handlers/project'
+import { templateHandlers } from './handlers/template'
 import { transitionHandlers } from './handlers/transition'
 import { voiceHandlers } from './handlers/voice'
 import { zoomHandlers } from './handlers/zoom'
@@ -41,6 +42,7 @@ const HANDLERS: HandlerTable = {
   ...markerHandlers,
   ...mediaHandlers,
   ...portraitHandlers,
+  ...templateHandlers,
   ...transitionHandlers,
   ...voiceHandlers,
   ...zoomHandlers
