@@ -73,6 +73,18 @@ export interface ProjectSetBriefing {
   briefing: ProjectBriefing | null
 }
 
+/**
+ * 動画の大きさ・フレームレート・背景の色を変える。rescale なら、置いた素材の位置・大きさ・字幕を新しい大きさに合わせる。
+ */
+export interface ProjectSetCanvas {
+  op: 'project.setCanvas'
+  width?: number
+  height?: number
+  fps?: number
+  backgroundColor?: string
+  rescale?: boolean
+}
+
 /** 全体の音量と、音の種類ごとの音量(0〜2 の倍率。1 = 100%)。null で 100% に戻す。 */
 export interface ProjectSetMix {
   op: 'project.setMix'
@@ -852,6 +864,7 @@ export type Command =
   | ProjectSetConversationAi
   | ProjectSetEditing
   | ProjectSetMix
+  | ProjectSetCanvas
   | ProjectSetBriefing
   | CreditsSet
   | PublishSet

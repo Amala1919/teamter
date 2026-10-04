@@ -27,6 +27,7 @@ import { deleteSelection, useEditorStore } from '../../state/store'
 import { openContextMenu, type MenuEntry } from '../../ui/ContextMenu'
 import { DecorationPicker } from '../decorations/DecorationPicker'
 import { insertZoom } from '../timeline/timeline-menus'
+import { CanvasDialog } from './CanvasDialog'
 import { CropFrameEditor } from './CropFrameEditor'
 import { ItemFrameEditor } from './ItemFrameEditor'
 import { MixControl } from './MixControl'
@@ -61,6 +62,7 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
   const [portraitTarget, setPortraitTarget] = useState<string | null>(null)
   /** 装飾のひな形を選ぶ画面を開いているとき、置く場所。 */
   const [decorationPoint, setDecorationPoint] = useState<{ x: number; y: number } | null>(null)
+  const [canvasOpen, setCanvasOpen] = useState(false)
 
   const selected = selectedItemIds[0] === undefined ? undefined : findItem(project, selectedItemIds[0])
   const zoomItem = selected?.type === 'zoom' ? selected : null
@@ -381,9 +383,9 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
             拡大して確認
           </label>
         )}
-        <span className="pane__count">
+        <button type="button" className="pane__count preview__canvasButton" onClick={() => setCanvasOpen(true)} title="動画の大きさ・フレームレート・背景の色を変える" data-testid="open-canvas">
           {project.canvas.width}×{project.canvas.height} / {project.canvas.fps}fps
-        </span>
+        </button>
       </header>
       {building && building.state === 'building' && (
         <p className="status" data-testid="proxy-status">
@@ -507,6 +509,7 @@ export function PreviewPane({ onError }: { onError: (message: string) => void })
         />
         <MixControl onError={onError} />
         {decorationPoint && <DecorationPicker point={decorationPoint} onClose={() => setDecorationPoint(null)} onError={onError} />}
+        {canvasOpen && <CanvasDialog onClose={() => setCanvasOpen(false)} onError={onError} />}
         {notice && (
           <span className="preview__notice" role="status" data-testid="preview-notice">
             {notice}

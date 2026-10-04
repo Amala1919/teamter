@@ -6,6 +6,7 @@ import { useEditorStore } from '../../state/store'
 import { openMenuAt, type MenuEntry } from '../../ui/ContextMenu'
 import { ExportDialog } from '../export/ExportDialog'
 import { ShortcutsDialog } from '../help/ShortcutsDialog'
+import { ShortDialog } from './ShortDialog'
 
 /** 設定を読み込む前の空の一覧(毎回新しい配列を返すと、描画が止まらなくなるため同じものを使う)。 */
 const NO_RECENT: string[] = []
@@ -25,6 +26,7 @@ export function Toolbar({ onError, onOpenSettings }: ToolbarProps): React.JSX.El
   const { newProject, openProject, saveProject, undo, redo, dispatch } = useEditorStore.getState()
   const [exportOpen, setExportOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [shortOpen, setShortOpen] = useState(false)
   // F1: キーの操作の一覧
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -109,6 +111,9 @@ export function Toolbar({ onError, onOpenSettings }: ToolbarProps): React.JSX.El
         <button type="button" onClick={() => setExportOpen(true)} data-testid="open-export">
           書き出し
         </button>
+        <button type="button" onClick={() => setShortOpen(true)} title="このプロジェクトの一部から、縦型のショートを別に作る" data-testid="open-short">
+          ショートを作る
+        </button>
         <button type="button" onClick={onOpenSettings} data-testid="open-settings">
           設定
         </button>
@@ -133,6 +138,7 @@ export function Toolbar({ onError, onOpenSettings }: ToolbarProps): React.JSX.El
       </div>
       {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} />}
       {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
+      {shortOpen && <ShortDialog onClose={() => setShortOpen(false)} onError={(message) => onError(message)} />}
     </header>
   )
 }

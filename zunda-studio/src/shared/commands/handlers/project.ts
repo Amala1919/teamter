@@ -1,6 +1,7 @@
 import { validateBriefing } from '../../ai/briefing'
 import { isSafeModelId } from '../../ai/types'
 import { SUBTITLE_APPEARS, ZOOM_METHODS, type Layer } from '../../project/types'
+import { rescaleProject } from '../../project/canvas'
 import { normalizeChapters } from '../../project/chapters'
 import { TIMELINE_COLOR } from '../../project/timeline-colors'
 import { fail, insertLayer, requireLayer, refreshSubtitleLines, type HandlerTable } from '../env'
@@ -19,6 +20,7 @@ type ProjectHandlers = Pick<
   | 'layer.insert'
   | 'layer.update'
   | 'style.upsertSubtitle'
+  | 'project.setCanvas'
 >
 
 const CHAT_LIMIT = 500
@@ -43,6 +45,32 @@ export const projectHandlers: ProjectHandlers = {
       fail(command.op, `モデルIDに使えない文字が含まれています: ${command.model.model}`)
     }
     draft.ai.conversation = command.model
+  },
+
+  'project.setCanvas': (draft, command) => {
+    const width = command.width ?? draft.canvas.width
+    const height = command.height ?? draft.canvas.height
+    for (const [value, label] of [
+      [width, '幅'],
+      [height, '高さ']
+    ] as const) {
+      if (!Number.isInteger(value) || value < 64 || value > 7680) fail(command.op, `動画の${label}は 64〜7680 の整数にしてください`)
+      // H.264 は縦横が偶数でないと書き出せない。
+      if (value % 2 !== 0) fail(command.op, `動画の${label}は偶数にしてください`)
+    }
+    if (command.fps !== undefined && !(Number.isFinite(command.fps) && command.fps >= 1 && command.fps <= 120)) fail(command.op, 'フレームレートは 1〜120 にしてください')
+    if (command.backgroundColor !== undefined && !COLOR_PATTERN.test(command.backgroundColor)) fail(command.op, `背景の色の指定が不正です: ${command.backgroundColor}`)
+    if (command.rescale && (width !== draft.canvas.width || height !== draft.canvas.height)) {
+      rescaleProject(draft, draft.canvas, { width, height })
+      for (const item of draft.items) if (item.type === 'voice') refreshSubtitleLines(draft, item)
+    }
+    draft.canvas = {
+      ...draft.canvas,
+      width,
+      height,
+      ...(command.fps !== undefined ? { fps: Math.round(command.fps) } : {}),
+      ...(command.backgroundColor !== undefined ? { backgroundColor: command.backgroundColor } : {})
+    }
   },
 
   'project.setMix': (draft, command) => {
