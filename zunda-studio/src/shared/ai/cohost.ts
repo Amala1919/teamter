@@ -205,7 +205,7 @@ export function targetLength(request: Pick<CohostRequest, 'targetLengthChars'>, 
   return request.targetLengthChars ?? character?.persona?.targetLengthChars ?? null
 }
 
-function describePersona(character: Character, targetLengthChars: number | null): string {
+export function describePersona(character: Character, targetLengthChars: number | null): string {
   const persona = character.persona
   if (!persona) return `${character.name}(性格の設定なし。自然な話し方で)`
   return [

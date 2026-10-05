@@ -11,6 +11,8 @@ export interface AppPaths {
   charactersFile: string
   /** アプリに保存したひな形(オープニング・エンディングなど)。 */
   templatesFile: string
+  /** 解説の参考画像として落とした画像(キャッシュの移動の影響を受けないよう、アプリのデータに置く)。 */
+  downloadedImages: string
   /** APIキーなど(暗号化して置く)。 */
   secretsFile: string
   /** 録画中の会話記録。消えると取り戻せないのでキャッシュには置かない。 */
@@ -35,6 +37,7 @@ export function createAppPaths(userData: string, cacheRoot?: string | null): App
     settingsFile: join(userData, 'settings.json'),
     charactersFile: join(userData, 'characters.json'),
     templatesFile: join(userData, 'templates.json'),
+    downloadedImages: join(userData, 'downloaded-images'),
     secretsFile: join(userData, 'secrets.json'),
     live: join(userData, 'live'),
     cache: {

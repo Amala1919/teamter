@@ -12,3 +12,5 @@ export const AI_RESPONSE_DIR = join(tmpdir(), 'zunda-e2e-ai-responses')
 export const ENGINE_RELEASE_PORT = 50135
 /** 自動インストールしたエンジンが待ち受けるポート。 */
 export const INSTALLED_ENGINE_PORT = 50141
+/** Wikimedia Commons の模擬(解説の参考画像)。 */
+export const MOCK_COMMONS_PORT = 50151

@@ -30,6 +30,8 @@ export const ERROR_CODES = [
   'PSD_UNSUPPORTED',
   'OBS_UNAVAILABLE',
   'STT_UNAVAILABLE',
+  /** インターネットの向こうのサービス(画像の検索など)につながらない。 */
+  'NETWORK',
   'INTERNAL'
 ] as const
 
@@ -77,5 +79,6 @@ export const ERROR_GUIDANCE: Record<ErrorCode, string> = {
   OBS_UNAVAILABLE:
     'OBSに接続できません。OBSの「ツール → WebSocketサーバー設定」で有効化し、ポートとパスワードを設定画面に入力してください。',
   STT_UNAVAILABLE: '音声入力に必要な文字起こしの設定がありません。設定画面で whisper の場所とモデルを指定してください。',
+  NETWORK: 'インターネットにつながっているか確かめて、少し待ってからやり直してください。',
   INTERNAL: '予期しないエラーです。操作をやり直してください。'
 }
