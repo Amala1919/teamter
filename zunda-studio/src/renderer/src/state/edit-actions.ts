@@ -242,6 +242,19 @@ export function ungroupSelection(ids?: readonly ItemId[]): string | null {
   return run([{ op: 'item.ungroup', itemIds: grouped }], 'グループを解く').error
 }
 
+/**
+ * 1つだけグループから外す(ほかの仲間はグループのまま。仲間が1つしか残らなければ、そのグループも解ける)。
+ * 外したものだけを選んだ状態にする(独立に戻ったことが分かるように)。
+ */
+export function removeFromGroup(itemId: ItemId): string | null {
+  const { project, setSelection } = state()
+  const item = project.items.find((candidate) => candidate.id === itemId)
+  if (!item || item.groupId === undefined) return null
+  const result = run([{ op: 'item.ungroup', itemIds: [itemId] }], 'グループから外す')
+  if (!result.error) setSelection([itemId])
+  return result.error
+}
+
 export function setSpeed(itemId: ItemId, rate: number): string | null {
   return run([{ op: 'item.setSpeed', itemId, rate }], '速度の変更').error
 }

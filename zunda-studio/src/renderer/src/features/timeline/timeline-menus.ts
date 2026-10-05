@@ -27,6 +27,7 @@ import {
   selectAll,
   selectFrom,
   groupSelection,
+  removeFromGroup,
   ungroupSelection,
   selectLayer,
   setLocked,
@@ -193,6 +194,12 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
       testId: 'menu-group'
     },
     { label: 'グループを解く', shortcut: 'Ctrl+Shift+G', disabled: !anyGrouped, onSelect: report(context, () => ungroupSelection(ids)), testId: 'menu-ungroup' },
+    {
+      label: 'これだけグループから外す',
+      disabled: item.groupId === undefined,
+      onSelect: report(context, () => removeFromGroup(item.id)),
+      testId: 'menu-remove-from-group'
+    },
     'separator',
     {
       label: many ? `選んだ${ids.length}個の色` : '色',

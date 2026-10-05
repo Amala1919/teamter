@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 
 import type { Command } from '@shared/commands/types'
 import { effectiveVoice, findItem, itemEndMs, voiceItemsInOrder } from '@shared/project/queries'
-import type { ImageItem, ShapeItem, TextItem, VideoItem, VoiceItem, VoiceParams } from '@shared/project/types'
+import type { ImageItem, Item, Project, ShapeItem, TextItem, VideoItem, VoiceItem, VoiceParams } from '@shared/project/types'
 import { accentPhrasesToKana } from '@shared/voice/kana'
 
+import { itemLabel } from '../../lib/item-label'
 import { formatMs } from '../../lib/time'
 import { deleteSelection, useEditorStore } from '../../state/store'
 import { NumberField } from '../../ui/NumberField'
@@ -84,6 +85,7 @@ export function InspectorPane({ onError }: { onError: (message: string) => void 
                   >
                     グループを解く
                   </button>
+                  <GroupMembers project={project} item={item} run={run} />
                 </dd>
               </>
             )}
@@ -147,6 +149,44 @@ export function InspectorPane({ onError }: { onError: (message: string) => void 
         </div>
       )}
     </section>
+  )
+}
+
+/**
+ * グループの仲間の一覧。1つずつ「外す」でグループから外せる(ほかの仲間はグループのまま)。
+ * 名前を押すと、そのアイテムだけを選んで設定を開く。
+ */
+function GroupMembers({ project, item, run }: { project: Project; item: Item; run: Run }): React.JSX.Element {
+  const setSelection = useEditorStore((state) => state.setSelection)
+  const members = project.items.filter((candidate) => candidate.groupId === item.groupId).sort((a, b) => a.startMs - b.startMs)
+  const remove = (member: Item): void => {
+    run([{ op: 'item.ungroup', itemIds: [member.id] }], 'グループから外す')
+    // 続けて外せるよう、残った仲間を選んだままにする(仲間が1つになってグループが解けたら、外したものを選ぶ)。
+    const rest = members.filter((candidate) => candidate.id !== member.id).map((candidate) => candidate.id)
+    setSelection(rest.length >= 2 ? rest : [member.id])
+  }
+  return (
+    <ul className="inspector__groupMembers" data-testid="inspector-group-members">
+      {members.map((member) => (
+        <li key={member.id} className={member.id === item.id ? 'is-current' : undefined} data-testid="inspector-group-member">
+          <button type="button" className="inspector__groupMemberName" onClick={() => setSelection([member.id])} title="これだけを選んで設定を開く">
+            <span className="inspector__groupMemberType">{ITEM_LABELS[member.type] ?? member.type}</span>
+            {itemLabel(project, member)}
+          </button>
+          <span className="inspector__groupMemberTime">{formatMs(member.startMs).replace(/\.\d+$/, '')}</span>
+          <button
+            type="button"
+            className="button--small"
+            onClick={() => remove(member)}
+            title="これだけグループから外す(ほかはグループのまま)"
+            aria-label={`「${itemLabel(project, member)}」をグループから外す`}
+            data-testid="inspector-group-remove"
+          >
+            外す
+          </button>
+        </li>
+      ))}
+    </ul>
   )
 }
 

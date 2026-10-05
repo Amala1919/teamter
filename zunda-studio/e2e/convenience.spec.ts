@@ -192,6 +192,52 @@ test.describe('使い勝手の機能', () => {
     await expect(page.locator('[data-item-type="text"][aria-pressed="true"]')).toHaveCount(1)
   })
 
+  test('グループから1つずつ外せる(右クリック・インスペクタの一覧)。ほかの仲間はグループのまま', async ({ page }) => {
+    await openFresh(page)
+    const ruler = page.getByTestId('timeline-ruler')
+    const box = (await ruler.boundingBox())!
+    const pxPerSecond = 60
+    for (const seconds of [0, 5, 10, 15]) {
+      await ruler.click({ position: { x: seconds * pxPerSecond, y: box.height / 2 } })
+      await page.getByTestId('add-caption').click()
+    }
+    const at = (seconds: string) => page.locator(`[data-item-type="text"][title*="${seconds} –"]`)
+    const grouped = page.locator('[data-item-type="text"][data-group-id]')
+    await at('0:00.000').click()
+    for (const seconds of ['0:05.000', '0:10.000', '0:15.000']) await at(seconds).click({ modifiers: ['Shift'] })
+    await page.keyboard.press('Control+g')
+    await expect(grouped).toHaveCount(4)
+
+    // 右クリックで、これだけ外す。外したものだけが選ばれ、残りの3つはグループのまま
+    await at('0:05.000').click({ button: 'right' })
+    await page.getByTestId('context-menu').getByTestId('menu-remove-from-group').click()
+    await expect(grouped).toHaveCount(3)
+    await expect(at('0:05.000')).not.toHaveAttribute('data-group-id', /.+/)
+    await expect(page.locator('[data-item-type="text"][aria-pressed="true"]')).toHaveCount(1)
+    await expect(at('0:05.000')).toHaveAttribute('aria-pressed', 'true')
+
+    // インスペクタのグループの一覧から、1つずつ外す(続けて外せるよう、残りの仲間は選んだまま)
+    await page.getByTestId('side-tab-inspector').click()
+    await at('0:00.000').click()
+    const members = page.getByTestId('inspector-group-member')
+    await expect(members).toHaveCount(3)
+    await members.nth(1).getByTestId('inspector-group-remove').click()
+    await expect(grouped).toHaveCount(2)
+    await expect(at('0:10.000')).not.toHaveAttribute('data-group-id', /.+/)
+    await expect(members).toHaveCount(2)
+    await expect(page.locator('[data-item-type="text"][aria-pressed="true"]')).toHaveCount(2)
+
+    // 仲間が1つになったら、グループも解ける
+    await members.first().getByTestId('inspector-group-remove').click()
+    await expect(grouped).toHaveCount(0)
+
+    // 1回ずつ元に戻せる
+    await page.getByRole('button', { name: '元に戻す' }).click()
+    await expect(grouped).toHaveCount(2)
+    await page.getByRole('button', { name: '元に戻す' }).click()
+    await expect(grouped).toHaveCount(3)
+  })
+
   test('セリフを書き換えて長さが変わっても、ほかのセリフや素材は動かない', async ({ page }) => {
     await openFresh(page)
     await addLines(page, 'ずんだもん:みじかい\n四国めたん:つぎのセリフよ\nずんだもん:さいごなのだ', 3)
