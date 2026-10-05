@@ -54,6 +54,21 @@ const BLEND_MAP: Partial<Record<BlendMode, LayerBlend>> = {
 const MANIFEST_VERSION = 1
 
 /**
+ * キャッシュの manifest に書かれたパーツの画像の場所を、今のキャッシュの場所に直す。
+ * manifest は画像を絶対パスで持つので、キャッシュの置き場所を移す(設定 → 保存場所)と、移す前の場所を指したままになる。
+ * 移す前の場所は配信が許されないため、立ち絵が出なくなっていた。画像はいつも manifest と同じフォルダにあるので、ファイル名だけを使う。
+ */
+export function relocateManifest(manifest: PsdManifest, directory: string): PsdManifest {
+  const fix = (nodes: PsdLayerNode[]): PsdLayerNode[] =>
+    nodes.map((node) => ({
+      ...node,
+      image: node.image === null ? null : join(directory, node.image.split(/[\\/]/).at(-1) ?? node.image),
+      children: fix(node.children)
+    }))
+  return { ...manifest, layers: fix(manifest.layers) }
+}
+
+/**
  * PSD を解析し、レイヤーごとの PNG とレイヤーツリー(manifest)をキャッシュに書き出す。
  * キャッシュのキーはファイルの場所・大きさ・更新時刻で決め、PSD を描き直したら自動で作り直す。
  */
@@ -77,7 +92,7 @@ export class PsdService {
     const manifestPath = join(directory, 'manifest.json')
 
     if (await fileExists(manifestPath)) {
-      return JSON.parse(await readFile(manifestPath, 'utf8')) as PsdManifest
+      return relocateManifest(JSON.parse(await readFile(manifestPath, 'utf8')) as PsdManifest, directory)
     }
     const pending = this.inFlight.get(key)
     if (pending) return pending

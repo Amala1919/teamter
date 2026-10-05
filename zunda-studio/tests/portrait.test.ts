@@ -1,3 +1,5 @@
+import { cp, rm } from 'node:fs/promises'
+
 import { beforeAll, describe, expect, it } from 'vitest'
 import { createCanvas, loadImage } from '@napi-rs/canvas'
 
@@ -53,6 +55,20 @@ describe('PSD の解析', () => {
     context.drawImage(image, 0, 0)
     expect(context.getImageData(2, 5, 1, 1).data[3]).toBe(255)
     expect(context.getImageData(35, 5, 1, 1).data[3]).toBe(0)
+  })
+
+  it('キャッシュを別の場所へ移しても、パーツの画像は今のキャッシュの場所を指す', async () => {
+    // 移す前の場所で解析し、キャッシュのフォルダごと別の場所へ写す(設定の「保存場所」で移したときと同じ)。
+    const before = await tempDir('zs-psd-before-')
+    const after = await tempDir('zs-psd-after-')
+    await new PsdService(before).load(psdPath)
+    await cp(before, after, { recursive: true })
+    await rm(before, { recursive: true, force: true })
+    const moved = await new PsdService(after).load(psdPath)
+    const eye = findLayer(moved.layers, '!目/*開き')!
+    expect(eye.image!.startsWith(after)).toBe(true)
+    // 画像はそこにある(移す前の場所はもう無い)。
+    expect((await loadImage(eye.image!)).width).toBe(eye.width)
   })
 
   it('同じ PSD は二度解析しない', async () => {
