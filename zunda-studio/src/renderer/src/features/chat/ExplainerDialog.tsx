@@ -61,6 +61,7 @@ export function ExplainerDialog({ onClose }: { onClose: () => void }): React.JSX
   const [imageSources, setImageSources] = useState<ExplainerImagePolicy>('web')
   const [webSearch, setWebSearch] = useState(true)
   const [showTitle, setShowTitle] = useState(true)
+  const [separateSpeech, setSeparateSpeech] = useState(true)
   const [place, setPlace] = useState<'playhead' | 'end'>('playhead')
   const [ripple, setRipple] = useState(true)
   const [model, setModel] = useState<ModelRef | null>(null)
@@ -95,7 +96,8 @@ export function ExplainerDialog({ onClose }: { onClose: () => void }): React.JSX
         ...(audience.trim() ? { audience: audience.trim() } : {}),
         ...(instruction.trim() ? { instruction: instruction.trim() } : {}),
         images,
-        imageSources
+        imageSources,
+        separateSpeech
       },
       { model, webSearch: webSearch || webImages, place, ripple, showTitle }
     )
@@ -261,7 +263,16 @@ export function ExplainerDialog({ onClose }: { onClose: () => void }): React.JSX
               <input type="checkbox" checked={showTitle} onChange={(event) => setShowTitle(event.target.checked)} />
               最初に見出しを出す
             </label>
-            <p className="note">字幕と立ち絵はいつもどおり出ます(表情もセリフに合わせて AI が選びます)。</p>
+            <label className="field__row">
+              <input type="checkbox" checked={separateSpeech} onChange={(event) => setSeparateSpeech(event.target.checked)} data-testid="explainer-separate-speech" />
+              読み間違えを防ぐため、読み上げる文を字幕と分ける
+            </label>
+            <p className="note">
+              字幕と立ち絵はいつもどおり出ます(表情もセリフに合わせて AI が選びます)。
+              {separateSpeech
+                ? ' 分けると、AI が数字・英字・固有名詞など読み間違えやすい語だけをかなにした「読み上げる文」も書き、声はそれで作ります。字幕はふつうの文のまま出ます(セリフの「字幕に出す文字」で直せます)。'
+                : ''}
+            </p>
 
             <h3>置く場所</h3>
             <div className="segmented" role="radiogroup" aria-label="置く場所">

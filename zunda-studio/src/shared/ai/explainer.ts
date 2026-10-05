@@ -120,6 +120,11 @@ export interface ExplainerRequest {
   images: boolean
   /** 参考画像の探し先(無ければ Commons だけ)。 */
   imageSources?: ExplainerImagePolicy
+  /**
+   * 読み上げ用の文を字幕と分けて書かせる(読み間違えを防ぐ。声は読み上げ用の文で合成し、字幕はふつうの文を出す)。
+   * false なら字幕の文をそのまま読ませる。無ければ分ける。
+   */
+  separateSpeech?: boolean
 }
 
 /** 1秒あたりに読み上げるおおよその文字数(合成音声の標準の速さ)。 */
@@ -134,7 +139,12 @@ export const explainerResponseSchema = z.object({
     .array(
       z.object({
         speaker: z.string().min(1).max(100).describe('話すキャラクターの ID(指定された中から)'),
-        text: z.string().min(1).max(300).describe('セリフ(名前やかぎかっこは付けない)'),
+        text: z.string().min(1).max(300).describe('セリフ(字幕に出す文。ふつうの漢字かな交じり。名前やかぎかっこは付けない)'),
+        speech: z
+          .string()
+          .max(400)
+          .nullable()
+          .describe('読み上げ用の文(合成音声が読む。読み間違えやすい語だけをかなや読みどおりの書き方にしたもの)。text のままで正しく読めるなら null'),
         expression: z.string().max(60).nullable().describe('表情の名前(指定された一覧から。無ければ null)'),
         image: z
           .object({
@@ -177,7 +187,10 @@ export interface ExplainerImageQuery {
 
 export interface ExplainerLine {
   characterId: CharacterId
+  /** 字幕に出す文。 */
   text: string
+  /** 声に読ませる文(読み間違えやすい語をかなにしたもの)。字幕と同じなら text と同じ。 */
+  speech: string
   expressionId: string | null
   image: ExplainerImageQuery | null
 }
@@ -217,6 +230,7 @@ export function buildExplainerPrompt(project: Project, request: ExplainerRequest
     style,
     interjection,
     '- 各キャラクターの性格・口調を守る。セリフに名前やかぎかっこは付けない',
+    ...speechRules(request.separateSpeech !== false),
     `- 全体で約${request.targetSeconds}秒(セリフの合計で約${targetChars}文字)。1つのセリフは15〜60文字くらいにし、長い説明は分ける`,
     '- 最初に何の話かを示し、最後に一言でまとめる',
     '- 確かでないことは断定しない。数字や年号は確かなものだけ使う',
@@ -242,6 +256,19 @@ export function buildExplainerPrompt(project: Project, request: ExplainerRequest
     .join('\n\n')
 
   return { system, turns: [{ role: 'user', content }] }
+}
+
+/** 読み上げ用の文についての決まりごと(合成音声の読み間違いを防ぐ)。 */
+function speechRules(separate: boolean): string[] {
+  if (!separate) return ['- speech はすべて null にする(text をそのまま読み上げる)']
+  return [
+    '- text は字幕に出す文(ふつうの漢字かな交じり)。speech は合成音声が読み上げる文で、声だけに使われ画面には出ない',
+    '- 合成音声は、固有名詞・難読語・専門用語・ゲームの用語・英字・略語・数字・単位・記号・年号をよく読み間違える。そういう語を含むセリフは、speech でその部分だけを読みどおりのひらがな・カタカナに書き換える',
+    '  - 例: text「1914年に第一次世界大戦が始まった」→ speech「せんきゅうひゃくじゅうよねんに第一次世界大戦が始まった」',
+    '  - 例: text「HPを3割削る」→ speech「エイチピーを三割削る」 / text「独逸帝国」→ speech「ドイツ帝国」 / text「十字軍」は正しく読めるので null',
+    '- 書き換えるのは読み間違えそうな語だけ。ほかは text と同じ字のまま(全部をかなにすると抑揚がおかしくなる)。言い回しや中身は text と変えない',
+    '- 迷う読み方(人名・地名・作品名・造語など)は、確かめた読みにする。読み間違えの心配がないセリフの speech は null'
+  ]
 }
 
 /** 画像の探し先についての決まりごと。 */
@@ -304,12 +331,15 @@ export function interpretExplainer(project: Project, request: ExplainerRequest, 
     const character = project.characters[characterId]!
     const text = cleanLine(line.text, character.name)
     if (text === '') return
+    // 読み上げ用の文(分けないとき・無いときは字幕の文をそのまま読む)。
+    const speech = (request.separateSpeech !== false && line.speech ? cleanLine(line.speech, character.name) : '') || text
     const expression = line.expression ? Object.values(character.portrait?.expressions ?? {}).find((candidate) => candidate.name === line.expression) : undefined
     const sources = useSources && line.image ? cleanImageSources(line.image.sources) : { sources: [], dropped: 0 }
     droppedSources += sources.dropped
     lines.push({
       characterId,
       text,
+      speech,
       expressionId: expression?.id ?? null,
       image:
         request.images && line.image
@@ -435,9 +465,11 @@ export function explainerCommands(project: Project, plan: ExplainerPlan): Comman
   plan.lines.forEach((line, index) => {
     const tempId = `ex-v${index}`
     tempIds.push(tempId)
+    // 声は読み上げ用の文で合成し、字幕にはふつうの文を出す(「字幕に出す文字」。同じなら分けない)。
     commands.push(
-      { op: 'voice.insert', characterId: line.characterId, text: line.text, atMs: starts[index]!, ...(line.expressionId ? { expressionId: line.expressionId } : {}), tempId },
-      { op: 'voice.applySynthesis', itemId: tempId, expectedText: line.text, synthesis: line.synthesis }
+      { op: 'voice.insert', characterId: line.characterId, text: line.speech, atMs: starts[index]!, ...(line.expressionId ? { expressionId: line.expressionId } : {}), tempId },
+      ...(line.text !== line.speech ? [{ op: 'voice.setDisplayText' as const, itemId: tempId, text: line.text }] : []),
+      { op: 'voice.applySynthesis', itemId: tempId, expectedText: line.speech, synthesis: line.synthesis }
     )
   })
 

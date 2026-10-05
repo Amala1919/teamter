@@ -189,7 +189,8 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
       audience: z.string().max(1000).optional(),
       instruction: z.string().max(4000).optional(),
       images: z.boolean(),
-      imageSources: z.enum(['web', 'free']).optional()
+      imageSources: z.enum(['web', 'free']).optional(),
+      separateSpeech: z.boolean().optional()
     }),
     z.object({ model: z.object({ providerId: z.enum(PROVIDER_IDS), model: z.string().min(1).max(200) }).nullable(), webSearch: z.boolean() })
   ]) as unknown as z.ZodType<ChannelArgs<'ai:explainer'>>,

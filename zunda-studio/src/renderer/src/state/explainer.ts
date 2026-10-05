@@ -75,7 +75,8 @@ async function voiceLines(script: ExplainerScript): Promise<PlacedLine[]> {
     const character = useEditorStore.getState().project.characters[line.characterId]
     if (!character) continue
     const { engineId, speakerId, speakerName: _name, ...params } = character.voice
-    const outcome = await api.invoke('voice:synthesize', { engineId, speakerId, text: line.text, params })
+    // 読み間違えないよう、字幕とは別の読み上げ用の文で合成する。
+    const outcome = await api.invoke('voice:synthesize', { engineId, speakerId, text: line.speech, params })
     placed.push({
       ...line,
       synthesis: { cacheKey: outcome.cacheKey, audioDurationMs: outcome.audioDurationMs, lipSync: outcome.lipSync, accentPhrases: outcome.accentPhrases }

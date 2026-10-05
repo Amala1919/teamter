@@ -41,9 +41,9 @@ test.describe('解説パートを作る', () => {
       {
         title: 'カイザーライヒとは',
         lines: [
-          { speaker: '四国めたん', text: '今日はカイザーライヒの世界を解説しますわ', expression: null, image: { query: 'ドイツ帝国 地図', queryEn: 'German Empire map', caption: '地図', sources: [] } },
-          { speaker: 'ずんだもん', text: 'へぇ〜なのだ', expression: null, image: null },
-          { speaker: '四国めたん', text: '第一次世界大戦でドイツが勝った世界ですの', expression: null, image: null }
+          { speaker: '四国めたん', text: '今日はカイザーライヒの世界を解説しますわ', speech: null, expression: null, image: { query: 'ドイツ帝国 地図', queryEn: 'German Empire map', caption: '地図', sources: [] } },
+          { speaker: 'ずんだもん', text: 'へぇ〜なのだ', speech: null, expression: null, image: null },
+          { speaker: '四国めたん', text: '1918年にドイツが勝った世界ですの', speech: 'せんきゅうひゃくじゅうはちねんにドイツが勝った世界ですの', expression: null, image: null }
         ]
       }
     ])
@@ -66,6 +66,7 @@ test.describe('解説パートを作る', () => {
     expect(call.system).toContain('約60秒')
     expect(call.system).toContain('1人で語る')
     expect(call.system).toContain('合いの手')
+    expect(call.system).toContain('speech は合成音声が読み上げる文')
 
     await page.getByRole('button', { name: '閉じる' }).last().click()
     await expect(page.locator('[data-item-type="voice"]')).toHaveCount(3)
@@ -77,6 +78,12 @@ test.describe('解説パートを作る', () => {
     await expect(page.locator('.timeline__layerName', { hasText: '解説の画像 2' })).toHaveCount(0)
     // セリフは合成済みで並ぶ(字幕も出る)。
     await expect(page.getByTestId('synthesis-status').filter({ hasText: '合成済み' })).toHaveCount(3)
+    // 読み間違えやすい語(年号)は、声は読み上げ用の文で作り、字幕はふつうの文のまま出す。
+    const third = page.getByTestId('script-line').nth(2)
+    await expect(third.getByTestId('script-text')).toHaveValue('せんきゅうひゃくじゅうはちねんにドイツが勝った世界ですの')
+    await expect(third.getByTestId('script-display-text')).toHaveText('字幕: 1918年にドイツが勝った世界ですの')
+    // 読み上げと字幕が同じセリフは、分けない。
+    await expect(page.getByTestId('script-line').first().getByTestId('script-display-text')).toHaveCount(0)
 
     // 参考画像(模擬の Commons はマゼンタの画像)が画面に出る。
     await page.keyboard.press('Shift+ArrowRight')
@@ -99,6 +106,7 @@ test.describe('解説パートを作る', () => {
           {
             speaker: '四国めたん',
             text: 'まずは公式の地図ですわ',
+            speech: null,
             expression: null,
             image: {
               query: '地図',
@@ -110,7 +118,7 @@ test.describe('解説パートを作る', () => {
               ]
             }
           },
-          { speaker: '四国めたん', text: '次は昔の写真ですの', expression: null, image: { query: '写真', queryEn: 'old photo', caption: '写真', sources: [] } }
+          { speaker: '四国めたん', text: '次は昔の写真ですの', speech: null, expression: null, image: { query: '写真', queryEn: 'old photo', caption: '写真', sources: [] } }
         ]
       }
     ])

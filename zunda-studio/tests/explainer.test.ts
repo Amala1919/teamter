@@ -73,9 +73,9 @@ describe('解説の台本の依頼と応答', () => {
     const script = interpretExplainer(project, req, {
       title: 'カイザーライヒとは',
       lines: [
-        { speaker: metan, text: '四国めたん:今日はカイザーライヒの話ですわ', expression: '笑顔', image: { query: 'ドイツ帝国', queryEn: 'German Empire', caption: '地図', sources: [] } },
-        { speaker: 'ずんだもん', text: 'へぇ〜なのだ', expression: null, image: { query: '無視される', queryEn: 'x', caption: '', sources: [] } },
-        { speaker: 'だれか', text: 'まとめると…', expression: '怒り', image: null }
+        { speaker: metan, text: '四国めたん:今日はカイザーライヒの話ですわ', speech: null, expression: '笑顔', image: { query: 'ドイツ帝国', queryEn: 'German Empire', caption: '地図', sources: [] } },
+        { speaker: 'ずんだもん', text: 'へぇ〜なのだ', speech: null, expression: null, image: { query: '無視される', queryEn: 'x', caption: '', sources: [] } },
+        { speaker: 'だれか', text: 'まとめると…', speech: null, expression: '怒り', image: null }
       ]
     })
     expect(script.lines.map((line) => [line.characterId, line.text, line.expressionId])).toEqual([
@@ -86,7 +86,7 @@ describe('解説の台本の依頼と応答', () => {
     expect(script.lines[0]!.image).toEqual({ query: 'ドイツ帝国', queryEn: 'German Empire', caption: '地図', sources: [] })
     expect(script.warnings[0]).toContain('1 行')
     // 画像を使わない設定なら、画像の指定は捨てる。
-    expect(interpretExplainer(project, { ...req, images: false }, { title: 't', lines: [{ speaker: metan, text: 'a', expression: null, image: { query: 'q', queryEn: 'q', caption: '', sources: [] } }, { speaker: metan, text: 'b', expression: null, image: null }] }).lines[0]!.image).toBeNull()
+    expect(interpretExplainer(project, { ...req, images: false }, { title: 't', lines: [{ speaker: metan, text: 'a', speech: null, expression: null, image: { query: 'q', queryEn: 'q', caption: '', sources: [] } }, { speaker: metan, text: 'b', speech: null, expression: null, image: null }] }).lines[0]!.image).toBeNull()
   })
 
   it('一次ソース・信頼できるサイトの画像も使うときは、ウェブで探すよう頼み、候補は確かめて一次ソースを先にする', () => {
@@ -107,6 +107,7 @@ describe('解説の台本の依頼と応答', () => {
         {
           speaker: metan,
           text: 'a',
+          speech: null,
           expression: null,
           image: {
             query: 'q',
@@ -120,7 +121,7 @@ describe('解説の台本の依頼と応答', () => {
             ]
           }
         },
-        { speaker: tsumugi, text: 'b', expression: null, image: null }
+        { speaker: tsumugi, text: 'b', speech: null, expression: null, image: null }
       ]
     }
     const script = interpretExplainer(project, req, response, true)
@@ -157,7 +158,7 @@ const IMAGE: FoundImage = {
 }
 
 function placed(characterId: string, text: string, ms: number, image = false): PlacedLine {
-  return { characterId, text, expressionId: null, image: image ? { query: 'q', queryEn: 'q', caption: '', sources: [] } : null, synthesis: { cacheKey: `k-${text}`, audioDurationMs: ms, lipSync: [], accentPhrases: [] } }
+  return { characterId, text, speech: text, expressionId: null, image: image ? { query: 'q', queryEn: 'q', caption: '', sources: [] } : null, synthesis: { cacheKey: `k-${text}`, audioDurationMs: ms, lipSync: [], accentPhrases: [] } }
 }
 
 describe('解説をタイムラインに並べる', () => {
@@ -230,6 +231,38 @@ describe('解説をタイムラインに並べる', () => {
       expect(again.layers.map((layer) => layer.name)).toEqual(names)
       expect(again.items.filter((item) => item.type === 'image')).toHaveLength(2)
     }
+  })
+
+  it('読み上げ用の文と字幕を分けて頼み、声は読み上げ用の文で、字幕はふつうの文で出す(分けない設定もできる)', () => {
+    const { project, metan, tsumugi } = cast()
+    const req = request({ narrators: [metan, tsumugi], images: false })
+    expect(buildExplainerPrompt(project, req, false).system).toContain('speech は合成音声が読み上げる文')
+    expect(buildExplainerPrompt(project, { ...req, separateSpeech: false }, false).system).toContain('speech はすべて null')
+
+    const response = {
+      title: 't',
+      lines: [
+        { speaker: metan, text: '1914年に始まりましたわ', speech: '四国めたん「せんきゅうひゃくじゅうよねんに始まりましたわ」', expression: null, image: null },
+        { speaker: tsumugi, text: 'へぇ', speech: null, expression: null, image: null }
+      ]
+    }
+    const script = interpretExplainer(project, req, response)
+    expect(script.lines.map((line) => [line.text, line.speech])).toEqual([
+      ['1914年に始まりましたわ', 'せんきゅうひゃくじゅうよねんに始まりましたわ'],
+      ['へぇ', 'へぇ']
+    ])
+    // 分けない設定なら、字幕の文をそのまま読む。
+    expect(interpretExplainer(project, { ...req, separateSpeech: false }, response).lines[0]!.speech).toBe('1914年に始まりましたわ')
+
+    // 並べると、声(text と合成)は読み上げ用の文、字幕は「字幕に出す文字」になる。同じなら分けない。
+    const lines: PlacedLine[] = script.lines.map((line, index) => ({ ...line, synthesis: { cacheKey: `k${index}`, audioDurationMs: 1000, lipSync: [], accentPhrases: [] } }))
+    const after = apply(project, explainerCommands(project, { atMs: 0, title: '', lines, images: [null, null], ripple: false, showTitle: false, gapMs: 100 }))
+    const voices = after.items.filter((item): item is VoiceItem => item.type === 'voice').sort((a, b) => a.startMs - b.startMs)
+    expect(voices.map((voice) => [voice.text, voice.displayText ?? null, voice.synthesis?.cacheKey])).toEqual([
+      ['せんきゅうひゃくじゅうよねんに始まりましたわ', '1914年に始まりましたわ', 'k0'],
+      ['へぇ', null, 'k1']
+    ])
+    expect(voices[0]!.subtitleLines.join('')).toBe('1914年に始まりましたわ')
   })
 
   it('セリフを足すと後ろをずらす設定でも、並べた場所から動かさず、設定は元に戻す', () => {

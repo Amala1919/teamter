@@ -252,8 +252,12 @@ AIの呼び出しはローカルのCLI(Claude Code / OpenCode)を経由し、ア
 ## 解説パート
 
 お題・目安の長さ・語り方(ひとりで語る / AI 同士の掛け合い / 投稿者の合いの手)から、台本を構造化出力で作らせる(`src/shared/ai/explainer.ts`)。
-AI が返すのは `{ title, lines: [{ speaker, text, expression, image: { query, queryEn, caption, sources } | null }] }` で、
+AI が返すのは `{ title, lines: [{ speaker, text, speech, expression, image: { query, queryEn, caption, sources } | null }] }` で、
 話す人(ID でも名前でも受ける)・表情の名前をアプリ側で確かめる。セリフは先に合成してから、合成した長さで並べる。
+
+`text` は字幕に出す文、`speech` は合成音声に読ませる文(読み間違えやすい語 ― 数字・年号・英字・略語・固有名詞・難読語・ゲームの用語 ― だけを読みどおりのかなにしたもの。
+正しく読めるなら null)。声は `speech` で合成してセリフの `text` に入れ、字幕は `text` を「字幕に出す文字」(`displayText`)に入れる(同じなら分けない)。
+ダイアログで分けない設定にすると、`speech` は出させず、字幕の文をそのまま読ませる。
 
 参考画像の探し先は2つから選ぶ(既定は1つ目)。
 
