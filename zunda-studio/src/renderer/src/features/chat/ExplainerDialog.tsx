@@ -61,6 +61,7 @@ export function ExplainerDialog({ onClose }: { onClose: () => void }): React.JSX
   const [imageSources, setImageSources] = useState<ExplainerImagePolicy>('web')
   const [webSearch, setWebSearch] = useState(true)
   const [showTitle, setShowTitle] = useState(true)
+  const [showPortraits, setShowPortraits] = useState(true)
   const [separateSpeech, setSeparateSpeech] = useState(true)
   const [place, setPlace] = useState<'playhead' | 'end'>('playhead')
   const [ripple, setRipple] = useState(true)
@@ -99,7 +100,7 @@ export function ExplainerDialog({ onClose }: { onClose: () => void }): React.JSX
         imageSources,
         separateSpeech
       },
-      { model, webSearch: webSearch || webImages, place, ripple, showTitle }
+      { model, webSearch: webSearch || webImages, place, ripple, showTitle, showPortraits }
     )
   }
 
@@ -262,6 +263,10 @@ export function ExplainerDialog({ onClose }: { onClose: () => void }): React.JSX
             <label className="field__row">
               <input type="checkbox" checked={showTitle} onChange={(event) => setShowTitle(event.target.checked)} />
               最初に見出しを出す
+            </label>
+            <label className="field__row">
+              <input type="checkbox" checked={showPortraits} onChange={(event) => setShowPortraits(event.target.checked)} data-testid="explainer-show-portraits" />
+              解説のあいだ、話すキャラクターの立ち絵を出す(立ち絵の表示の区間が途中で切れていれば、解説のあいだの区間を足す)
             </label>
             <label className="field__row">
               <input type="checkbox" checked={separateSpeech} onChange={(event) => setSeparateSpeech(event.target.checked)} data-testid="explainer-separate-speech" />

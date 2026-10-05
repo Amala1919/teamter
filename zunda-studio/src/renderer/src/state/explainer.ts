@@ -50,6 +50,8 @@ export interface ExplainerOptions {
   /** 再生位置に置くとき、後ろの素材をずらして場所を空ける。 */
   ripple: boolean
   showTitle: boolean
+  /** 解説のあいだ、話すキャラクターの立ち絵を出す(表示の区間が切れていれば足す)。 */
+  showPortraits: boolean
 }
 
 function setPhase(phase: ExplainerPhase): void {
@@ -143,13 +145,14 @@ export async function createExplainer(request: ExplainerRequest, options: Explai
       images,
       ripple: options.place === 'playhead' && options.ripple,
       showTitle: options.showTitle,
+      showPortraits: options.showPortraits,
       gapMs: project.editing.defaultGapMs,
       ...(measure ? { measure } : {})
     })
     const result = dispatch(commands, `解説「${script.title}」を作る`)
     if (!result.ok) throw new Error(result.message)
     const ids = Object.entries(result.resolvedIds)
-      .filter(([key]) => /^ex-(v|i|c)\d+$|^ex-title$/.test(key))
+      .filter(([key]) => /^ex-(v|i|c|p)\d+$|^ex-title$/.test(key))
       .map(([, id]) => id)
     setSelection(ids)
     useEditorStore.getState().setPlayhead(atMs)

@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 import type { Command } from '../commands/types'
 import { DEFAULT_LAYER_IDS } from '../project/factory'
-import type { Character, CharacterId, Ms, Project, SynthesisResult, TextLook } from '../project/types'
+import type { Character, CharacterId, Ms, PortraitItem, Project, SynthesisResult, TextLook } from '../project/types'
 import { briefingPromptSection } from './briefing'
 import { cleanLine, describePersona } from './cohost'
 import type { GenerateRequest } from './types'
@@ -387,6 +387,8 @@ export interface ExplainerPlan {
   ripple: boolean
   /** 見出しを出す。 */
   showTitle: boolean
+  /** 解説のあいだ、話すキャラクターの立ち絵を出す(表示の区間が切れていれば足す)。無ければ出す。 */
+  showPortraits?: boolean
   gapMs: Ms
   /** テロップの幅を測る(画面の右上に出典を寄せるため)。無ければ文字数から見積もる。 */
   measure?: (text: string, look: TextLook) => number
@@ -439,6 +441,40 @@ function explainerLayers(project: Project, names: readonly string[], commands: C
 }
 
 /**
+ * 解説のあいだ、話すキャラクターの立ち絵が消えないようにするコマンド。
+ * - 場所を空けると、再生位置から始まる「動画の最後まで」の表示の区間(動画の頭から出している立ち絵など)まで後ろへずれてしまうので、元の位置に戻す。
+ * - それでも解説の途中で表示の区間が切れる(区間を短く決めてある・区間が無い)キャラクターには、解説のあいだの表示の区間を足す
+ *   (plan.showPortraits が false なら足さない)。足した区間は解説のグループに入れる。
+ */
+function portraitCommands(project: Project, plan: ExplainerPlan, endMs: Ms, total: Ms, tempIds: string[]): Command[] {
+  const commands: Command[] = []
+  const sections = project.items.filter((item): item is PortraitItem => item.type === 'portrait' && (item.kind ?? 'show') === 'show')
+  // 場所を空けたあとの、表示の区間の始まり(動画の最後までの区間は、再生位置から始まっていてもずらさない)。
+  const startAfter = (item: PortraitItem): Ms => {
+    if (!plan.ripple || item.locked || item.startMs < plan.atMs) return item.startMs
+    if (item.untilEnd && item.startMs === plan.atMs) {
+      commands.push({ op: 'item.setTimeRange', itemId: item.id, startMs: plan.atMs })
+      return plan.atMs
+    }
+    return item.startMs + total
+  }
+  const placed = sections.map((item) => ({ item, startMs: startAfter(item) }))
+  if (plan.showPortraits === false) return commands
+
+  const speakers = [...new Set(plan.lines.map((line) => line.characterId))].filter((id) => project.characters[id]?.portrait)
+  speakers.forEach((characterId, index) => {
+    const covered = placed.some(
+      ({ item, startMs }) => item.characterId === characterId && startMs <= plan.atMs && (item.untilEnd === true || startMs + item.durationMs >= endMs)
+    )
+    if (covered) return
+    const tempId = `ex-p${index}`
+    commands.push({ op: 'portrait.insert', characterId, atMs: plan.atMs, durationMs: endMs - plan.atMs, kind: 'show', tempId })
+    tempIds.push(tempId)
+  })
+  return commands
+}
+
+/**
  * 合成済みのセリフと見つけた画像を、タイムラインに並べるコマンド。1回の「元に戻す」で全部戻る。
  * セリフは間を空けて順に並べ、画像は次の画像まで画面の真ん中(字幕の上)に、出典は画面の右上に出す。全体を1つのグループにする。
  */
@@ -472,6 +508,8 @@ export function explainerCommands(project: Project, plan: ExplainerPlan): Comman
       { op: 'voice.applySynthesis', itemId: tempId, expectedText: line.speech, synthesis: line.synthesis }
     )
   })
+
+  commands.push(...portraitCommands(project, plan, endMs, total, tempIds))
 
   // 画像・出典・見出しのレイヤー(無ければ立ち絵のすぐ下に作る。立ち絵は画像より手前に出る)。
   const hasImages = plan.images.some((image) => image !== null)
