@@ -190,7 +190,14 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
       instruction: z.string().max(4000).optional(),
       images: z.boolean(),
       imageSources: z.enum(['web', 'free']).optional(),
-      separateSpeech: z.boolean().optional()
+      separateSpeech: z.boolean().optional(),
+      revision: z
+        .object({
+          title: z.string().max(200),
+          lines: z.array(z.object({ characterId: z.string().min(1).max(100), text: z.string().max(1000) })).max(200),
+          requirement: z.string().max(4000)
+        })
+        .optional()
     }),
     z.object({ model: z.object({ providerId: z.enum(PROVIDER_IDS), model: z.string().min(1).max(200) }).nullable(), webSearch: z.boolean() })
   ]) as unknown as z.ZodType<ChannelArgs<'ai:explainer'>>,

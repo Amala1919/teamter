@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 import type { Command } from '../commands/types'
 import { DEFAULT_LAYER_IDS } from '../project/factory'
+import { itemEndMs } from '../project/queries'
 import type { Character, CharacterId, Ms, PortraitItem, Project, SynthesisResult, TextLook } from '../project/types'
 import { briefingPromptSection } from './briefing'
 import { cleanLine, describePersona } from './cohost'
@@ -125,6 +126,15 @@ export interface ExplainerRequest {
    * false なら字幕の文をそのまま読ませる。無ければ分ける。
    */
   separateSpeech?: boolean
+  /** 作り直すとき: 前回の台本と、追加の要件(空なら、前回とは違う案にする)。 */
+  revision?: ExplainerRevision
+}
+
+/** 作り直すときに渡す、前回の台本と追加の要件。 */
+export interface ExplainerRevision {
+  title: string
+  lines: { characterId: CharacterId; text: string }[]
+  requirement: string
 }
 
 /** 1秒あたりに読み上げるおおよその文字数(合成音声の標準の速さ)。 */
@@ -239,10 +249,23 @@ export function buildExplainerPrompt(project: Project, request: ExplainerRequest
       ? '- 説明に合う参考画像を、話題が変わるところで image に指定する(画面の真ん中に出る)。query / queryEn は Wikimedia Commons で見つかりそうな具体的な言葉(人物名・地名・物の名前・地図など)にする。同じ画像のままでよいセリフは null。画像は4〜8行に1枚くらい'
       : '- 参考画像は使わない(image はすべて null)',
     ...(request.images ? imageSourceRules(request.imageSources ?? 'free', canSearch) : []),
-    '- expression は、そのキャラクターの表情の一覧にある名前だけ。合うものが無ければ null'
+    '- expression は、そのキャラクターの表情の一覧にある名前だけ。合うものが無ければ null',
+    ...(request.revision
+      ? request.revision.requirement.trim()
+        ? ['- これは作り直し。「前回の台本」をもとに、「作り直しの要件」を必ず満たすように書き直す。要件と関係のない、よいところは残してよい']
+        : ['- これは作り直し。「前回の台本」とは違う構成・言い回しの案にする(お題・長さ・語り方の決まりは同じ)']
+      : [])
   ]
     .filter((line): line is string => line !== null)
     .join('\n')
+
+  const revision = request.revision
+  const previous = revision
+    ? [
+        `## 前回の台本(見出し: ${revision.title})`,
+        ...revision.lines.map((line) => `${project.characters[line.characterId]?.name ?? line.characterId}(${line.characterId}): ${line.text}`)
+      ].join('\n')
+    : ''
 
   const content = [
     `## お題\n${request.topic.trim()}`,
@@ -250,7 +273,9 @@ export function buildExplainerPrompt(project: Project, request: ExplainerRequest
     project.meta.synopsis?.trim() ? `## この動画の企画メモ(話をそろえるために)\n${project.meta.synopsis.trim()}` : '',
     briefingPromptSection(project),
     `## 話すキャラクター\n${speakerList}`,
-    request.instruction?.trim() ? `## 指示\n${request.instruction.trim()}` : ''
+    request.instruction?.trim() ? `## 指示\n${request.instruction.trim()}` : '',
+    previous,
+    revision?.requirement.trim() ? `## 作り直しの要件(最優先で満たす)\n${revision.requirement.trim()}` : ''
   ]
     .filter(Boolean)
     .join('\n\n')
@@ -634,7 +659,50 @@ export function explainerCommands(project: Project, plan: ExplainerPlan): Comman
 
   if (openGap) commands.push({ op: 'project.setEditing', openGapOnVoiceInsert: true })
   // 解説のまとまりを1つのグループにして、一緒に動かせるようにする。
-  if (tempIds.length >= 2) commands.push({ op: 'item.group', itemIds: tempIds })
+  if (tempIds.length >= 2) commands.push({ op: 'item.group', itemIds: tempIds, tempId: EXPLAINER_GROUP_TEMP_ID })
+  return commands
+}
+
+/** 解説のまとまり(グループ)の仮の ID。並べた後のグループの ID を知るために使う。 */
+export const EXPLAINER_GROUP_TEMP_ID = 'ex-group'
+
+/** タイムラインに今ある解説(作ったときのグループ)。グループから外したものは含まない。 */
+export interface PlacedExplainer {
+  itemIds: string[]
+  /** セリフの始まりと終わり(セリフが無ければ、まとまり全体)。 */
+  startMs: Ms
+  endMs: Ms
+  /** ロックしたものがある(消せないので作り直せない)。 */
+  locked: boolean
+}
+
+export function findPlacedExplainer(project: Project, groupId: string): PlacedExplainer | null {
+  const items = project.items.filter((item) => item.groupId === groupId)
+  if (items.length === 0) return null
+  const voices = items.filter((item) => item.type === 'voice')
+  const span = voices.length > 0 ? voices : items
+  return {
+    itemIds: items.map((item) => item.id),
+    startMs: Math.min(...span.map((item) => item.startMs)),
+    endMs: Math.max(...span.map((item) => itemEndMs(item))),
+    locked: items.some((item) => item.locked)
+  }
+}
+
+/**
+ * 作り直すときに、前回の解説を取り除くコマンド(このあと同じ場所に新しい解説を置く)。
+ * ripple なら(前回、後ろをずらして場所を空けたなら)、後ろの素材を前回の長さだけ前へ戻す。
+ * 新しい解説を置くときにまた場所を空けるので、後ろの素材は新しい長さの分だけずれた位置に来る。
+ */
+export function removeExplainerCommands(project: Project, placed: PlacedExplainer, ripple: boolean): Command[] {
+  const commands: Command[] = placed.itemIds.map((itemId) => ({ op: 'item.delete', itemId }))
+  if (!ripple) return commands
+  const removed = new Set(placed.itemIds)
+  const length = placed.endMs - placed.startMs
+  for (const item of project.items) {
+    if (removed.has(item.id) || item.locked || item.startMs < placed.endMs) continue
+    commands.push({ op: 'item.setTimeRange', itemId: item.id, startMs: Math.max(placed.startMs, item.startMs - length) })
+  }
   return commands
 }
 

@@ -13,7 +13,17 @@ import { formatModelRef, type ModelRef } from '@shared/ai/types'
 import type { Character } from '@shared/project/types'
 
 import { formatMs } from '../../lib/time'
-import { cancelExplainer, createExplainer, resetExplainer, useExplainerStore } from '../../state/explainer'
+import {
+  cancelExplainer,
+  closeExplainerDialog,
+  createExplainer,
+  findRedoable,
+  openExplainerReview,
+  resetExplainer,
+  saveExplainerDraft,
+  useExplainerStore,
+  type ExplainerDraft
+} from '../../state/explainer'
 import { useSettingsStore } from '../../state/settings'
 import { useEditorStore } from '../../state/store'
 import { Modal } from '../../ui/Modal'
@@ -38,7 +48,7 @@ const STYLE_LABELS: Record<ExplainerStyle, string> = {
  * 動画の中に入れる解説パートを作る。お題と目安の長さ・語り方を決めると、選んだ AI が台本を書き、
  * セリフ(字幕と立ち絵はいつもどおり)と、話に合う参考画像(画面の真ん中・出典は画面の右上)を並べる。
  */
-export function ExplainerDialog({ onClose }: { onClose: () => void }): React.JSX.Element {
+export function ExplainerDialog(): React.JSX.Element {
   // 一覧は毎回新しい配列になるので、ストアからは元のオブジェクトを受け取り、ここで並べる(並べたものを選ぶと描画が止まらなくなる)。
   const characterMap = useEditorStore((state) => state.project.characters)
   const characters = Object.values(characterMap)
@@ -47,25 +57,37 @@ export function ExplainerDialog({ onClose }: { onClose: () => void }): React.JSX
   const aiCharacters = characters.filter((character) => character.authorRole === 'ai')
   const userCharacters = characters.filter((character) => character.authorRole === 'user')
 
-  const [topic, setTopic] = useState('')
-  const [seconds, setSeconds] = useState(120)
-  const [style, setStyle] = useState<ExplainerStyle>(aiCharacters.length >= 2 ? 'dialogue' : 'solo')
-  const [solo, setSolo] = useState(aiCharacters[0]?.id ?? characters[0]?.id ?? '')
-  const [group, setGroup] = useState<string[]>(aiCharacters.slice(0, 2).map((character) => character.id))
-  const [interject, setInterject] = useState(userCharacters.length > 0)
-  const [interjector, setInterjector] = useState(userCharacters[0]?.id ?? '')
-  const [frequency, setFrequency] = useState<InterjectionFrequency>('normal')
-  const [audience, setAudience] = useState('')
-  const [instruction, setInstruction] = useState('')
-  const [images, setImages] = useState(true)
-  const [imageSources, setImageSources] = useState<ExplainerImagePolicy>('web')
-  const [webSearch, setWebSearch] = useState(true)
-  const [showTitle, setShowTitle] = useState(true)
-  const [showPortraits, setShowPortraits] = useState(true)
-  const [separateSpeech, setSeparateSpeech] = useState(true)
-  const [place, setPlace] = useState<'playhead' | 'end'>('playhead')
-  const [ripple, setRipple] = useState(true)
-  const [model, setModel] = useState<ModelRef | null>(null)
+  // 前回の入力(閉じて結果を確かめてから開き直しても、同じ設定から作り直せるように)。
+  const [draft] = useState(() => useExplainerStore.getState().draft)
+  const previous = draft?.request
+  const previousOptions = draft?.options
+  const [topic, setTopic] = useState(previous?.topic ?? '')
+  const [seconds, setSeconds] = useState(previous?.targetSeconds ?? 120)
+  const [style, setStyle] = useState<ExplainerStyle>(previous?.style ?? (aiCharacters.length >= 2 ? 'dialogue' : 'solo'))
+  const [solo, setSolo] = useState(previous?.style === 'solo' ? (previous.narrators[0] ?? '') : (aiCharacters[0]?.id ?? characters[0]?.id ?? ''))
+  const [group, setGroup] = useState<string[]>(previous?.style === 'dialogue' ? previous.narrators : aiCharacters.slice(0, 2).map((character) => character.id))
+  const [interject, setInterject] = useState(previous ? previous.interjector !== null : userCharacters.length > 0)
+  const [interjector, setInterjector] = useState(previous?.interjector?.characterId ?? userCharacters[0]?.id ?? '')
+  const [frequency, setFrequency] = useState<InterjectionFrequency>(previous?.interjector?.frequency ?? 'normal')
+  const [audience, setAudience] = useState(previous?.audience ?? '')
+  const [instruction, setInstruction] = useState(previous?.instruction ?? '')
+  const [images, setImages] = useState(previous?.images ?? true)
+  const [imageSources, setImageSources] = useState<ExplainerImagePolicy>(previous?.imageSources ?? 'web')
+  const [webSearch, setWebSearch] = useState(previousOptions?.webSearch ?? true)
+  const [showTitle, setShowTitle] = useState(previousOptions?.showTitle ?? true)
+  const [showPortraits, setShowPortraits] = useState(previousOptions?.showPortraits ?? true)
+  const [separateSpeech, setSeparateSpeech] = useState(previous?.separateSpeech ?? true)
+  const [place, setPlace] = useState<'playhead' | 'end'>(previousOptions?.place ?? 'playhead')
+  const [ripple, setRipple] = useState(previousOptions?.ripple ?? true)
+  const [model, setModel] = useState<ModelRef | null>(previousOptions?.model ?? null)
+  const [requirement, setRequirement] = useState('')
+
+  // 作り直せる前回の解説(タイムラインに残っているもの)。
+  const history = useExplainerStore((state) => state.history)
+  const project = useEditorStore((state) => state.project)
+  const redoable = findRedoable(history, project)
+  const last = redoable?.last ?? null
+  const placed = redoable?.placed ?? null
 
   // 一次ソースなどの画像はウェブで探すので、そのときはウェブを使う。
   const webImages = images && imageSources === 'web'
@@ -85,29 +107,46 @@ export function ExplainerDialog({ onClose }: { onClose: () => void }): React.JSX
               ? '使うAIを選んでください(設定の「AI」で編集AIを決めるか、下で選ぶ)'
               : null
 
-  const start = (): void => {
+  const currentDraft = (): ExplainerDraft => ({
+    request: {
+      topic: topic.trim(),
+      targetSeconds: seconds,
+      style,
+      narrators,
+      interjector: interject ? { characterId: interjector, frequency } : null,
+      ...(audience.trim() ? { audience: audience.trim() } : {}),
+      ...(instruction.trim() ? { instruction: instruction.trim() } : {}),
+      images,
+      imageSources,
+      separateSpeech
+    },
+    // ウェブ検索のチェックは、入れた値のまま覚える(一次ソースの画像で使うときは、呼ぶときに足す)。
+    options: { model, webSearch, place, ripple, showTitle, showPortraits }
+  })
+
+  const run = (redo?: { requirement: string }): void => {
     if (problem) return
-    void createExplainer(
-      {
-        topic: topic.trim(),
-        targetSeconds: seconds,
-        style,
-        narrators,
-        interjector: interject ? { characterId: interjector, frequency } : null,
-        ...(audience.trim() ? { audience: audience.trim() } : {}),
-        ...(instruction.trim() ? { instruction: instruction.trim() } : {}),
-        images,
-        imageSources,
-        separateSpeech
-      },
-      { model, webSearch: webSearch || webImages, place, ripple, showTitle, showPortraits }
-    )
+    const next = currentDraft()
+    saveExplainerDraft(next)
+    void createExplainer(next.request, { ...next.options, webSearch: webSearch || webImages }, redo)
   }
 
   const close = (): void => {
     if (running) return
+    // 入力は覚えておく(開き直したときに戻し、作り直せるように)。
+    if (topic.trim() !== '') saveExplainerDraft(currentDraft())
     resetExplainer()
-    onClose()
+    closeExplainerDialog()
+  }
+
+  /** 閉じて、前回の解説の頭へ移り、確認パネルを出す(プレビューで確かめながら作り直せる)。 */
+  const review = (): void => {
+    if (!placed) return
+    const { setPlayhead, setSelection } = useEditorStore.getState()
+    setPlayhead(placed.startMs)
+    setSelection(placed.itemIds)
+    close()
+    openExplainerReview()
   }
 
   const toggleGroup = (character: Character, checked: boolean): void =>
@@ -128,8 +167,15 @@ export function ExplainerDialog({ onClose }: { onClose: () => void }): React.JSX
             <button type="button" onClick={close}>
               閉じる
             </button>
-            <button type="button" className="button--primary" disabled={problem !== null} onClick={start} title={problem ?? undefined} data-testid="explainer-start">
-              {phase.kind === 'done' ? 'もう一度作る' : '作る'}
+            <button
+              type="button"
+              className={placed ? undefined : 'button--primary'}
+              disabled={problem !== null}
+              onClick={() => run()}
+              title={problem ?? (placed ? '前回の解説は残したまま、新しくもう1つ作る' : undefined)}
+              data-testid="explainer-start"
+            >
+              {placed ? '新しくもう1つ作る' : '作る'}
             </button>
           </>
         )
@@ -140,6 +186,42 @@ export function ExplainerDialog({ onClose }: { onClose: () => void }): React.JSX
           <p className="pane__empty">先にキャラクターを足してください(台本の欄の「キャラクター」)。</p>
         ) : (
           <>
+            {placed && last && !running && (
+              <div className="explainer__redo" data-testid="explainer-redo-panel">
+                <h3>前回作った解説を作り直す</h3>
+                <p>
+                  「{last.title}」({formatMs(placed.startMs).replace(/\.\d+$/, '')} 〜 {formatMs(placed.endMs).replace(/\.\d+$/, '')}・{last.lines.length}行)
+                  <button type="button" className="button--small" onClick={review} data-testid="explainer-review">
+                    閉じて確かめる
+                  </button>
+                </p>
+                <label className="field field--stacked">
+                  <span className="field__label">作り直すときの追加の要件(任意)</span>
+                  <textarea
+                    rows={3}
+                    value={requirement}
+                    placeholder="例: もっと短く。最初に結論を言って。専門用語を減らし、2つ目の画像は地図にして"
+                    onChange={(event) => setRequirement(event.target.value)}
+                    data-testid="explainer-redo-requirement"
+                  />
+                </label>
+                <div className="field__row">
+                  <button
+                    type="button"
+                    className="button--primary"
+                    disabled={problem !== null || placed.locked}
+                    title={placed.locked ? 'ロックしたものがあるため作り直せません' : (problem ?? undefined)}
+                    onClick={() => run({ requirement: requirement.trim() })}
+                    data-testid="explainer-redo"
+                  >
+                    作り直す
+                  </button>
+                  <span className="note">
+                    前回の台本をもとに、要件を満たすように AI が書き直します(空なら別の案に)。前回の解説は消して、同じ場所に置き直します(「元に戻す」で前回に戻せます)。下の設定を変えてから作り直すこともできます。
+                  </span>
+                </div>
+              </div>
+            )}
             <label className="field field--stacked">
               <span className="field__label">お題</span>
               <textarea
@@ -326,7 +408,7 @@ function describeKinds(kinds: Record<ImageSourceKind, number>): string {
     .join('・')
 }
 
-function ExplainerStatus(): React.JSX.Element | null {
+export function ExplainerStatus(): React.JSX.Element | null {
   const phase = useExplainerStore((state) => state.phase)
   switch (phase.kind) {
     case 'idle':
@@ -353,6 +435,7 @@ function ExplainerStatus(): React.JSX.Element | null {
       return (
         <div className="status status--ok" data-testid="explainer-done">
           <p>
+            {phase.replaced ? '前回の解説を作り直しました。' : ''}
             {phase.lines}行のセリフ(約{formatMs(phase.durationMs).replace(/\.\d+$/, '')})と、参考画像 {phase.images}枚を並べました。
             {phase.images > 0 ? `(${describeKinds(phase.imageKinds)})` : ''}
             {phase.missingImages > 0 ? ` 見つからなかった画像が ${phase.missingImages}枚あります(その間は前の画像のまま)。` : ''}
