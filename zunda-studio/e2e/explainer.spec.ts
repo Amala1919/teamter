@@ -56,6 +56,8 @@ test.describe('解説パートを作る', () => {
     // 相方が1人なので「ひとりで語る」、あなた(ずんだもん)の合いの手が入る。
     await expect(page.getByTestId('explainer-style-solo')).toBeChecked()
     await expect(page.getByTestId('explainer-interject')).toBeChecked()
+    // 解説のあいだ、話すキャラクターの立ち絵を出す(既定でオン)。
+    await expect(page.getByTestId('explainer-show-portraits')).toBeChecked()
     await page.getByTestId('explainer-start').click()
     await expect(page.getByTestId('explainer-done')).toContainText('3行のセリフ', { timeout: 30_000 })
     await expect(page.getByTestId('explainer-done')).toContainText('参考画像 1枚')

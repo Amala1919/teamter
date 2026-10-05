@@ -21,7 +21,7 @@ import { applyCommands } from '@shared/commands/apply'
 import type { Command } from '@shared/commands/types'
 import { generateCredits } from '@shared/project/credits'
 import { createEmptyProject } from '@shared/project/factory'
-import type { ImageItem, Project, TextItem, VoiceItem } from '@shared/project/types'
+import type { ImageItem, PortraitItem, Project, TextItem, VoiceItem } from '@shared/project/types'
 
 import { tempDir } from './helpers/env'
 
@@ -263,6 +263,36 @@ describe('解説をタイムラインに並べる', () => {
       ['へぇ', null, 'k1']
     ])
     expect(voices[0]!.subtitleLines.join('')).toBe('1914年に始まりましたわ')
+  })
+
+  it('解説のあいだ、話すキャラクターの立ち絵は消えない(動画の頭から出している区間をずらさず、切れていれば区間を足す)', () => {
+    const { project: base, metan, tsumugi } = cast()
+    // めたん(立ち絵あり)は、動画の頭から最後まで出している。
+    const withTrack = apply(base, [
+      { op: 'portrait.insert', characterId: metan, atMs: 0, durationMs: 5000, kind: 'show', tempId: 'track' },
+      { op: 'media.placeText', text: '本編', atMs: 0, durationMs: 4000 }
+    ])
+    const track = withTrack.items.find((item) => item.type === 'portrait')!
+    const project = apply(withTrack, [{ op: 'portrait.update', itemId: track.id, untilEnd: true }])
+    const lines = [placed(metan, '一', 2000), placed(tsumugi, '二', 1000)]
+    const portraits = (after: Project): PortraitItem[] => after.items.filter((item): item is PortraitItem => item.type === 'portrait')
+
+    // 頭(0秒)に場所を空けて置いても、動画の頭からの区間はずれない(本編だけがずれる)。区間は足さない。
+    const atStart = apply(project, explainerCommands(project, { atMs: 0, title: '', lines, images: [null, null], ripple: true, showTitle: false, gapMs: 200 }))
+    expect(portraits(atStart).map((item) => [item.startMs, item.untilEnd])).toEqual([[0, true]])
+    expect(atStart.items.find((item) => item.type === 'text' && item.text === '本編')!.startMs).toBe(3200)
+
+    // 区間の長さを決めてあって解説の途中で切れるなら、解説のあいだの区間を足し、解説のグループに入れる。
+    const fixed = apply(project, [{ op: 'item.setTimeRange', itemId: track.id, durationMs: 3000 }])
+    const later = apply(fixed, explainerCommands(fixed, { atMs: 5000, title: '', lines, images: [null, null], ripple: false, showTitle: false, gapMs: 200 }))
+    const added = portraits(later).find((item) => item.id !== track.id)!
+    expect([added.characterId, added.startMs, added.durationMs, added.kind]).toEqual([metan, 5000, 3200, 'show'])
+    expect(added.groupId).toBeDefined()
+    expect(added.groupId).toBe(later.items.find((item) => item.type === 'voice')!.groupId)
+    // 立ち絵の無いキャラクター(つむぎ)には足さない。足さない設定もできる。
+    expect(portraits(later).filter((item) => item.characterId === tsumugi)).toHaveLength(0)
+    const off = apply(fixed, explainerCommands(fixed, { atMs: 5000, title: '', lines, images: [null, null], ripple: false, showTitle: false, showPortraits: false, gapMs: 200 }))
+    expect(portraits(off)).toHaveLength(1)
   })
 
   it('セリフを足すと後ろをずらす設定でも、並べた場所から動かさず、設定は元に戻す', () => {
