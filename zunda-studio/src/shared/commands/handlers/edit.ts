@@ -1,3 +1,4 @@
+import { scaleKeys, splitKeys } from '../../audio/volume-keys'
 import { DEFAULT_LAYER_IDS } from '../../project/factory'
 import type { Effect, Item, Ms, Project, VideoItem } from '../../project/types'
 import { TIMELINE_COLOR } from '../../project/timeline-colors'
@@ -28,7 +29,8 @@ type EditHandlers = Pick<
 /** 分けたときに両側に残す最短の尺。 */
 const MIN_PART_MS = 10
 export const MIN_SPEED = 0.25
-export const MAX_SPEED = 4
+/** 速度の上限。待ち時間の早送りに使えるよう 16 倍まで(プレビューでは 4 倍を超えると音が出ない)。 */
+export const MAX_SPEED = 16
 
 const ITEM_TYPES: readonly Item['type'][] = ['voice', 'video', 'image', 'text', 'audio', 'shape', 'portrait', 'zoom']
 
@@ -52,9 +54,14 @@ function splitEffects(effects: readonly Effect[]): { first: Effect[]; second: Ef
     if (effect.type === 'fade') {
       if (effect.inMs > 0) first.push({ type: 'fade', inMs: effect.inMs, outMs: 0 })
       if (effect.outMs > 0) second.push({ type: 'fade', inMs: 0, outMs: effect.outMs })
+    } else if (effect.type === 'transition') {
+      // 登場は前半に、退場は後半に残す。
+      if (effect.in) first.push({ type: 'transition', in: { ...effect.in }, out: null })
+      if (effect.out) second.push({ type: 'transition', in: null, out: { ...effect.out } })
     } else {
       first.push({ ...effect })
-      if (effect.type === 'shake') second.push({ ...effect })
+      // 揺れと、繰り返しの動き(ドクンドクン・点滅・回転など)は両方に残す。
+      if (['shake', 'pulse', 'blink', 'spin', 'swing', 'float'].includes(effect.type)) second.push({ ...effect })
     }
   }
   return { first, second }
@@ -64,11 +71,19 @@ function splitEffects(effects: readonly Effect[]): { first: Effect[]; second: Ef
  * アイテムを at で2つに分け、後半(新しいアイテム)を返す。前半は元のアイテムのまま短くなる。
  * 動画・音声は素材の区間も分け、フェードは前半に入り・後半に出だけを残す。
  */
-function splitItem(draft: Project, item: Item, at: Ms, newId: string): Item {
+export function splitItem(draft: Project, item: Item, at: Ms, newId: string): Item {
   const second = clone(item)
   second.id = newId
   second.startMs = at
   second.durationMs = itemEnd(item) - at
+  // 音量の折れ点も、分けた所で前半と後半に分ける。
+  if ((item.type === 'audio' || item.type === 'video') && (second.type === 'audio' || second.type === 'video') && item.volumeKeys) {
+    const keys = splitKeys(item.volumeKeys, at - item.startMs, item.durationMs)
+    if (keys.first) item.volumeKeys = keys.first
+    else delete item.volumeKeys
+    if (keys.second) second.volumeKeys = keys.second
+    else delete second.volumeKeys
+  }
   item.durationMs = at - item.startMs
   const effects = splitEffects(item.effects)
   item.effects = effects.first
@@ -92,12 +107,12 @@ function splitItem(draft: Project, item: Item, at: Ms, newId: string): Item {
   return second
 }
 
-function clone<T>(value: T): T {
+export function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
 
 /** 貼り付けるアイテムが、このプロジェクトで成り立つか確かめる(別のプロジェクトからの貼り付けに備える)。 */
-function validatePasted(draft: Project, item: Item, op: CommandOp): void {
+export function validatePasted(draft: Project, item: Item, op: CommandOp): void {
   if (!ITEM_TYPES.includes(item.type)) fail(op, `未対応のアイテムです: ${String(item.type)}`)
   requireFinite(item.startMs, op, '開始時刻')
   requireFinite(item.durationMs, op, '尺')
@@ -224,7 +239,11 @@ export const editHandlers: EditHandlers = {
     requireFinite(command.rate, command.op, '速度')
     if (command.rate < MIN_SPEED || command.rate > MAX_SPEED) fail(command.op, `速度は${MIN_SPEED}〜${MAX_SPEED}倍にしてください`)
     item.playbackRate = command.rate
+    const before = item.durationMs
     item.durationMs = Math.max(MIN_PART_MS, Math.round((item.outMs - item.inMs) / command.rate))
+    // 音量の折れ点は、素材の同じ場所に付いたままにする(長さに合わせて伸び縮みさせる)。
+    const keys = scaleKeys(item.volumeKeys, item.durationMs / Math.max(1, before))
+    if (keys) item.volumeKeys = keys
   },
 
   'item.setLocked': (draft, command, env) => {

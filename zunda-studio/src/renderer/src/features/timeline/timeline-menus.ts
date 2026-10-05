@@ -1,7 +1,8 @@
 import { zoomCommands } from '@shared/commands/zoom-still'
 import type { Command } from '@shared/commands/types'
 import { itemEndMs } from '@shared/project/queries'
-import type { Item, Layer, Ms, Project } from '@shared/project/types'
+import { TRANSITION_KINDS, type Item, type Layer, type Ms, type Project, type TransitionKind, type VideoItem } from '@shared/project/types'
+import { TRANSITION_LABELS } from '@shared/render/effects'
 import { TIMELINE_PALETTE } from '@shared/project/timeline-colors'
 import { clampRegion, regionHeight } from '@shared/render/zoom'
 
@@ -34,6 +35,12 @@ import {
   splitAtPlayhead
 } from '../../state/edit-actions'
 import { pickColor } from '../../lib/pick-color'
+import { addVolumeKey, setVolumeKeys } from './VolumeLine'
+import { dipVolume } from '../../state/volume'
+import { addMarker } from '../../state/markers'
+import { registerSoundFromItem } from '../../state/sounds'
+import { CORNER_LABELS, crossTransition, makeWipe, resetWipe, setAdjust, setTransitionSide, wipeFromPart, type Corner } from '../../state/look-actions'
+import { ADJUST_PRESETS } from '../inspector/MediaLookInspector'
 import { deleteSelection, useEditorStore } from '../../state/store'
 import type { MenuEntry } from '../../ui/ContextMenu'
 
@@ -41,6 +48,8 @@ import type { MenuEntry } from '../../ui/ContextMenu'
 export interface MenuContext {
   onError: (message: string) => void
   onAddMedia: () => void
+  /** 待ち時間を探す画面を開く(動画)。 */
+  onFindLulls?: (item: VideoItem) => void
 }
 
 const report =
@@ -50,7 +59,7 @@ const report =
     if (error) context.onError(error)
   }
 
-const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
+const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 8, 16]
 const VOLUMES: [number, string][] = [
   [0, 'ミュート'],
   [0.25, '25%'],
@@ -72,6 +81,18 @@ const FREEZE_LENGTHS: [Ms, string][] = [
   [2000, '2秒'],
   [3000, '3秒'],
   [5000, '5秒']
+]
+
+/** 前の素材から切り替えるときの、よく使う切り替え方。 */
+const CROSS_KINDS: [TransitionKind, string][] = [
+  ['fade', 'クロスフェード(0.5秒)'],
+  ['wipeRight', 'ワイプ(左から右へ)'],
+  ['wipeDown', 'ワイプ(上から下へ)'],
+  ['iris', '円が広がる'],
+  ['slideLeft', 'スライド(右から)'],
+  ['zoom', 'ズーム'],
+  ['blur', 'ぼかし'],
+  ['blinds', 'ブラインド']
 ]
 
 const VISUAL_TYPES: Item['type'][] = ['video', 'image', 'text', 'shape', 'portrait']
@@ -240,6 +261,11 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
       }
     )
   }
+  if (item.type === 'video' && !item.freeze && context.onFindLulls) {
+    const video = item
+    const open = context.onFindLulls
+    tools.push({ label: '待ち時間を探して詰める・早送り…', disabled: locked, onSelect: () => open(video), testId: 'menu-find-lulls' })
+  }
   if (item.type === 'video' && !item.freeze) {
     tools.push({
       label: '速度',
@@ -266,6 +292,34 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
       }))
     })
   }
+  if (item.type === 'audio') {
+    const audio = item
+    tools.push({
+      label: '効果音のパレットに登録',
+      onSelect: () => void registerSoundFromItem(audio).then((message) => message && context.onError(message)),
+      testId: 'menu-register-sound'
+    })
+  }
+  if ((item.type === 'video' && !item.freeze) || item.type === 'audio') {
+    const sound = item
+    const relMs = playheadMs - item.startMs
+    const inside = relMs > 0 && relMs < item.durationMs
+    tools.push({
+      label: '音量の点(時間で音量を変える)',
+      disabled: locked,
+      testId: 'menu-volume-keys',
+      submenu: [
+        { label: '再生位置に点を足す', disabled: !inside, onSelect: report(context, () => addVolumeKey(sound, relMs)), testId: 'menu-volume-key-add' },
+        {
+          label: '再生位置の前後1秒だけ下げる(30%)',
+          disabled: !inside,
+          onSelect: report(context, () => dipVolume(sound, relMs)),
+          testId: 'menu-volume-dip'
+        },
+        { label: 'すべての点を消す(一定に戻す)', disabled: !sound.volumeKeys?.length, onSelect: report(context, () => setVolumeKeys(sound, null, '音量の点を消す')) }
+      ]
+    })
+  }
   if (item.type !== 'voice' && item.type !== 'zoom') {
     tools.push({
       label: 'フェード',
@@ -278,12 +332,10 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
       ]
     })
   }
+  // 動き(寄る・揺らすなど)と、登場・退場・前の素材からの切り替えは、メニューが長くならないよう1つにまとめる。
+  const motion: MenuEntry[] = []
   if (VISUAL_TYPES.includes(item.type)) {
-    tools.push({
-      label: '動きを付ける',
-      disabled: locked,
-      testId: 'menu-motion',
-      submenu: [
+    motion.push(
         {
           label: 'じわっと寄る',
           onSelect: report(context, () =>
@@ -303,8 +355,76 @@ export function itemMenu(project: Project, item: Item, context: MenuContext): Me
           ),
           testId: 'menu-shake'
         }
-      ]
-    })
+    )
+  }
+  if (item.type === 'video' || item.type === 'image' || item.type === 'text' || item.type === 'shape') {
+    const transition = item.effects.find((effect) => effect.type === 'transition')
+    const current = transition?.type === 'transition' ? transition : null
+    const sideMenu = (side: 'in' | 'out'): MenuEntry[] => [
+      { label: 'なし', checked: !current?.[side], onSelect: report(context, () => setTransitionSide(item, side, null)) },
+      ...TRANSITION_KINDS.map((kind) => ({
+        label: TRANSITION_LABELS[kind],
+        checked: current?.[side]?.kind === kind,
+        onSelect: report(context, () => setTransitionSide(item, side, kind)),
+        testId: `menu-transition-${side}-${kind}`
+      }))
+    ]
+    motion.push(
+      'separator',
+      {
+        label: '前の素材から切り替える(重ねる)',
+        disabled: locked,
+        testId: 'menu-cross-transition',
+        submenu: CROSS_KINDS.map(([kind, label]) => ({
+          label,
+          onSelect: report(context, () => crossTransition(item.id, kind, 500)),
+          testId: `menu-cross-${kind}`
+        }))
+      },
+      { label: '登場の動き', disabled: locked, testId: 'menu-transition-in', submenu: sideMenu('in') },
+      { label: '退場の動き', disabled: locked, testId: 'menu-transition-out', submenu: sideMenu('out') }
+    )
+  }
+  if (motion.length > 0) tools.push({ label: '動き・切り替え', disabled: locked, testId: 'menu-motion', submenu: motion })
+  if (item.type === 'video' || item.type === 'image') {
+    const media = item
+    tools.push(
+      {
+        label: '小窓(ワイプ)',
+        disabled: locked,
+        testId: 'menu-wipe',
+        submenu: [
+          ...(Object.keys(CORNER_LABELS) as Corner[]).map((corner) => ({
+            label: `${CORNER_LABELS[corner]}の小窓にする`,
+            onSelect: report(context, () => makeWipe(media, corner)),
+            testId: `menu-wipe-${corner}`
+          })),
+          'separator' as const,
+          {
+            label: '一部を切り抜いて小窓で見せる(複製)',
+            onSelect: report(context, () => wipeFromPart(media)),
+            testId: 'menu-wipe-part'
+          },
+          { label: '小窓をやめる(画面いっぱいに戻す)', onSelect: report(context, () => resetWipe(media)), testId: 'menu-wipe-reset' }
+        ]
+      },
+      {
+        label: '色の調整',
+        disabled: locked,
+        testId: 'menu-adjust',
+        submenu: ADJUST_PRESETS.map((preset) => ({
+          label: preset.name,
+          onSelect: report(context, () =>
+            setAdjust(
+              selected.filter((candidate) => candidate.type === 'video' || candidate.type === 'image').map((candidate) => candidate.id),
+              preset.id === 'none' ? null : preset.adjust,
+              `色の調整「${preset.name}」`
+            )
+          ),
+          testId: `menu-adjust-${preset.id}`
+        }))
+      }
+    )
   }
   if (item.type === 'video' || item.type === 'image') {
     tools.push({
@@ -402,6 +522,7 @@ export function rulerMenu(atMs: Ms, context: MenuContext): MenuEntry[] {
   const at = Math.max(0, Math.round(atMs))
   return [
     { label: '再生位置をここへ', onSelect: () => state().setPlayhead(at) },
+    { label: 'ここに目印を置く', onSelect: report(context, () => addMarker(at).error), testId: 'menu-ruler-marker' },
     { label: 'ここから後ろをすべて選択', onSelect: () => selectFrom(at), testId: 'menu-ruler-select-from' },
     {
       label: 'ここで分割',

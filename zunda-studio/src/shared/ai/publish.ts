@@ -61,6 +61,12 @@ export function buildPublishPrompt(project: Project): Omit<GenerateRequest, 'jso
     `\n${briefingPromptSection(project)}`,
     `## 仮のタイトル\n${project.meta.title}`,
     markers.length > 0 ? `## 録画中に打った目印\n${markers.join('\n')}` : '',
+    (project.markers ?? []).some((marker) => marker.text.trim() !== '')
+      ? `## 編集中に置いた目印(投稿者のメモ)\n${(project.markers ?? [])
+          .filter((marker) => marker.text.trim() !== '')
+          .map((marker) => `[${formatMs(marker.atMs).replace(/\.\d+$/, '')}] ${marker.text.trim()}`)
+          .join('\n')}`
+      : '',
     `## 台本${step > 1 ? `(${step}行に1行だけ)` : ''}\n${script || '(まだセリフが無い)'}`
   ]
     .filter(Boolean)

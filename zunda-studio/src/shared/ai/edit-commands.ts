@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 import type { Command } from '../commands/types'
-import { ZOOM_METHODS } from '../project/types'
+import { SHAPE_KINDS, TRANSITION_KINDS, ZOOM_METHODS } from '../project/types'
 
 /**
  * 編集AIが出してよいコマンドの一覧と形(AI_EDIT_PROTOCOL.md 5章・6章)。
@@ -22,12 +22,61 @@ const transform = z
   .partial()
 const tempId = z.string().min(1).max(40).optional().describe('後のコマンドから参照するための一時ID')
 
+const period = z.number().min(50).max(60_000)
+const transitionSide = z.object({ kind: z.enum(TRANSITION_KINDS), durationMs: ms }).nullable()
+
 const effect = z.discriminatedUnion('type', [
   z.object({ type: z.literal('fade'), inMs: ms, outMs: ms }),
   z.object({ type: z.literal('scale'), from: z.number().positive(), to: z.number().positive(), easing, durationMs: ms }),
   z.object({ type: z.literal('move'), fromX: z.number(), fromY: z.number(), toX: z.number(), toY: z.number(), easing, durationMs: ms }),
-  z.object({ type: z.literal('shake'), amplitudePx: z.number().min(0), frequencyHz: z.number().positive().max(60), durationMs: ms })
+  z.object({ type: z.literal('shake'), amplitudePx: z.number().min(0), frequencyHz: z.number().positive().max(60), durationMs: ms }),
+  z.object({ type: z.literal('pulse'), amount: z.number().min(0).max(2), periodMs: period }).describe('拡大縮小の繰り返し(ドクンドクン)'),
+  z.object({ type: z.literal('blink'), periodMs: period, minOpacity: z.number().min(0).max(1) }).describe('点滅'),
+  z.object({ type: z.literal('spin'), degreesPerSecond: z.number().min(-7200).max(7200) }).describe('回り続ける'),
+  z.object({ type: z.literal('swing'), degrees: z.number().min(-180).max(180), periodMs: period }).describe('左右に傾く'),
+  z.object({ type: z.literal('float'), amplitudePx: z.number().min(0), periodMs: period }).describe('ふわふわ浮く'),
+  z.object({ type: z.literal('transition'), in: transitionSide, out: transitionSide }).describe('登場・退場の切り替え(ワイプ・円・スライド・ズームなど)')
 ])
+
+const stroke = z.object({ color, widthPx: z.number().min(0).max(200) })
+const shadowSchema = z.object({ color, offsetX: z.number().min(-200).max(200), offsetY: z.number().min(-200).max(200), blurPx: z.number().min(0).max(200) })
+
+/** 図形・装飾の見た目(null は形ごとの既定に戻す)。 */
+const shapeProps = z
+  .object({
+    width: z.number().min(1).max(20_000),
+    height: z.number().min(1).max(20_000),
+    fillOpacity: z.number().min(0).max(1),
+    gradient: z.object({ color, angle: z.number().min(-360).max(360), radial: z.boolean() }).nullable(),
+    thickness: z.number().min(0.5).max(400),
+    dash: z.enum(['solid', 'dash', 'dot']),
+    stroke: stroke.nullable(),
+    outerStroke: stroke.nullable(),
+    shadow: shadowSchema.nullable(),
+    cornerRadius: z.number().min(0).max(10_000),
+    points: z.number().int().min(3).max(60),
+    innerRatio: z.number().min(0.05).max(0.98),
+    tail: z.object({ x: z.number(), y: z.number() }).nullable().describe('吹き出しのしっぽの先(図形の中心からの位置)'),
+    headSize: z.number().min(0.2).max(4),
+    bend: z.number().min(-1).max(1),
+    drawMs: ms.describe('線を描いていく時間(手書きで現れる)'),
+    roughness: z.number().min(0).max(1),
+    wiggle: z.boolean(),
+    density: z.number().min(0.2).max(3),
+    speed: z.number().min(0).max(10)
+  })
+  .partial()
+
+const crop = z.object({ left: z.number().min(0).max(0.95), top: z.number().min(0).max(0.95), right: z.number().min(0).max(0.95), bottom: z.number().min(0).max(0.95) })
+const mediaFrame = z.object({ shape: z.enum(['rect', 'rounded', 'circle']), radiusPx: z.number().min(0).max(2000), border: stroke.nullable(), shadow: shadowSchema.nullable() })
+const colorAdjust = z.object({
+  brightness: z.number().min(0).max(3),
+  contrast: z.number().min(0).max(3),
+  saturation: z.number().min(0).max(3),
+  hue: z.number().min(-360).max(360),
+  sepia: z.number().min(0).max(1),
+  blurPx: z.number().min(0).max(100)
+})
 
 const portraitTransform = z.object({
   x: z.number(),
@@ -118,20 +167,37 @@ export const aiCommandSchema = z.discriminatedUnion('op', [
     fadeOutMs: ms.optional(),
     duckable: z.boolean().optional()
   }),
-  z.object({ op: z.literal('item.setContent'), itemId: id, text: text.optional(), styleId: id.optional(), fill: color.optional(), shape: z.enum(['rect', 'ellipse']).optional() }),
+  z.object({ op: z.literal('item.setContent'), itemId: id, text: text.optional(), styleId: id.optional(), fill: color.optional(), shape: z.enum(SHAPE_KINDS).optional() }),
+  z.object({ op: z.literal('item.setShape'), itemIds: z.array(id).min(1).max(200), shape: z.enum(SHAPE_KINDS).optional(), fill: color.optional(), props: shapeProps.optional(), replace: z.boolean().optional() }),
+  z.object({ op: z.literal('item.setMediaLook'), itemIds: z.array(id).min(1).max(200), crop: crop.nullable().optional(), frame: mediaFrame.nullable().optional(), adjust: colorAdjust.nullable().optional() }),
+  z.object({ op: z.literal('item.setVolumeKeys'), itemId: id, keys: z.array(z.object({ atMs: ms, gain: z.number().min(0).max(4) })).max(500).nullable() }),
   z.object({ op: z.literal('item.setTextLook'), itemIds: z.array(id).min(1).max(200), look: textLook, replace: z.boolean().optional() }),
   z.object({ op: z.literal('item.addEffect'), itemId: id, effect }),
   z.object({ op: z.literal('item.updateEffect'), itemId: id, effectIndex: z.number().int().min(0), effect }),
   z.object({ op: z.literal('item.removeEffect'), itemId: id, effectIndex: z.number().int().min(0) }),
   z.object({ op: z.literal('item.delete'), itemId: id }),
   z.object({ op: z.literal('item.split'), itemId: id, atMs: ms, tempId }),
-  z.object({ op: z.literal('item.setSpeed'), itemId: id, rate: z.number().min(0.25).max(4) }),
+  z.object({ op: z.literal('item.setSpeed'), itemId: id, rate: z.number().min(0.25).max(16) }),
   z.object({ op: z.literal('item.freezeFrame'), itemId: id, atMs: ms, durationMs: ms, mode: z.enum(['insert', 'overwrite']), tempId }),
   // タイムライン全体の間
   z.object({ op: z.literal('timeline.rippleDelete'), itemIds: z.array(id).min(1).max(200), ignoreOthers: z.boolean().optional() }),
   z.object({ op: z.literal('timeline.closeGap'), atMs: ms }),
   z.object({ op: z.literal('timeline.packLeft'), itemIds: z.array(id).min(1).max(200), keepGaps: z.boolean().optional() }),
   z.object({ op: z.literal('timeline.insertGap'), atMs: ms, durationMs: ms }),
+  z.object({ op: z.literal('timeline.crossTransition'), itemId: id, kind: z.enum(TRANSITION_KINDS), durationMs: ms }),
+  z.object({
+    op: z.literal('video.condense'),
+    itemId: id,
+    ranges: z.array(z.object({ fromMs: ms, toMs: ms })).min(1).max(200),
+    mode: z.enum(['cut', 'speed']),
+    rate: z.number().min(1.1).max(16).optional(),
+    ripple: z.boolean().optional(),
+    label: z.boolean().optional()
+  }),
+  // 目印(編集中のメモ。動画には出ない)
+  z.object({ op: z.literal('marker.add'), atMs: ms, text: z.string().max(500).optional(), color: color.optional(), tempId }),
+  z.object({ op: z.literal('marker.update'), markerId: id, atMs: ms.optional(), text: z.string().max(500).optional(), color: color.optional() }),
+  z.object({ op: z.literal('marker.remove'), markerId: id }),
   // 素材の配置(素材そのものの登録・削除は利用者だけが行う)
   z.object({ op: z.literal('media.placeVideo'), assetId: id, atMs: ms, layerId: id.optional(), inMs: ms.optional(), outMs: ms.optional(), transform: transform.optional(), volume: z.number().min(0).max(4).optional(), tempId }),
   z.object({ op: z.literal('media.placeImage'), assetId: id, atMs: ms, durationMs: ms, layerId: id.optional(), transform: transform.optional(), tempId }),
@@ -149,7 +215,18 @@ export const aiCommandSchema = z.discriminatedUnion('op', [
     tempId
   }),
   z.object({ op: z.literal('media.placeText'), text, atMs: ms, durationMs: ms, layerId: id.optional(), styleId: id.optional(), transform: transform.optional(), tempId }),
-  z.object({ op: z.literal('media.placeShape'), shape: z.enum(['rect', 'ellipse']), fill: color, atMs: ms, durationMs: ms, layerId: id.optional(), transform: transform.optional(), tempId }),
+  z.object({
+    op: z.literal('media.placeShape'),
+    shape: z.enum(SHAPE_KINDS),
+    fill: color,
+    atMs: ms,
+    durationMs: ms,
+    layerId: id.optional(),
+    transform: transform.optional(),
+    props: shapeProps.optional().describe('大きさ(width・height)・縁取り・影・描いていく時間など。width・height を省くと画面いっぱい'),
+    effects: z.array(effect).max(10).optional(),
+    tempId
+  }),
   // ズーム
   z.object({
     op: z.literal('zoom.insert'),

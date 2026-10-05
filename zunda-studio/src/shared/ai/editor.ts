@@ -35,6 +35,8 @@ function itemSummary(project: Project, item: Item): string {
       return `${base} asset=${item.assetId}`
     case 'text':
       return `${base} 「${item.text}」`
+    case 'shape':
+      return `${base} 図形=${item.shape} 色=${item.fill}${item.width ? ` ${Math.round(item.width)}x${Math.round(item.height ?? 0)}` : ' 画面いっぱい'} 中心=${Math.round(item.transform.x)},${Math.round(item.transform.y)}`
     case 'zoom':
       return `${base} 範囲 x=${item.region.x} y=${item.region.y} 幅=${item.region.width} 寄り方=${item.method}`
     case 'portrait':
@@ -92,6 +94,9 @@ export function buildEditorContext(project: Project, selection: readonly ItemId[
     `## セリフ以外のアイテム\n${others.join('\n') || '(なし)'}`,
     `## 素材\n${assets.join('\n') || '(なし)'}`,
     `## 字幕スタイル\n${styles.join('\n')}`,
+    project.markers && project.markers.length > 0
+      ? `## 目印(投稿者のメモ)\n${project.markers.map((marker) => `- ${marker.id} ${formatMs(marker.atMs)} ${marker.text || '(メモなし)'}`).join('\n')}`
+      : '',
     selection.length > 0 ? `## 選択中\n${selection.join(', ')}` : ''
   ]
     .filter(Boolean)
@@ -112,7 +117,9 @@ export function buildEditorPrompt(project: Project, request: EditorRequest): Omi
     '- セリフの長さ(尺)は音声合成で決まる。セリフの開始時刻や間は変えられるが、セリフの尺は直接変えられない',
     '- ズーム(zoom.insert)の region は幅だけを指定し、高さは動画の縦横比で決まる。立ち絵や字幕も拡大したいときだけ wholeScreen を true にする',
     `- 1回の提案は${MAX_AI_COMMANDS}コマンドまで。それより大きい変更は、何回かに分けることを reply で提案する`,
-    '- 素材の追加・削除、保存・書き出しはできない。必要なら reply で利用者に頼む'
+    '- 素材の追加・削除、保存・書き出しはできない。必要なら reply で利用者に頼む',
+    '- 強調の演出には装飾(media.placeShape)が使える: 手書きの丸(handCircle)・矢印(arrow/curveArrow)・吹き出し(bubble/shout/cloud)・集中線(focusLines)・スポットライト(spotlight)・紙吹雪(confetti)など。props に width・height(画素)・stroke(縁取り)・drawMs(描いていく時間)を入れ、effects で動き(pulse・blink・transition など)を付ける',
+    '- 待ち時間(相手のターン・ロード)を飛ばすには video.condense(cut か speed)。場面の切り替えには timeline.crossTransition が使える'
   ].join('\n')
 
   const history: ChatTurn[] = request.history.slice(-HISTORY_TURNS * 2).map((message) => ({ role: message.role, content: message.content }))

@@ -118,7 +118,14 @@ const exportSchema = z
   .object({
     crf: z.number().int().min(0).max(51).default(20),
     preset: z.string().default('veryfast'),
-    audioBitrateKbps: z.number().int().positive().default(192)
+    audioBitrateKbps: z.number().int().positive().default(192),
+    /** 音の大きさをそろえる目標(LUFS)。'off' ならそろえない。YouTube は -14。 */
+    loudness: z.union([z.literal('off'), z.number().min(-40).max(-5)]).default(-14),
+    /**
+     * 映像のエンコーダ。auto は使える GPU(NVIDIA・Intel・AMD)、無ければ CPU。
+     * 既定は CPU(画質が良く、書き出しの時間は1コマずつ描く方で決まるので、GPU にしてもほとんど速くならない)。
+     */
+    encoder: z.enum(['auto', 'cpu', 'nvenc', 'qsv', 'amf']).default('cpu')
   })
   .prefault({})
 
@@ -135,7 +142,15 @@ const subtitleLookSchema = z.object({
     y: z.number()
   }),
   maxCharsPerLine: z.number().int().min(1).max(200),
-  lineHeight: z.number().min(0.5).max(4)
+  lineHeight: z.number().min(0.5).max(4),
+  background: z
+    .object({ color: z.string(), opacity: z.number().min(0).max(1), paddingPx: z.number().min(0).max(200), radiusPx: z.number().min(0).max(200), fullWidth: z.boolean() })
+    .nullable()
+    .default(null),
+  appear: z
+    .object({ kind: z.enum(['none', 'fade', 'pop', 'slideUp', 'typewriter']), durationMs: z.number().min(0).max(10_000) })
+    .nullable()
+    .default(null)
 })
 
 const subtitleSchema = z
@@ -182,6 +197,29 @@ const uiSchema = z
   })
   .prefault({})
 
+/** 効果音のパレットの1つ。数字キー(1〜9)で再生位置に置ける。 */
+const soundEntrySchema = z.object({
+  id: z.string().min(1).max(64),
+  name: z.string().min(1).max(100),
+  path: z.string().min(1).max(4096),
+  /** 置くときの音量(倍率)。 */
+  volume: z.number().min(0).max(4).default(1),
+  license: z
+    .object({
+      source: z.string().max(2000).default(''),
+      creditRequired: z.boolean().default(false),
+      creditText: z.string().max(2000).optional(),
+      sourceId: z.string().max(100).optional()
+    })
+    .prefault({})
+})
+
+const soundsSchema = z
+  .object({
+    palette: z.array(soundEntrySchema).max(60).default([])
+  })
+  .prefault({})
+
 /** アプリのデータの置き場所。 */
 const storageSchema = z
   .object({
@@ -205,11 +243,13 @@ export const settingsSchema = z.object({
   editing: editingSchema,
   ui: uiSchema,
   storage: storageSchema,
+  sounds: soundsSchema,
   recentProjects: z.array(z.string()).default([])
 })
 
 export type AppSettings = z.infer<typeof settingsSchema>
 export type VoiceEngineSettings = z.infer<typeof voiceEngineSchema>
+export type SoundEntry = z.infer<typeof soundEntrySchema>
 
 type DeepPartial<T> = T extends readonly (infer U)[]
   ? readonly U[]

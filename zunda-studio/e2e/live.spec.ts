@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { expect, test, type Page } from '@playwright/test'
 
-import { aiCalls, clearAiCalls, FIXTURE_BIN, openFresh, queueAiResponses, queuePick, updateSettings, useFakeAi } from './helpers'
+import { aiCalls, clearAiCalls, FIXTURE_BIN, fixtureCommand, openFresh, queueAiResponses, queuePick, updateSettings, useFakeAi } from './helpers'
 import { MOCK_VOICEVOX_URL } from './ports'
 
 async function openLive(page: Page): Promise<Page> {
@@ -23,7 +23,7 @@ test.describe('ライブ(録画中の会話と振り返り)', () => {
     clearAiCalls()
     await updateSettings(request, {
       voice: { engines: [{ id: 'voicevox', label: 'VOICEVOX', url: MOCK_VOICEVOX_URL, executablePath: null, autoLaunch: false }] },
-      speech: { whisperPath: join(FIXTURE_BIN, 'whisper-cli'), whisperModelPath: join(FIXTURE_BIN, 'claude') },
+      speech: { whisperPath: fixtureCommand('whisper-cli'), whisperModelPath: join(FIXTURE_BIN, 'claude') },
       live: { speakReplies: false },
       obs: { enabled: false }
     })

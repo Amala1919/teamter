@@ -8,6 +8,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 
 import { EventBus } from '../src/main/core/events'
 import { mixAudio } from '../src/main/services/export/audio-mix'
+import { availableEncoders, measureLoudness, resolveEncoder } from '../src/main/services/export/encoders'
 import { ExportService } from '../src/main/services/export/export-service'
 import { FfmpegLocator } from '../src/main/services/media/ffmpeg'
 import { PsdService } from '../src/main/services/psd/psd-service'
@@ -191,6 +192,42 @@ describe('書き出し(本物の ffmpeg)', () => {
     expect(progress.map((entry) => entry.phase)).toEqual(expect.arrayContaining(['prepare', 'audio', 'video', 'done']))
     expect(progress.at(-1)).toMatchObject({ phase: 'done', outputPath: output })
     expect(existsSync(output.replace('.mp4', '.part.mp4'))).toBe(false)
+  })
+
+  it('音の大きさを目標(YouTube の -14 LUFS)にそろえられ、そろえないこともできる', async () => {
+    // BGM を小さく(10%)して、そのままだと目標よりずっと小さい音にする。
+    const quiet = apply(buildProject(), [{ op: 'project.setMix', music: 0.1 }])
+    const normalized = join(directory, 'loud.mp4')
+    const raw = join(directory, 'raw.mp4')
+    const progress: ExportProgress[] = []
+    const stop = events.listen((envelope) => {
+      if (envelope.type === 'export:progress') progress.push(envelope.payload as ExportProgress)
+    })
+    await exporter().run('job-loud', { project: quiet, outputPath: normalized, loudness: -14, encoder: 'cpu' })
+    await exporter().run('job-raw', { project: quiet, outputPath: raw, loudness: 'off', encoder: 'cpu' })
+    stop()
+    const measured = await measureLoudness('ffmpeg', process.env, normalized, -14)
+    expect(measured!.inputI).toBeGreaterThan(-16)
+    expect(measured!.inputI).toBeLessThan(-12)
+    expect((await measureLoudness('ffmpeg', process.env, raw, -14))!.inputI).toBeLessThan(-20)
+    // 進み具合に、そろえる前の大きさと使ったエンコーダが出る。
+    expect(progress.find((entry) => entry.jobId === 'job-loud' && entry.phase === 'video')).toMatchObject({ encoder: 'CPU(x264)' })
+    expect(progress.find((entry) => entry.jobId === 'job-loud' && entry.phase === 'video')!.loudness).toBeLessThan(-20)
+    expect(progress.find((entry) => entry.jobId === 'job-raw' && entry.phase === 'video')!.loudness).toBeUndefined()
+  })
+
+  it('エンコーダは CPU に固定でき、auto は使える GPU を試して選ぶ(無ければ CPU)', async () => {
+    expect(await resolveEncoder('cpu', 'ffmpeg', process.env)).toBe('cpu')
+    const available = await availableEncoders('ffmpeg', process.env)
+    expect(available.has('cpu')).toBe(true)
+    const auto = await resolveEncoder('auto', 'ffmpeg', process.env)
+    expect(available.has(auto)).toBe(true)
+    // auto で書き出した動画も H.264 になる。
+    const output = join(directory, 'auto.mp4')
+    await exporter().run('job-auto', { project: buildProject(), outputPath: output, encoder: 'auto' })
+    const probe = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_streams', output]).toString()) as { streams: { codec_name: string }[] }
+    expect(probe.streams.map((stream) => stream.codec_name).sort()).toEqual(['aac', 'h264'])
+    expect(isRed(pixelAt(output, 0.5, 20, 90, 320))).toBe(true)
   })
 
   it('中止すると途中のファイルを残さない', async () => {

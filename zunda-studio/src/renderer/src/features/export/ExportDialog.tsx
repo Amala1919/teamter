@@ -8,6 +8,7 @@ import { chapterLines, MIN_CHAPTERS } from '@shared/project/chapters'
 
 import { api, toAppError } from '../../api'
 import { formatMs } from '../../lib/time'
+import { useSettingsStore } from '../../state/settings'
 import { useEditorStore } from '../../state/store'
 import { Modal } from '../../ui/Modal'
 import { PublishSection } from './PublishSection'
@@ -24,6 +25,22 @@ const QUALITIES = [
   { value: 18, label: '高画質(ファイル大)' },
   { value: 20, label: '標準' },
   { value: 26, label: '軽量(ファイル小)' }
+]
+
+/** 音の大きさをそろえる目標(LUFS)。 */
+const LOUDNESS_OPTIONS: { value: string; label: string }[] = [
+  { value: '-14', label: 'YouTube に合わせる(-14 LUFS)' },
+  { value: '-16', label: '少し控えめ(-16 LUFS)' },
+  { value: '-23', label: '放送の基準(-23 LUFS)' },
+  { value: 'off', label: 'そろえない' }
+]
+
+const ENCODER_OPTIONS: { value: 'auto' | 'cpu' | 'nvenc' | 'qsv' | 'amf'; label: string }[] = [
+  { value: 'cpu', label: 'CPU(画質優先・標準)' },
+  { value: 'auto', label: 'GPU があれば使う' },
+  { value: 'nvenc', label: 'NVIDIA(NVENC)' },
+  { value: 'qsv', label: 'Intel(Quick Sync)' },
+  { value: 'amf', label: 'AMD(AMF)' }
 ]
 
 const PHASE_LABELS: Record<ExportProgress['phase'], string> = {
@@ -51,6 +68,10 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
   const [error, setError] = useState<string | null>(null)
   const [savedText, setSavedText] = useState<string | null>(null)
   const [srtSpeaker, setSrtSpeaker] = useState(false)
+  const exportSettings = useSettingsStore((state) => state.settings?.export)
+  const updateSettings = useSettingsStore((state) => state.update)
+  const loudness = exportSettings?.loudness ?? -14
+  const encoder = exportSettings?.encoder ?? 'cpu'
 
   const draft = useMemo(() => generateCredits(project), [project])
   const creditsText = project.credits.generated || draft.text
@@ -94,6 +115,8 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
         ...bounds,
         fps,
         crf,
+        loudness,
+        encoder,
         ...(height > 0 ? { height } : {})
       })
       setJobId(id)
@@ -177,6 +200,32 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
             </label>
           </div>
           <div className="field__row field__row--wrap">
+            <label className="field field--inline" title="YouTube などは、決まった大きさより大きい音を下げて流します。先にそろえておくと、小さすぎ・大きすぎを防げます">
+              <span className="field__label">音の大きさ</span>
+              <select
+                value={String(loudness)}
+                onChange={(event) => void updateSettings({ export: { loudness: event.target.value === 'off' ? 'off' : Number(event.target.value) } })}
+                data-testid="export-loudness"
+              >
+                {LOUDNESS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field field--inline" title="書き出しの時間は、ほとんどが1コマずつ描く方にかかります。GPU にしても大きくは速くなりません">
+              <span className="field__label">エンコーダ</span>
+              <select value={encoder} onChange={(event) => void updateSettings({ export: { encoder: event.target.value as typeof encoder } })} data-testid="export-encoder">
+                {ENCODER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="field__row field__row--wrap">
             <label className="field__row">
               <input type="radio" checked={range === 'all'} onChange={() => setRange('all')} />
               全体({formatMs(duration)})
@@ -194,6 +243,8 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
                 {PHASE_LABELS[progress.phase]}
                 {running && ` ${Math.round(progress.ratio * 100)}%`}
                 {progress.phase === 'video' && progress.fps ? `(${progress.fps.toFixed(1)}コマ/秒)` : ''}
+                {progress.phase === 'video' && progress.encoder ? ` ${progress.encoder}` : ''}
+                {progress.phase === 'video' && progress.loudness !== undefined ? ` ・ 音の大きさ ${progress.loudness} → ${loudness} LUFS` : ''}
               </span>
             </div>
           )}

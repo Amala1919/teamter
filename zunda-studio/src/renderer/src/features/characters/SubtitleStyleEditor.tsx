@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import type { Command } from '@shared/commands/types'
 import { lookForCharacter, subtitleLook, subtitlePresets } from '@shared/project/subtitle-look'
-import type { PortraitAnchor, SubtitleStyle } from '@shared/project/types'
+import { SUBTITLE_APPEARS, type PortraitAnchor, type SubtitleAppearKind, type SubtitleStyle } from '@shared/project/types'
 import { drawSubtitleLines } from '@shared/render/compositor'
 import type { Ctx2D } from '@shared/render/types'
 
@@ -24,6 +24,17 @@ function alignOf(anchor: PortraitAnchor): PortraitAnchor {
 }
 
 const DEFAULT_SHADOW = { color: '#00000080', offsetX: 4, offsetY: 4, blurPx: 4 }
+
+/** 帯を敷いたときの始めの見た目(黒・半透明・角丸)。 */
+const DEFAULT_BACKGROUND = { color: '#000000', opacity: 0.55, paddingPx: 14, radiusPx: 10, fullWidth: false }
+
+const APPEAR_LABELS: Record<SubtitleAppearKind, string> = {
+  none: 'そのまま出す',
+  fade: 'ふわっと',
+  pop: 'ぽんっと',
+  slideUp: '下からすっと',
+  typewriter: '1文字ずつ'
+}
 
 interface SubtitleStyleEditorProps {
   style: SubtitleStyle
@@ -227,6 +238,83 @@ export function SubtitleStyleEditor({ style, sampleLines, run }: SubtitleStyleEd
       </label>
 
       <div className="field">
+        <span className="field__label">帯</span>
+        <span className="field__row field__row--wrap">
+          <input
+            type="checkbox"
+            checked={style.background != null}
+            onChange={(event) => set({ background: event.target.checked ? DEFAULT_BACKGROUND : null }, '字幕の帯の変更')}
+            aria-label="字幕の後ろに帯を敷く"
+            data-testid="subtitle-background"
+          />
+          {style.background && (
+            <>
+              <input
+                type="color"
+                value={style.background.color.slice(0, 7)}
+                onChange={(event) => set({ background: { ...style.background!, color: event.target.value } }, '字幕の帯の変更')}
+                aria-label="帯の色"
+              />
+              濃さ(%)
+              <NumberInput
+                value={Math.round(style.background.opacity * 100)}
+                min={0}
+                max={100}
+                step={10}
+                integer
+                onCommit={(percent) => set({ background: { ...style.background!, opacity: percent / 100 } }, '字幕の帯の変更')}
+              />
+              余白
+              <NumberInput value={style.background.paddingPx} min={0} max={200} step={2} onCommit={(paddingPx) => set({ background: { ...style.background!, paddingPx } }, '字幕の帯の変更')} />
+              角の丸み
+              <NumberInput value={style.background.radiusPx} min={0} max={200} step={2} onCommit={(radiusPx) => set({ background: { ...style.background!, radiusPx } }, '字幕の帯の変更')} />
+              <label className="field__row">
+                <input
+                  type="checkbox"
+                  checked={style.background.fullWidth}
+                  onChange={(event) => set({ background: { ...style.background!, fullWidth: event.target.checked } }, '字幕の帯の変更')}
+                  data-testid="subtitle-background-full"
+                />
+                画面の横幅いっぱい
+              </label>
+            </>
+          )}
+        </span>
+      </div>
+
+      <div className="field">
+        <span className="field__label">出方</span>
+        <span className="field__row field__row--wrap">
+          <select
+            value={style.appear?.kind ?? 'none'}
+            onChange={(event) => {
+              const kind = event.target.value as SubtitleAppearKind
+              set({ appear: kind === 'none' ? null : { kind, durationMs: style.appear?.durationMs ?? (kind === 'typewriter' ? 600 : 250) } }, '字幕の出方の変更')
+            }}
+            data-testid="subtitle-appear"
+          >
+            {SUBTITLE_APPEARS.map((kind) => (
+              <option key={kind} value={kind}>
+                {APPEAR_LABELS[kind]}
+              </option>
+            ))}
+          </select>
+          {style.appear && style.appear.kind !== 'none' && (
+            <>
+              時間(秒)
+              <NumberInput
+                value={style.appear.durationMs / 1000}
+                min={0.05}
+                max={10}
+                step={0.05}
+                onCommit={(seconds) => set({ appear: { ...style.appear!, durationMs: Math.round(seconds * 1000) } }, '字幕の出方の変更')}
+              />
+            </>
+          )}
+        </span>
+      </div>
+
+      <div className="field">
         <span className="field__label">既定</span>
         <span className="field__row field__row--wrap">
           <button type="button" onClick={saveAsDefault} data-testid="subtitle-save-default">
@@ -368,7 +456,7 @@ function SubtitleSample({
       raw.lineTo(width, height * ratio)
       raw.stroke()
     }
-    drawSubtitleLines(context, lines, shown)
+    drawSubtitleLines(context, lines, shown, width)
   }, [shown, lines, width, height, fontsVersion])
 
   const toCanvas = (event: React.PointerEvent<HTMLCanvasElement>): { x: number; y: number } => {

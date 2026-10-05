@@ -21,6 +21,7 @@ import { ffmpegErrorDetail, ffmpegFailure, type FfmpegLocator } from '../media/f
 import type { PsdService } from '../psd/psd-service'
 import type { SynthesisService } from '../voice/synthesis-service'
 import { mixAudio } from './audio-mix'
+import { ENCODER_LABELS, loudnessFilter, measureLoudness, resolveEncoder, videoCodecArgs, type EncoderKind } from './encoders'
 import { FrameStream } from './streams'
 
 interface ActiveVideo {
@@ -93,18 +94,42 @@ export class ExportService {
         onProgress: (ratio) => emit({ phase: 'audio', ratio })
       })
 
-      await this.encodeVideo(project, request, { startMs, endMs, ffmpeg, env, audioPath, partial, resources, signal }, (ratio, fps) =>
-        emit({ phase: 'video', ratio, fps })
-      )
+      // 音の大きさをそろえる(YouTube などの基準。設定で切れる)。測るのは混ぜた音声に対して1回だけ。
+      const settings = this.getSettings().export
+      const target = request.loudness ?? settings.loudness
+      let audioFilter: string | null = null
+      let loudness: number | undefined
+      if (target !== 'off') {
+        const stats = await measureLoudness(ffmpeg, env, audioPath, target, signal)
+        if (stats) {
+          audioFilter = loudnessFilter(stats, target)
+          loudness = Math.round(stats.inputI * 10) / 10
+        }
+      }
+
+      // GPU で書き出せるならそれを使う(設定で CPU に固定できる)。GPU で失敗したら、CPU でやり直す。
+      let kind = await resolveEncoder(request.encoder ?? settings.encoder, ffmpeg, env)
+      const encode = (encoder: EncoderKind): Promise<void> =>
+        this.encodeVideo(project, request, { startMs, endMs, ffmpeg, env, audioPath, audioFilter, encoder, partial, resources, signal }, (ratio, fps) =>
+          emit({ phase: 'video', ratio, fps, encoder: ENCODER_LABELS[encoder], ...(loudness !== undefined ? { loudness } : {}) })
+        )
+      try {
+        await encode(kind)
+      } catch (error) {
+        if (kind === 'cpu' || signal?.aborted || !(error instanceof AppError) || error.code !== 'FFMPEG_FAILED') throw error
+        await rm(partial, { force: true, maxRetries: 5, retryDelay: 100 })
+        kind = 'cpu'
+        await encode(kind)
+      }
       await rename(partial, request.outputPath)
       emit({ phase: 'done', ratio: 1, outputPath: request.outputPath })
     } catch (error) {
-      await rm(partial, { force: true })
+      await rm(partial, { force: true, maxRetries: 5, retryDelay: 100 })
       const cancelled = signal?.aborted === true || (error instanceof AppError && error.code === 'CANCELLED')
       emit(cancelled ? { phase: 'cancelled', ratio: 0 } : { phase: 'error', ratio: 0, error: toErrorShape(error) })
       if (!cancelled) throw error
     } finally {
-      await rm(audioPath, { force: true })
+      await rm(audioPath, { force: true, maxRetries: 5, retryDelay: 100 })
     }
   }
 
@@ -133,6 +158,9 @@ export class ExportService {
       ffmpeg: string
       env: NodeJS.ProcessEnv
       audioPath: string
+      /** 音の大きさをそろえるフィルタ。null ならそのまま。 */
+      audioFilter: string | null
+      encoder: EncoderKind
       partial: string
       resources: NodeRenderResources
       signal: AbortSignal | undefined
@@ -164,16 +192,12 @@ export class ExportService {
         '-i',
         context.audioPath,
         ...(outputHeight ? ['-vf', `scale=-2:${outputHeight}:flags=lanczos`] : []),
+        ...(context.audioFilter ? ['-af', context.audioFilter] : []),
         '-map',
         '0:v',
         '-map',
         '1:a',
-        '-c:v',
-        'libx264',
-        '-preset',
-        settings.preset,
-        '-crf',
-        String(request.crf ?? settings.crf),
+        ...videoCodecArgs(context.encoder, request.crf ?? settings.crf, settings.preset),
         '-pix_fmt',
         'yuv420p',
         '-c:a',
@@ -223,6 +247,8 @@ export class ExportService {
       if (code !== 0) throw new AppError('FFMPEG_FAILED', encodeFailure(stderr), ffmpegErrorDetail(stderr))
     } catch (error) {
       encoder.kill('SIGKILL')
+      // 終わるのを待つ。Windows では ffmpeg が開いている間、途中のファイルと音声の WAV を消せない。
+      await exited.catch(() => null)
       if (error instanceof AppError && error.code === 'FFMPEG_FAILED') throw error
       // 書き込みの失敗は、ffmpeg が先に異常終了したことが原因であることが多い。その理由を添える。
       if (!(error instanceof AppError) && stderr.trim() !== '') {

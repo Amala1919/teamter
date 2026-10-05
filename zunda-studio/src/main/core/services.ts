@@ -26,6 +26,7 @@ import { defaultCacheRoot, finishCacheMove, markCacheRoot } from './cache-locati
 import { createAppPaths, ensureAppDirectories, type AppPaths } from './paths'
 import { SettingsStore } from './settings-store'
 import { CharacterLibraryStore } from './character-library-store'
+import { TemplateStore } from './template-store'
 import { sevenZipPath } from './seven-zip'
 
 export interface ServicesOptions {
@@ -70,6 +71,7 @@ export interface Services {
   cache: { root: string; defaultRoot: string; fallbackFrom: string | null }
   /** アプリに保存したキャラクター。 */
   characters: CharacterLibraryStore
+  templates: TemplateStore
   secrets: SecretStore
   media: MediaAccess
   picker: FilePicker
@@ -118,9 +120,14 @@ export async function createServices(options: ServicesOptions): Promise<Services
 
   const media = new MediaAccess()
   media.allowRoot(paths.cache.root)
+  // 効果音のパレットに登録した音は、どのプロジェクトからでも置けるようにしておく(登録はファイルを選んだときだけ)。
+  media.allowFiles(settings.get().sounds.palette.map((entry) => entry.path))
   // 保存したキャラクターの立ち絵(PSD)は、新しいプロジェクトに足したときに読めるようにしておく。
   const characters = new CharacterLibraryStore(paths.charactersFile, (path) => media.allowFile(path))
   await characters.load()
+  // ひな形で使う素材も、どのプロジェクトに入れても読めるようにしておく。
+  const templates = new TemplateStore(paths.templatesFile, (path) => media.allowFile(path))
+  await templates.load()
 
   const getSettings = (): ReturnType<SettingsStore['get']> => settings.get()
   const env = options.env ?? process.env
@@ -161,6 +168,7 @@ export async function createServices(options: ServicesOptions): Promise<Services
     settings,
     cache: { root: paths.cache.root, defaultRoot: defaultCacheRoot(options.userData), fallbackFrom: cache.fallbackFrom },
     characters,
+    templates,
     secrets,
     media,
     picker: options.picker,

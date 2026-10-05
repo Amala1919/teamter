@@ -7,6 +7,7 @@
  */
 
 import type { GeneratedBy, ModelRef } from '../ai/types'
+import type { ProjectTemplate } from '../project/templates'
 import type {
   AiPersona,
   ProjectBriefing,
@@ -20,9 +21,15 @@ import type {
   PortraitItemKind,
   PortraitTransform,
   CharacterAuthorRole,
+  ColorAdjust,
+  Crop,
   Effect,
   Item,
+  MediaFrame,
   ShapeItem,
+  ShapeKind,
+  ShapeProps,
+  TransitionKind,
   Transform,
   ZoomMethod,
   ZoomRegion,
@@ -39,6 +46,7 @@ import type {
   SynthesisResult,
   TextLook,
   VoiceConfig,
+  VolumeKey,
   VoiceParams
 } from '../project/types'
 
@@ -63,6 +71,18 @@ export interface ProjectSetConversationAi {
 export interface ProjectSetBriefing {
   op: 'project.setBriefing'
   briefing: ProjectBriefing | null
+}
+
+/**
+ * 動画の大きさ・フレームレート・背景の色を変える。rescale なら、置いた素材の位置・大きさ・字幕を新しい大きさに合わせる。
+ */
+export interface ProjectSetCanvas {
+  op: 'project.setCanvas'
+  width?: number
+  height?: number
+  fps?: number
+  backgroundColor?: string
+  rescale?: boolean
 }
 
 /** 全体の音量と、音の種類ごとの音量(0〜2 の倍率。1 = 100%)。null で 100% に戻す。 */
@@ -429,6 +449,7 @@ export interface MediaPlaceText {
   tempId?: string
 }
 
+/** 図形・装飾を置く。props の width・height を省くと画面いっぱいの大きさになる(以前の図形と同じ)。 */
 export interface MediaPlaceShape {
   op: 'media.placeShape'
   shape: ShapeItem['shape']
@@ -437,7 +458,38 @@ export interface MediaPlaceShape {
   atMs: Ms
   durationMs: Ms
   transform?: Partial<Transform>
+  props?: ShapeProps
+  effects?: Effect[]
   tempId?: string
+}
+
+/**
+ * 図形の形・色・見た目を変える(選んだ複数の図形にまとめて)。props の項目を null にすると形ごとの既定に戻す。
+ * replace なら今の見た目の調整を捨てて props だけにする(大きさは残す。ひな形を当てるとき)。
+ */
+export interface ItemSetShape {
+  op: 'item.setShape'
+  itemIds: ItemId[]
+  shape?: ShapeKind
+  fill?: string
+  props?: { [K in keyof ShapeProps]?: ShapeProps[K] | null }
+  replace?: boolean
+}
+
+/** 音量の折れ点を置き換える(アイテム内の時刻と倍率)。null か空で一定に戻す。 */
+export interface ItemSetVolumeKeys {
+  op: 'item.setVolumeKeys'
+  itemId: ItemId
+  keys: VolumeKey[] | null
+}
+
+/** 動画・画像の切り抜き・枠(ワイプの見た目)・色の調整を変える(複数にまとめて)。null で外す。 */
+export interface ItemSetMediaLook {
+  op: 'item.setMediaLook'
+  itemIds: ItemId[]
+  crop?: Crop | null
+  frame?: MediaFrame | null
+  adjust?: ColorAdjust | null
 }
 
 // ------------------------------------------------------------------ アイテム共通(続き)
@@ -578,6 +630,34 @@ export interface TimelineRippleDelete {
   ignoreOthers?: boolean
 }
 
+/**
+ * 前の素材から切り替える(クロスフェード・ワイプなど)。直前で終わる画面の素材と durationMs だけ重ね、この素材に登場の切り替えを付ける。
+ * 重ねる分は前の素材の続きを使う(足りなければこの素材の手前を使う)。この素材は前の素材より上のレイヤーへ移す。
+ * どちらにも続きが無ければ重ねずに、前の素材をフェードで消してからこの素材を出す(時間は半分ずつ)。
+ * 直前に素材が無ければ、登場の切り替えだけを付ける。
+ */
+export interface TimelineCrossTransition {
+  op: 'timeline.crossTransition'
+  itemId: ItemId
+  kind: TransitionKind
+  durationMs: Ms
+}
+
+/**
+ * 動画の中の区間(タイムラインの時刻)をまとめて詰める。待ち時間(相手のターン・ロード)を飛ばすのに使う。
+ * cut: その区間を切り取る / speed: その区間だけ rate 倍で早送りにする(label なら「▶▶ ×4」のテロップも置く)。
+ * ripple(既定 true)なら、短くなった分だけ後ろの素材を前へ詰める。
+ */
+export interface VideoCondense {
+  op: 'video.condense'
+  itemId: ItemId
+  ranges: { fromMs: Ms; toMs: Ms }[]
+  mode: 'cut' | 'speed'
+  rate?: number
+  ripple?: boolean
+  label?: boolean
+}
+
 /** atMs の位置にある「何も置かれていない時間」を詰める。 */
 export interface TimelineCloseGap {
   op: 'timeline.closeGap'
@@ -699,6 +779,46 @@ export interface ZoomUpdate {
   outMs?: Ms
 }
 
+// ------------------------------------------------------------------ ひな形
+
+/**
+ * ひな形(オープニング・エンディングなど)を atMs に入れる。ripple なら後ろをずらして場所を空ける。
+ * 素材・字幕スタイル・レイヤーは入れる先のものに合わせ(無ければ足す)、キャラクターがいないセリフは入れない。
+ * 入れたアイテムの ID は tempIdPrefix + 番号で受け取れる。アプリの内部処理だけが発行する。
+ */
+export interface TemplateInsert {
+  op: 'template.insert'
+  template: ProjectTemplate
+  atMs: Ms
+  ripple?: boolean
+  tempIdPrefix?: string
+}
+
+// ------------------------------------------------------------------ 目印(編集中のメモ)
+
+/** 目印を置く。動画には出ない(編集のメモ・チャプターの元)。 */
+export interface MarkerAdd {
+  op: 'marker.add'
+  atMs: Ms
+  text?: string
+  /** #rrggbb */
+  color?: string
+  tempId?: string
+}
+
+export interface MarkerUpdate {
+  op: 'marker.update'
+  markerId: string
+  atMs?: Ms
+  text?: string
+  color?: string
+}
+
+export interface MarkerRemove {
+  op: 'marker.remove'
+  markerId: string
+}
+
 // ------------------------------------------------------------------ ライブの記録
 
 /** ライブの記録をプロジェクトに取り込む。既にあれば発言を足し、採用済みの印や手で直したずれは残す。 */
@@ -745,6 +865,7 @@ export type Command =
   | ProjectSetConversationAi
   | ProjectSetEditing
   | ProjectSetMix
+  | ProjectSetCanvas
   | ProjectSetBriefing
   | CreditsSet
   | PublishSet
@@ -780,6 +901,8 @@ export type Command =
   | ItemSetLocked
   | TimelineRippleDelete
   | TimelineCloseGap
+  | TimelineCrossTransition
+  | VideoCondense
   | TimelinePackLeft
   | TimelineInsertGap
   | TimelineArrangeOverlaps
@@ -792,10 +915,17 @@ export type Command =
   | MediaPlaceAudio
   | MediaPlaceText
   | MediaPlaceShape
+  | ItemSetShape
+  | ItemSetMediaLook
+  | ItemSetVolumeKeys
   | PortraitInsert
   | PortraitUpdate
   | ZoomInsert
   | ZoomUpdate
+  | TemplateInsert
+  | MarkerAdd
+  | MarkerUpdate
+  | MarkerRemove
   | LiveImportSession
   | LiveSetOffset
   | LiveLinkRecording

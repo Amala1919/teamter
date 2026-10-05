@@ -264,6 +264,26 @@ export interface SubtitlePosition {
   y: number
 }
 
+/** 字幕の後ろに敷く帯。 */
+export interface SubtitleBackground {
+  color: string
+  /** 0〜1 */
+  opacity: number
+  paddingPx: number
+  radiusPx: number
+  /** 真なら画面の横幅いっぱいの帯にする。 */
+  fullWidth: boolean
+}
+
+/** 字幕の出方。typewriter は1文字ずつ。 */
+export const SUBTITLE_APPEARS = ['none', 'fade', 'pop', 'slideUp', 'typewriter'] as const
+export type SubtitleAppearKind = (typeof SUBTITLE_APPEARS)[number]
+
+export interface SubtitleAppear {
+  kind: SubtitleAppearKind
+  durationMs: Ms
+}
+
 export interface SubtitleStyle {
   id: SubtitleStyleId
   name: string
@@ -276,6 +296,10 @@ export interface SubtitleStyle {
   position: SubtitlePosition
   maxCharsPerLine: number
   lineHeight: number
+  /** 字幕の後ろの帯。無ければ敷かない。 */
+  background?: SubtitleBackground | null
+  /** 出方。無ければそのまま出す。 */
+  appear?: SubtitleAppear | null
 }
 
 // ---------------------------------------------------------------- レイヤー
@@ -328,7 +352,86 @@ export interface ShakeEffect {
   durationMs: Ms
 }
 
-export type Effect = FadeEffect | ScaleEffect | MoveEffect | ShakeEffect
+/** 大きくなったり小さくなったりを繰り返す(ドクンドクン)。amount は振れ幅(0.1 で ±10%)。 */
+export interface PulseEffect {
+  type: 'pulse'
+  amount: number
+  periodMs: Ms
+}
+
+/** 点滅する。minOpacity は一番薄いときの不透明度(0 で消える)。 */
+export interface BlinkEffect {
+  type: 'blink'
+  periodMs: Ms
+  minOpacity: number
+}
+
+/** 回り続ける(1秒に degreesPerSecond 度。負なら逆回り)。 */
+export interface SpinEffect {
+  type: 'spin'
+  degreesPerSecond: number
+}
+
+/** 振り子のように左右に傾く。 */
+export interface SwingEffect {
+  type: 'swing'
+  degrees: number
+  periodMs: Ms
+}
+
+/** ふわふわと上下に浮く。 */
+export interface FloatEffect {
+  type: 'float'
+  amplitudePx: number
+  periodMs: Ms
+}
+
+/** 登場・退場の切り替え方。docs/PROJECT_FORMAT.md 7 を参照。 */
+export const TRANSITION_KINDS = [
+  'fade',
+  'wipeRight',
+  'wipeLeft',
+  'wipeDown',
+  'wipeUp',
+  'iris',
+  'slideLeft',
+  'slideRight',
+  'slideUp',
+  'slideDown',
+  'zoom',
+  'pop',
+  'blur',
+  'spin',
+  'blinds'
+] as const
+export type TransitionKind = (typeof TRANSITION_KINDS)[number]
+
+export interface TransitionSide {
+  kind: TransitionKind
+  durationMs: Ms
+}
+
+/**
+ * 登場(in)・退場(out)の切り替え。ワイプ・スライド・円形などで出入りする。
+ * 前の動画に重ねて置いた動画に in を付けると、場面の切り替え(クロスフェード・ワイプ)になる。
+ */
+export interface TransitionEffect {
+  type: 'transition'
+  in: TransitionSide | null
+  out: TransitionSide | null
+}
+
+export type Effect =
+  | FadeEffect
+  | ScaleEffect
+  | MoveEffect
+  | ShakeEffect
+  | PulseEffect
+  | BlinkEffect
+  | SpinEffect
+  | SwingEffect
+  | FloatEffect
+  | TransitionEffect
 
 // ---------------------------------------------------------------- アイテム
 
@@ -423,7 +526,51 @@ export interface VoiceItem extends ItemBase {
   subtitleHidden?: boolean
 }
 
-export interface VideoItem extends ItemBase {
+/** 切り抜き。素材の上下左右から切り落とす割合(0〜1)。 */
+export interface Crop {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+/** 動画・画像の枠(ワイプ・小窓の見た目)。 */
+export interface MediaFrame {
+  /** rect: 四角 / rounded: 角丸(radiusPx) / circle: 円(楕円)で切り抜く */
+  shape: 'rect' | 'rounded' | 'circle'
+  radiusPx: number
+  border: { color: string; widthPx: number } | null
+  shadow: SubtitleShadow | null
+}
+
+/** 色の調整。数値は元のままが 1(色相は 0 度、ぼかし・セピアは 0)。 */
+export interface ColorAdjust {
+  brightness: number
+  contrast: number
+  saturation: number
+  /** 色相を回す角度(度)。 */
+  hue: number
+  /** セピア(0〜1)。回想シーンなどに。 */
+  sepia: number
+  /** ぼかし(px)。 */
+  blurPx: number
+}
+
+/** 音量の折れ点(アイテム内の相対時刻と倍率)。点の間はなめらかにつなぐ。 */
+export interface VolumeKey {
+  atMs: Ms
+  /** 0〜4。素材の音量(volume)にさらに掛ける。 */
+  gain: number
+}
+
+/** 動画・画像に共通の見た目(切り抜き・枠・色の調整)。どれも無ければ元のまま。 */
+export interface MediaLook {
+  crop?: Crop
+  frame?: MediaFrame
+  adjust?: ColorAdjust
+}
+
+export interface VideoItem extends ItemBase, MediaLook {
   type: 'video'
   assetId: AssetId
   inMs: Ms
@@ -436,9 +583,11 @@ export interface VideoItem extends ItemBase {
    * 無い古いプロジェクトは通常の動画として扱う。
    */
   freeze?: boolean
+  /** 音量の時間変化。無ければ一定。 */
+  volumeKeys?: VolumeKey[]
 }
 
-export interface ImageItem extends ItemBase {
+export interface ImageItem extends ItemBase, MediaLook {
   type: 'image'
   assetId: AssetId
   transform: Transform
@@ -497,11 +646,101 @@ export interface AudioItem extends ItemBase {
   fadeOutMs: Ms
   /** セリフ再生中に自動で音量を下げる対象にするか。 */
   duckable: boolean
+  /** 音量の時間変化。無ければ一定。 */
+  volumeKeys?: VolumeKey[]
 }
 
-export interface ShapeItem extends ItemBase {
+/**
+ * 図形・装飾の形。描き方は shared/render/shapes.ts。
+ * 動くもの(集中線・流線・紙吹雪・キラキラ)は時刻と renderSeed から決定論的に描く。
+ */
+export const SHAPE_KINDS = [
+  'rect',
+  'roundRect',
+  'ellipse',
+  'triangle',
+  'diamond',
+  'star',
+  'burst',
+  'heart',
+  'arrow',
+  'curveArrow',
+  'line',
+  'wave',
+  'check',
+  'cross',
+  'handCircle',
+  'corners',
+  'bubble',
+  'shout',
+  'cloud',
+  'band',
+  'focusLines',
+  'speedLines',
+  'spotlight',
+  'confetti',
+  'sparkles'
+] as const
+export type ShapeKind = (typeof SHAPE_KINDS)[number]
+
+export interface ShapeStroke {
+  color: string
+  widthPx: number
+}
+
+/** 塗りのグラデーション。fill から color へ変わる。 */
+export interface ShapeGradient {
+  color: string
+  /** 線形の向き(度。0 で左から右、90 で上から下)。 */
+  angle: number
+  /** 真なら中心から外へ(円形)。 */
+  radial: boolean
+}
+
+/** 図形の見た目と、形ごとの調整。無い項目は形ごとの既定値。 */
+export interface ShapeProps {
+  /** 基準の大きさ(px)。無い(以前の図形)なら画面いっぱい。 */
+  width?: number
+  height?: number
+  /** 塗りの不透明度(0 なら塗らず線だけ)。 */
+  fillOpacity?: number
+  gradient?: ShapeGradient | null
+  /** 線の形(矢印の軸・下線・チェックなど)の太さ(px)。 */
+  thickness?: number
+  /** 線の種類。線の形では本体の線、塗らない図形では縁取りに掛かる。 */
+  dash?: 'solid' | 'dash' | 'dot'
+  /** 縁取り。 */
+  stroke?: ShapeStroke | null
+  /** 線のさらに外側の縁(白い縁で目立たせるなど)。 */
+  outerStroke?: ShapeStroke | null
+  /** 影。ずらしを 0 にして明るい色にすると光って見える。 */
+  shadow?: SubtitleShadow | null
+  cornerRadius?: number
+  /** 星・爆発の角の数。 */
+  points?: number
+  /** 星のくぼみの深さ(0〜1。小さいほど細い)。 */
+  innerRatio?: number
+  /** 吹き出しのしっぽの先(図形の中心からの位置、px)。 */
+  tail?: { x: number; y: number } | null
+  /** 矢印の頭の大きさ(太さに対する倍率)。 */
+  headSize?: number
+  /** 曲がった矢印の曲がり具合(-1〜1)。 */
+  bend?: number
+  /** 線を描いていく(手書きで現れる)時間。0 なら始めから全部出す。 */
+  drawMs?: Ms
+  /** 手書き風のゆらぎ(0〜1)。 */
+  roughness?: number
+  /** 手書きの線をゆらゆら動かす。 */
+  wiggle?: boolean
+  /** 集中線・紙吹雪・キラキラの量(0.2〜3、1 が標準)。 */
+  density?: number
+  /** 動く装飾の速さ(倍率)。 */
+  speed?: number
+}
+
+export interface ShapeItem extends ItemBase, ShapeProps {
   type: 'shape'
-  shape: 'rect' | 'ellipse'
+  shape: ShapeKind
   fill: string
   transform: Transform
 }
@@ -659,6 +898,8 @@ export interface Project {
   publish?: PublishInfo
   /** 全体の音量と、音の種類ごとの音量。無い項目は 1(100%)。 */
   mix?: AudioMix
+  /** 編集中の目印。 */
+  markers?: Marker[]
 }
 
 /**
@@ -674,6 +915,15 @@ export interface AudioMix {
   music?: number
   /** 動画の音。 */
   video?: number
+}
+
+/** 編集中の目印(メモ付き)。動画には出ない。チャプターの元にもできる。 */
+export interface Marker {
+  id: string
+  atMs: Ms
+  text: string
+  /** #rrggbb */
+  color: string
 }
 
 export interface Chapter {

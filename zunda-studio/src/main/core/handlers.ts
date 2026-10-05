@@ -24,6 +24,7 @@ import { buildPublishPrompt, interpretPublishResponse, publishResponseSchema } f
 import { PROVIDER_IDS, projectSession } from '@shared/ai/types'
 import type { CacheInfo, Channel, ChannelArgs, ChannelResult, IpcResult } from '@shared/ipc/contract'
 import type { SavedCharacter } from '@shared/project/character-library'
+import type { ProjectTemplate } from '@shared/project/templates'
 import type { Project } from '@shared/project/types'
 import type { SettingsPatch } from '@shared/settings/schema'
 import { SECRET_NAMES } from '@shared/settings/secrets'
@@ -193,6 +194,7 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
   'media:probe': z.tuple([pathArg]),
   'media:proxy': z.union([z.tuple([pathArg, z.enum(['mp4', 'webm'])]), z.tuple([pathArg, z.enum(['mp4', 'webm']), z.number().int().min(0).max(4320)])]),
   'media:peaks': z.tuple([pathArg]),
+  'media:activity': z.tuple([pathArg]),
   'export:start': z.tuple([
     z
       .object({
@@ -202,7 +204,9 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
         endMs: z.number().min(0).optional(),
         fps: z.number().int().min(1).max(120).optional(),
         height: z.number().int().min(144).max(4320).optional(),
-        crf: z.number().int().min(0).max(51).optional()
+        crf: z.number().int().min(0).max(51).optional(),
+        loudness: z.union([z.literal('off'), z.number().min(-40).max(-5)]).optional(),
+        encoder: z.enum(['auto', 'cpu', 'nvenc', 'qsv', 'amf']).optional()
       })
       .loose()
   ]) as unknown as z.ZodType<ChannelArgs<'export:start'>>,
@@ -235,6 +239,9 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
   // 形の検証は保存するときに行う(壊れた値は保存しない)
   'characters:save': z.tuple([z.record(z.string(), z.unknown())]) as unknown as z.ZodType<[SavedCharacter]>,
   'characters:remove': z.tuple([z.string().min(1).max(100)]),
+  'templates:list': z.tuple([]),
+  'templates:save': z.tuple([z.record(z.string(), z.unknown())]) as unknown as z.ZodType<[ProjectTemplate]>,
+  'templates:remove': z.tuple([z.string().min(1).max(100)]),
   'persona:read': z.tuple([pathArg]),
   'autosave:read': z.tuple([z.string().min(1).max(40)]),
   'autosave:clear': z.tuple([z.string().min(1).max(40)]),
@@ -505,6 +512,7 @@ export function createHandlers(services: Services): HandlerTable {
     'media:probe': (path) => requireAllowed(services, path).then(() => services.mediaTools.probe(path)),
     'media:proxy': (path, format, maxHeight) => requireAllowed(services, path).then(() => services.mediaTools.proxy(path, format, maxHeight)),
     'media:peaks': (path) => requireAllowed(services, path).then(() => services.mediaTools.peaks(path)),
+    'media:activity': (path) => requireAllowed(services, path).then(() => services.analysis.activity(path)),
 
     'export:start': (request) => {
       // 書き出し先は保存ダイアログで選ばれた場所に限る(任意の場所へ書かせない)。
@@ -539,6 +547,9 @@ export function createHandlers(services: Services): HandlerTable {
     'characters:list': () => Promise.resolve(services.characters.list()),
     'characters:save': (character) => services.characters.save(character),
     'characters:remove': (id) => services.characters.remove(id),
+    'templates:list': () => Promise.resolve(services.templates.list()),
+    'templates:save': (template) => services.templates.save(template),
+    'templates:remove': (id) => services.templates.remove(id),
     'persona:read': async (path) => {
       if (!services.readableFiles.has(resolve(path))) throw new AppError('ACCESS_DENIED', 'ファイルはファイル選択で選んでください')
       let raw: unknown

@@ -5,6 +5,7 @@ import { entryTimelineMs } from '@shared/live/timing'
 import { itemEndMs, projectDurationMs } from '@shared/project/queries'
 import { timelineColor } from '@shared/project/timeline-colors'
 import { PREVIEW_RESOLUTIONS, type Item, type Layer, type Ms, type Project } from '@shared/project/types'
+import { SHAPE_DEFAULTS } from '@shared/render/shapes'
 import { ZOOM_METHOD_LABELS } from '@shared/render/zoom'
 
 import { pickColor } from '../../lib/pick-color'
@@ -14,9 +15,18 @@ import { withGroups } from '../../state/edit-actions'
 import { assetName, importMediaFiles, parsePreview } from '../../state/media'
 import { useSettingsStore } from '../../state/settings'
 import { useEditorStore } from '../../state/store'
-import { openContextMenu } from '../../ui/ContextMenu'
+import { openContextMenu, openMenuAt } from '../../ui/ContextMenu'
+import { addMarker, jumpToMarker } from '../../state/markers'
+import { MarkerEditor, MarkerFlags } from './MarkerFlags'
 import { itemMenu, laneMenu, layerMenu, rulerMenu, type MenuContext } from './timeline-menus'
+import { DecorationPicker } from '../decorations/DecorationPicker'
 import { FreeSourcesDialog } from '../media/FreeSourcesDialog'
+import { LullDialog } from './LullDialog'
+import { SoundPalette } from './SoundPalette'
+import { TemplateSaveDialog } from './TemplateSaveDialog'
+import { templateMenu } from './template-menu'
+import { useTemplateEntries } from '../../state/template-entries'
+import { VolumeLine } from './VolumeLine'
 import { Waveform } from './Waveform'
 
 const MIN_VISIBLE_MS = 10_000
@@ -59,6 +69,13 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
   const [pxPerSecond, setPxPerSecond] = useState(60)
   const [drag, setDrag] = useState<DragState | null>(null)
   const [sourcesOpen, setSourcesOpen] = useState(false)
+  const [decorationsOpen, setDecorationsOpen] = useState(false)
+  const [soundsOpen, setSoundsOpen] = useState(false)
+  const [templateSaveOpen, setTemplateSaveOpen] = useState(false)
+  const templates = useTemplateEntries((state) => state.entries)
+  /** 待ち時間を探している動画。 */
+  const [lullItemId, setLullItemId] = useState<string | null>(null)
+  const lullItem = project.items.find((candidate) => candidate.id === lullItemId)
   const scrollRef = useRef<HTMLDivElement>(null)
   const rulerRef = useRef<HTMLDivElement>(null)
   const zoomRef = useRef(pxPerSecond)
@@ -255,8 +272,12 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
     else if (result.resolvedIds['text']) setSelection([result.resolvedIds['text']])
   }
 
+  const reportMarker = (message: string | null): void => {
+    if (message) onError(message)
+  }
+
   const step = labelStepSeconds(pxPerSecond)
-  const menuContext: MenuContext = { onError, onAddMedia: () => void addMedia() }
+  const menuContext: MenuContext = { onError, onAddMedia: () => void addMedia(), onFindLulls: (item) => setLullItemId(item.id) }
   /** クリックした位置の時刻(レーン・目盛りの左端が 0)。 */
   const timeAt = (event: React.MouseEvent<HTMLElement>): Ms =>
     ((event.clientX - event.currentTarget.getBoundingClientRect().left) / pxPerSecond) * 1000
@@ -290,6 +311,50 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
         </label>
         <button type="button" className="button--small" onClick={addCaption} data-testid="add-caption">
           テロップ
+        </button>
+        <button type="button" className="button--small" onClick={() => setDecorationsOpen(true)} data-testid="open-decorations" title="矢印・丸・吹き出し・集中線などの装飾を置く">
+          装飾
+        </button>
+        <button type="button" className="button--small" onClick={() => setSoundsOpen(true)} data-testid="open-sounds" title="よく使う効果音を登録して、再生位置に置く(数字キー 1〜9 でも置ける)">
+          効果音
+        </button>
+        <button
+          type="button"
+          className="button--small"
+          onClick={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect()
+            event.stopPropagation()
+            openMenuAt(rect.left, rect.bottom + 2, templateMenu(templates, selectedItemIds.length, () => setTemplateSaveOpen(true), onError))
+          }}
+          title="オープニング・エンディングなど、毎回使う並びを保存して入れる"
+          data-testid="open-templates"
+        >
+          ひな形 ▾
+        </button>
+        <button
+          type="button"
+          className="button--small"
+          onClick={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect()
+            event.stopPropagation()
+            const markers = project.markers ?? []
+            openMenuAt(rect.left, rect.bottom + 2, [
+              { label: '再生位置に目印を置く', shortcut: 'M', onSelect: () => reportMarker(addMarker().error), testId: 'menu-marker-add' },
+              { label: '再生位置に目印を置いてメモを書く', shortcut: 'Shift+M', onSelect: () => reportMarker(addMarker(undefined, { edit: true }).error) },
+              { label: '前の目印へ', shortcut: 'Ctrl+←', disabled: markers.length === 0, onSelect: () => jumpToMarker(-1) },
+              { label: '次の目印へ', shortcut: 'Ctrl+→', disabled: markers.length === 0, onSelect: () => jumpToMarker(1) },
+              ...(markers.length > 0 ? (['separator'] as const) : []),
+              ...markers.map((marker) => ({
+                label: `${formatMs(marker.atMs).replace(/\.\d+$/, '')}  ${marker.text.split('\n')[0] || '(メモなし)'}`,
+                onSelect: () => setPlayhead(marker.atMs),
+                testId: 'menu-marker-item'
+              }))
+            ])
+          }}
+          title="編集中の目印(メモ)。動画には出ません"
+          data-testid="open-markers"
+        >
+          目印{project.markers && project.markers.length > 0 ? `(${project.markers.length})` : ''} ▾
         </button>
         <button type="button" className="button--small" onClick={() => setSourcesOpen(true)} data-testid="open-free-sources" title="フリー BGM・効果音のサイト一覧">
           フリー素材サイト
@@ -337,6 +402,7 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
                   ★
                 </span>
               ))}
+              <MarkerFlags markers={project.markers ?? []} pxPerSecond={pxPerSecond} onError={onError} />
               {Array.from({ length: Math.ceil(visibleMs / 1000 / step) + 1 }, (_, index) => (
                 <span key={index} className="timeline__tick" style={{ left: `${index * step * pxPerSecond}px` }}>
                   {formatMs(index * step * 1000).replace(/\.\d+$/, '')}
@@ -376,6 +442,7 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
                       locked={item.locked || layer.locked}
                       onPointerDown={beginDrag}
                       onContextMenu={onItemContextMenu}
+                      onError={onError}
                     />
                   )
                 })}
@@ -383,6 +450,13 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
             </div>
           ))}
 
+          {(project.markers ?? []).map((marker) => (
+            <div
+              key={marker.id}
+              className="timeline__markerLine"
+              style={{ left: `${HEADER_WIDTH + msToPx(marker.atMs)}px`, '--flag-color': marker.color } as React.CSSProperties}
+            />
+          ))}
           <div
             className="timeline__playhead"
             style={{ left: `${HEADER_WIDTH + msToPx(playheadMs)}px` }}
@@ -391,6 +465,11 @@ export function TimelinePane({ onError }: { onError: (message: string) => void }
         </div>
       </div>
       {sourcesOpen && <FreeSourcesDialog onClose={() => setSourcesOpen(false)} />}
+      {decorationsOpen && <DecorationPicker onClose={() => setDecorationsOpen(false)} onError={onError} />}
+      <MarkerEditor onError={onError} />
+      {soundsOpen && <SoundPalette onClose={() => setSoundsOpen(false)} onError={onError} />}
+      {templateSaveOpen && <TemplateSaveDialog count={selectedItemIds.length} onClose={() => setTemplateSaveOpen(false)} onError={onError} />}
+      {lullItem?.type === 'video' && <LullDialog item={lullItem} onClose={() => setLullItemId(null)} onError={onError} />}
     </section>
   )
 }
@@ -507,7 +586,7 @@ function itemLabel(project: Project, item: Item): string {
     case 'text':
       return item.text
     case 'shape':
-      return item.shape === 'ellipse' ? '図形(楕円)' : '図形'
+      return SHAPE_DEFAULTS[item.shape]?.label ?? '図形'
     case 'zoom':
       return `ズーム(${ZOOM_METHOD_LABELS[item.method]})`
     case 'portrait': {
@@ -531,6 +610,7 @@ interface TimelineItemProps {
   locked: boolean
   onPointerDown: (event: React.PointerEvent, item: Item, mode: DragMode) => void
   onContextMenu: (event: React.MouseEvent, item: Item) => void
+  onError: (message: string) => void
 }
 
 function TimelineItem(props: TimelineItemProps): React.JSX.Element {
@@ -575,6 +655,9 @@ function TimelineItem(props: TimelineItemProps): React.JSX.Element {
       aria-pressed={props.selected}
     >
       {waveform && (item.type === 'audio' || item.type === 'video') && <Waveform item={item} path={asset.path.absolute} />}
+      {(item.type === 'audio' || (item.type === 'video' && !item.freeze)) && (
+        <VolumeLine item={item} width={props.width} editable={props.selected && !props.locked} onError={props.onError} />
+      )}
       {item.groupId !== undefined && <span className="timeline__groupMark" aria-label="グループ" />}
       <span className="timeline__itemLabel">{itemLabel(project, item)}</span>
       {trimmable && (

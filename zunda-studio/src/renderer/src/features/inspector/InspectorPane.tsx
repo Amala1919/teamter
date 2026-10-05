@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 import type { Command } from '@shared/commands/types'
 import { effectiveVoice, findItem, itemEndMs, voiceItemsInOrder } from '@shared/project/queries'
-import type { TextItem, VoiceItem, VoiceParams } from '@shared/project/types'
+import type { ImageItem, ShapeItem, TextItem, VideoItem, VoiceItem, VoiceParams } from '@shared/project/types'
 import { accentPhrasesToKana } from '@shared/voice/kana'
 
 import { formatMs } from '../../lib/time'
@@ -15,13 +15,14 @@ import {
   EffectsInspector,
   LicenseInspector,
   PreviewQualityInspector,
-  ShapeInspector,
   TimingInspector,
   TransformInspector,
   VolumeField,
   ZoomInspector,
   type Run
 } from './ItemInspectors'
+import { MediaLookInspector } from './MediaLookInspector'
+import { ShapeInspector } from './ShapeInspector'
 import { TextInspector } from './TextInspector'
 
 export function InspectorPane({ onError }: { onError: (message: string) => void }): React.JSX.Element {
@@ -100,7 +101,14 @@ export function InspectorPane({ onError }: { onError: (message: string) => void 
               run={run}
             />
           )}
-          {item.type === 'shape' && <ShapeInspector item={item} run={run} />}
+          {item.type === 'shape' && (
+            <ShapeInspector
+              project={project}
+              item={item}
+              targets={project.items.filter((candidate): candidate is ShapeItem => candidate.type === 'shape' && selectedItemIds.includes(candidate.id))}
+              run={run}
+            />
+          )}
           {item.type === 'audio' && <AudioInspector item={item} run={run} />}
           {item.type === 'video' && item.freeze && (
             <section>
@@ -118,7 +126,7 @@ export function InspectorPane({ onError }: { onError: (message: string) => void 
                 label="速度(倍)"
                 value={item.playbackRate}
                 min={0.25}
-                max={4}
+                max={16}
                 step={0.25}
                 onCommit={(rate) => run([{ op: 'item.setSpeed', itemId: item.id, rate }], '速度の変更')}
                 testId="inspector-speed"
@@ -127,6 +135,13 @@ export function InspectorPane({ onError }: { onError: (message: string) => void 
             </section>
           )}
           {'transform' in item && <TransformInspector item={item} run={run} />}
+          {(item.type === 'video' || item.type === 'image') && (
+            <MediaLookInspector
+              item={item}
+              targets={project.items.filter((candidate): candidate is VideoItem | ImageItem => (candidate.type === 'video' || candidate.type === 'image') && selectedItemIds.includes(candidate.id))}
+              run={run}
+            />
+          )}
           {item.type !== 'zoom' && item.type !== 'audio' && <EffectsInspector item={item} run={run} />}
           {'assetId' in item && <LicenseInspector project={project} assetId={item.assetId} run={run} />}
         </div>

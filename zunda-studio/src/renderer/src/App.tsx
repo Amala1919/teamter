@@ -32,8 +32,12 @@ import { api } from './api'
 import { deleteSelection, guardUnsavedClose, startAutosave, useEditorStore } from './state/store'
 import { loadLibrary, startLibrarySync } from './state/character-library'
 import { useLibraryEntries } from './state/library-entries'
+import { useTemplateEntries } from './state/template-entries'
+import { loadTemplates } from './state/templates'
 import { ContextMenuHost } from './ui/ContextMenu'
 import { useLayoutStore } from './state/layout'
+import { addMarker, jumpToMarker } from './state/markers'
+import { placeSoundByKey } from './state/sounds'
 import { Splitter } from './ui/Splitter'
 
 export function App(): React.JSX.Element {
@@ -53,13 +57,14 @@ export function App(): React.JSX.Element {
 
   useEffect(() => {
     // アプリに保存したキャラクターを読み、プロジェクトで直したらアプリにも反映する。
-    loadLibrary()
+    Promise.all([loadLibrary(), loadTemplates()])
       .then(() => {
         // 起動直後のまだ何もしていないプロジェクトにも、保存したキャラクターを入れる。
         const state = useEditorStore.getState()
         const untouched =
           state.filePath === null && !state.dirty && state.undoStack.length === 0 && state.project.items.length === 0 && Object.keys(state.project.characters).length === 0
-        if (untouched && useLibraryEntries.getState().entries.some((entry) => entry.autoAdd)) state.newProject()
+        const autoAdd = useLibraryEntries.getState().entries.some((entry) => entry.autoAdd) || useTemplateEntries.getState().entries.some((entry) => entry.autoAdd)
+        if (untouched && autoAdd) state.newProject()
       })
       .catch((caught: unknown) => setError(String(caught)))
     return startLibrarySync()
@@ -200,6 +205,12 @@ function timelineShortcut(event: KeyboardEvent, modifier: boolean, report: (mess
         // Ctrl+G: 選んだものをグループにする / Ctrl+Shift+G: グループを解く
         report(event.shiftKey ? ungroupSelection() : groupSelection())
         return true
+      case 'arrowleft':
+        jumpToMarker(-1)
+        return true
+      case 'arrowright':
+        jumpToMarker(1)
+        return true
       default:
         return false
     }
@@ -213,6 +224,23 @@ function timelineShortcut(event: KeyboardEvent, modifier: boolean, report: (mess
     case 's':
     case 'S':
       report(splitAtPlayhead())
+      return true
+    case '1':
+    case '2':
+    case '3':
+    case '4':
+    case '5':
+    case '6':
+    case '7':
+    case '8':
+    case '9':
+      // 効果音のパレットの音を再生位置に置く。
+      void placeSoundByKey(Number(event.key) - 1).then(report)
+      return true
+    case 'm':
+    case 'M':
+      // 再生位置に目印を置く(Shift+M ならメモも書く)。
+      report(addMarker(undefined, { edit: event.shiftKey }).error)
       return true
     case 'f':
     case 'F':

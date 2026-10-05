@@ -40,11 +40,20 @@ export interface Ctx2D {
   arcTo(x1: number, y1: number, x2: number, y2: number, radius: number): void
   closePath(): void
   ellipse(x: number, y: number, rx: number, ry: number, rotation: number, start: number, end: number): void
-  fill(): void
+  rect(x: number, y: number, width: number, height: number): void
+  arc(x: number, y: number, radius: number, start: number, end: number, counterclockwise?: boolean): void
+  /** fillRule が 'evenodd' なら、重なった部分を穴にする(スポットライトの抜きなど)。 */
+  fill(fillRule?: 'nonzero' | 'evenodd'): void
+  stroke(): void
+  clip(fillRule?: 'nonzero' | 'evenodd'): void
+  createLinearGradient(x0: number, y0: number, x1: number, y1: number): GradientLike
+  createRadialGradient(x0: number, y0: number, r0: number, x1: number, y1: number, r1: number): GradientLike
   fillStyle: unknown
   strokeStyle: unknown
   lineWidth: number
   lineJoin: string
+  lineCap: string
+  lineDashOffset: number
   globalAlpha: number
   globalCompositeOperation: string
   /** CSS のフィルタ(立ち絵を暗くするのに使う)。対応していない環境もある。 */
@@ -56,6 +65,10 @@ export interface Ctx2D {
   shadowOffsetX: number
   shadowOffsetY: number
   shadowBlur: number
+}
+
+export interface GradientLike {
+  addColorStop(offset: number, color: string): void
 }
 
 export interface CanvasLike {

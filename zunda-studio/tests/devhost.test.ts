@@ -7,7 +7,7 @@ import { startDevHost, type DevHost } from '../src/devhost/server'
 import { createEmptyProject } from '@shared/project/factory'
 import type { IpcResult } from '@shared/ipc/contract'
 
-import { FIXTURE_BIN, tempDir } from './helpers/env'
+import { fixtureCommand, tempDir } from './helpers/env'
 
 let host: DevHost
 let root: string
@@ -137,7 +137,7 @@ describe('テスト用ホスト', () => {
 
   it('AIプロバイダの状態を返す', async () => {
     await invoke('settings:update', {
-      ai: { providers: { 'claude-code': { executablePath: join(FIXTURE_BIN, 'claude') } } }
+      ai: { providers: { 'claude-code': { executablePath: fixtureCommand('claude') } } }
     })
     const result = await invoke<{ providerId: string; state: { kind: string } }[]>('ai:providers')
     expect(result.ok).toBe(true)

@@ -8,10 +8,15 @@ import { assetHandlers } from './handlers/asset'
 import { characterHandlers } from './handlers/character'
 import { dissolveLoneGroups, editHandlers } from './handlers/edit'
 import { itemHandlers } from './handlers/item'
+import { condenseHandlers } from './handlers/condense'
 import { liveHandlers } from './handlers/live'
+import { lookHandlers } from './handlers/look'
+import { markerHandlers } from './handlers/marker'
 import { mediaHandlers } from './handlers/media'
 import { portraitHandlers } from './handlers/portrait'
 import { projectHandlers } from './handlers/project'
+import { templateHandlers } from './handlers/template'
+import { transitionHandlers } from './handlers/transition'
 import { voiceHandlers } from './handlers/voice'
 import { zoomHandlers } from './handlers/zoom'
 import type { Command } from './types'
@@ -31,9 +36,14 @@ const HANDLERS: HandlerTable = {
   ...characterHandlers,
   ...itemHandlers,
   ...editHandlers,
+  ...condenseHandlers,
   ...liveHandlers,
+  ...lookHandlers,
+  ...markerHandlers,
   ...mediaHandlers,
   ...portraitHandlers,
+  ...templateHandlers,
+  ...transitionHandlers,
   ...voiceHandlers,
   ...zoomHandlers
 }

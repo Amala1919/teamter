@@ -49,7 +49,8 @@ describe('VOICEVOX ENGINE の自動インストール', () => {
     expect(parts.map((part) => part.name)).toEqual(['voicevox_engine-windows-cpu-0.25.2.7z.001', 'voicevox_engine-windows-cpu-0.25.2.7z.002'])
   })
 
-  it('最新版の分割アーカイブを落として展開し、そのまま起動して使える', async () => {
+  // Windows では展開したエンジンを run.exe として探す。模擬のエンジンは Node のスクリプトで exe にできないので、Windows では確かめない。
+  it.skipIf(process.platform === 'win32')('最新版の分割アーカイブを落として展開し、そのまま起動して使える', async () => {
     const { version, archive, server, progress, installer, root, events } = await setup()
     try {
       expect(archive.parts.length).toBeGreaterThan(1)
@@ -84,7 +85,7 @@ describe('VOICEVOX ENGINE の自動インストール', () => {
     }
   })
 
-  it('GitHub の API が使えなくても、決まった版を部品の一覧から落とせる', async () => {
+  it.skipIf(process.platform === 'win32')('GitHub の API が使えなくても、決まった版を部品の一覧から落とせる', async () => {
     const { server, installer } = await setup({ version: FALLBACK_ENGINE_VERSION, noApi: true })
     try {
       await installer.install()

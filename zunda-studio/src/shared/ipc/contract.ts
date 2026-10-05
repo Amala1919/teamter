@@ -4,6 +4,7 @@ import type { PortraitRequest } from '../ai/portraits'
 import type { EditorRequest } from '../ai/editor'
 import type { Command } from '../commands/types'
 import type { ExportProgress, ExportRequest } from '../export/types'
+import type { MediaActivity } from '../media/activity'
 import type { MediaProbe, ProxyFormat, WaveformPeaks } from '../media/types'
 import type { GeneratedBy, ModelInfo, ProviderId, ProviderStatus } from '../ai/types'
 import type { AppErrorShape } from '../errors'
@@ -11,6 +12,7 @@ import type { LiveProfile, LiveSessionSummary, LiveState } from '../live/types'
 import type { AiPersona, LiveEntry, LiveSession, Project, ProjectBriefing, PublishInfo } from '../project/types'
 import type { PsdManifest } from '../psd/types'
 import type { SavedCharacter } from '../project/character-library'
+import type { ProjectTemplate } from '../project/templates'
 import type { AppSettings, SettingsPatch } from '../settings/schema'
 import type { SecretName, SecretStatus } from '../settings/secrets'
 import type {
@@ -143,6 +145,8 @@ export interface IpcContract {
   'media:proxy': { args: [path: string, format: ProxyFormat, maxHeight?: number]; result: string }
   /** 波形の表示用データ。 */
   'media:peaks': { args: [path: string]; result: WaveformPeaks }
+  /** 動きと音の時間変化(待ち時間を探すのに使う)。 */
+  'media:activity': { args: [path: string]; result: MediaActivity }
 
   /** mp4 の書き出しを始めてジョブIDを返す。進み具合は export:progress で届く。 */
   'export:start': { args: [request: ExportRequest]; result: string }
@@ -170,6 +174,10 @@ export interface IpcContract {
   'characters:list': { args: []; result: SavedCharacter[] }
   'characters:save': { args: [character: SavedCharacter]; result: SavedCharacter[] }
   'characters:remove': { args: [id: string]; result: SavedCharacter[] }
+  /** アプリに保存したひな形(オープニング・エンディングなど)。 */
+  'templates:list': { args: []; result: ProjectTemplate[] }
+  'templates:save': { args: [template: ProjectTemplate]; result: ProjectTemplate[] }
+  'templates:remove': { args: [id: string]; result: ProjectTemplate[] }
 
   /** 書き出した相方の設定(ペルソナ)を読み込む(B-9)。ファイル選択で選んだものに限る。 */
   'persona:read': { args: [path: string]; result: AiPersona }

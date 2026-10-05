@@ -13,6 +13,10 @@ export interface ExportRequest {
   height?: number
   /** 画質(小さいほど高画質)。省略すると設定の値。 */
   crf?: number
+  /** 音の大きさをそろえる目標(LUFS)。'off' ならそろえない。省略すると設定の値。 */
+  loudness?: number | 'off'
+  /** 映像のエンコーダ。省略すると設定の値。 */
+  encoder?: 'auto' | 'cpu' | 'nvenc' | 'qsv' | 'amf'
 }
 
 export type ExportPhase = 'prepare' | 'audio' | 'video' | 'done' | 'error' | 'cancelled'
@@ -24,6 +28,10 @@ export interface ExportProgress {
   ratio: number
   /** 映像の書き出しの速さ(コマ/秒)。 */
   fps?: number
+  /** 使っているエンコーダ(画面に出す名前)。 */
+  encoder?: string
+  /** そろえる前の音の大きさ(LUFS)。そろえないときは無い。 */
+  loudness?: number
   outputPath?: string
   error?: AppErrorShape
 }

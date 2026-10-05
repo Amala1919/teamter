@@ -330,6 +330,8 @@ test.describe('素材・タイムライン・ズーム', () => {
   test('素材を付けたプロジェクトを保存して開き直せる', async ({ page, request }) => {
     await openFresh(page)
     await importFile(page, request, image)
+    // 読み込みが終わってから次へ(終わる前に保存すると画像が入らない)
+    await expect(page.locator('[data-item-type="image"]')).toHaveCount(1)
     await page.getByTestId('add-zoom').click()
     const path = join(directory, 'media.zsproj')
     await queuePick(request, [path])
