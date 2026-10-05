@@ -34,6 +34,77 @@ test.describe('解説パートを作る', () => {
     await useFakeAi(request)
   })
 
+  test('作り終えると確認パネルが出て、プレビューやタイムラインを触りながら、追加の要件を書いて作り直せる', async ({ page }) => {
+    await openFresh(page)
+    await page.getByRole('button', { name: /ずんだもん\(あなた\)/ }).click()
+    const line = (speaker: string, text: string) => ({ speaker, text, speech: null, expression: null, image: null })
+    queueAiResponses([
+      { title: '最初の案', lines: [line('四国めたん', '最初の一行目ですわ'), line('四国めたん', '最初の二行目ですわ'), line('四国めたん', '最初の三行目ですわ')] },
+      { title: '作り直した案', lines: [line('四国めたん', '短くした一行目ですわ'), line('四国めたん', '短くした二行目ですわ')] },
+      { title: '設定を変えた案', lines: [line('四国めたん', '設定を変えた一行目ですわ'), line('四国めたん', '設定を変えた二行目ですわ')] }
+    ])
+    await page.getByTestId('side-tab-chat').click()
+    await page.getByTestId('open-explainer').click()
+    await page.getByTestId('explainer-topic').fill('作り直しのお題')
+    await page.getByTestId('explainer-images').uncheck()
+    await page.getByTestId('explainer-interject').uncheck()
+    await expect(page.getByTestId('explainer-redo-panel')).toHaveCount(0)
+    await page.getByTestId('explainer-start').click()
+
+    // 作り終えると、ダイアログが閉じて確認パネルが出る(画面の操作はふさがない)。
+    const panel = page.getByTestId('explainer-review-panel')
+    await expect(panel.getByTestId('explainer-done')).toContainText('3行のセリフ', { timeout: 30_000 })
+    await expect(page.getByTestId('explainer-topic')).toHaveCount(0)
+    await expect(panel).toContainText('最初の案')
+    await expect(page.locator('[data-item-type="voice"]')).toHaveCount(3)
+    // パネルを出したまま、タイムラインを触れる・頭から再生できる。
+    await page.locator('[data-item-type="voice"]').nth(1).click()
+    await expect(page.locator('[data-item-type="voice"][aria-pressed="true"]')).toHaveCount(3)
+    await panel.getByTestId('explainer-review-play').click()
+    await expect(panel.getByTestId('explainer-review-play')).toHaveText('■ 止める')
+    await panel.getByTestId('explainer-review-play').click()
+    await expect(panel.getByTestId('explainer-review-play')).toHaveText('▶ 頭から再生')
+
+    // 追加の要件を書いて作り直す: 前回の解説を消して、同じ場所に置き直す。
+    await panel.getByTestId('explainer-review-requirement').fill('もっと短く')
+    await panel.getByTestId('explainer-review-redo').click()
+    await expect(panel.getByTestId('explainer-done')).toContainText('前回の解説を作り直しました', { timeout: 30_000 })
+    await expect(panel.getByTestId('explainer-done')).toContainText('2行のセリフ')
+    await expect(panel).toContainText('作り直した案')
+    await expect(panel.getByTestId('explainer-review-requirement')).toHaveValue('')
+    await expect(page.locator('[data-item-type="voice"]')).toHaveCount(2)
+    await expect(page.getByTestId('script-line').first().getByTestId('script-text')).toHaveValue('短くした一行目ですわ')
+
+    // AI には、前回の台本と追加の要件を渡している。
+    const call = aiCalls().at(-1)!
+    expect(call.stdin).toContain('前回の台本(見出し: 最初の案)')
+    expect(call.stdin).toContain('最初の二行目ですわ')
+    expect(call.stdin).toContain('もっと短く')
+
+    // 1回の「元に戻す」で前回の解説に戻り、パネルも前回の解説を指す(そこから作り直せる)。
+    await page.getByRole('button', { name: '元に戻す' }).click()
+    await expect(page.locator('[data-item-type="voice"]')).toHaveCount(3)
+    await expect(page.getByTestId('script-line').first().getByTestId('script-text')).toHaveValue('最初の一行目ですわ')
+    await expect(panel).toContainText('最初の案')
+
+    // 設定を変えて作り直す: ダイアログが前回の設定のまま開き、設定を変えて作り直せる。
+    await panel.getByTestId('explainer-review-settings').click()
+    await expect(panel).toHaveCount(0)
+    await expect(page.getByTestId('explainer-topic')).toHaveValue('作り直しのお題')
+    await expect(page.getByTestId('explainer-images')).not.toBeChecked()
+    await expect(page.getByTestId('explainer-redo-panel')).toContainText('最初の案')
+    await page.getByTestId('explainer-length').selectOption('30')
+    await page.getByTestId('explainer-redo').click()
+    await expect(panel.getByTestId('explainer-done')).toContainText('前回の解説を作り直しました', { timeout: 30_000 })
+    expect(aiCalls().at(-1)!.system).toContain('約30秒')
+    await expect(page.locator('[data-item-type="voice"]')).toHaveCount(2)
+
+    // これで決定: パネルを閉じる。
+    await panel.getByTestId('explainer-review-close').click()
+    await expect(panel).toHaveCount(0)
+    await expect(page.locator('[data-item-type="voice"]')).toHaveCount(2)
+  })
+
   test('お題と長さから、AI の台本でセリフ・合いの手・参考画像・出典・見出しが並び、1回で取り消せる', async ({ page }) => {
     await openFresh(page)
     await page.getByRole('button', { name: /ずんだもん\(あなた\)/ }).click()
@@ -70,7 +141,7 @@ test.describe('解説パートを作る', () => {
     expect(call.system).toContain('合いの手')
     expect(call.system).toContain('speech は合成音声が読み上げる文')
 
-    await page.getByRole('button', { name: '閉じる' }).last().click()
+    await page.getByTestId('explainer-review-close').click()
     await expect(page.locator('[data-item-type="voice"]')).toHaveCount(3)
     await expect(page.locator('[data-item-type="image"]')).toHaveCount(1)
     await expect(page.locator('[data-item-type="text"][title*="出典: Wikimedia Commons"]')).toHaveCount(1)
@@ -139,7 +210,7 @@ test.describe('解説パートを作る', () => {
     const call = aiCalls().at(-1)!
     expect(call.system).toContain('一次ソース(primary)')
 
-    await page.getByRole('button', { name: '閉じる' }).last().click()
+    await page.getByTestId('explainer-review-close').click()
     await expect(page.locator('[data-item-type="image"]')).toHaveCount(2)
     // 公式サイトの画像は、サイトの名前と題を出典に出す(ライセンスは出さない)。
     await expect(page.locator('[data-item-type="text"][title*="出典: 模擬の公式サイト「公式の地図」"]')).toHaveCount(1)

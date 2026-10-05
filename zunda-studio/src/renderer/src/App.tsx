@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
+import { ExplainerDialog } from './features/chat/ExplainerDialog'
+import { ExplainerReviewPanel } from './features/chat/ExplainerReviewPanel'
 import { SidePane } from './features/chat/SidePane'
 import { PreviewPane } from './features/preview/PreviewPane'
 import { ScriptPane } from './features/script/ScriptPane'
@@ -8,6 +10,7 @@ import { TimelinePane } from './features/timeline/TimelinePane'
 import { Toolbar } from './features/toolbar/Toolbar'
 import { togglePlayback } from './playback/player'
 import { useCohostStore } from './state/ai'
+import { useExplainerStore } from './state/explainer'
 import { useSettingsStore } from './state/settings'
 import { RecoveryBanner } from './features/toolbar/RecoveryBanner'
 import { EngineInstallBanner } from './features/voice/EngineInstall'
@@ -43,6 +46,7 @@ import { Splitter } from './ui/Splitter'
 export function App(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const explainerOpen = useExplainerStore((state) => state.dialogOpen)
   const loadSettings = useSettingsStore((state) => state.load)
   const layout = useLayoutStore((state) => state.layout)
   const appRef = useRef<HTMLDivElement>(null)
@@ -171,6 +175,9 @@ export function App(): React.JSX.Element {
       <Splitter target="timeline" container={() => appRef.current} orientation="horizontal" after label="タイムラインの高さ" />
       <TimelinePane onError={setError} />
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+      {/* 解説パートの設定のダイアログと、作ったあとの確認パネル(どのタブを見ていても出す)。 */}
+      {explainerOpen && <ExplainerDialog />}
+      <ExplainerReviewPanel />
       <ContextMenuHost />
     </div>
   )

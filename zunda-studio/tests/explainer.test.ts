@@ -9,9 +9,12 @@ import { isLocalHost, readPageInfo, sniffImageMime, WebImageService } from '@mai
 import {
   buildExplainerPrompt,
   citationText,
+  EXPLAINER_GROUP_TEMP_ID,
   explainerCommands,
+  findPlacedExplainer,
   interpretExplainer,
   isUntrustedImageUrl,
+  removeExplainerCommands,
   type ExplainerImageSource,
   type ExplainerRequest,
   type FoundImage,
@@ -293,6 +296,56 @@ describe('解説をタイムラインに並べる', () => {
     expect(portraits(later).filter((item) => item.characterId === tsumugi)).toHaveLength(0)
     const off = apply(fixed, explainerCommands(fixed, { atMs: 5000, title: '', lines, images: [null, null], ripple: false, showTitle: false, showPortraits: false, gapMs: 200 }))
     expect(portraits(off)).toHaveLength(1)
+  })
+
+  it('作り直すときは、前回の台本と追加の要件を AI に渡す(要件が空なら別の案に)', () => {
+    const { project, metan, tsumugi } = cast()
+    const revision = { title: '前回の見出し', lines: [{ characterId: metan, text: '前回のセリフ' }], requirement: 'もっと短く' }
+    const prompt = buildExplainerPrompt(project, request({ narrators: [metan, tsumugi], revision }), false)
+    expect(prompt.turns[0]!.content).toContain('前回の台本(見出し: 前回の見出し)')
+    expect(prompt.turns[0]!.content).toContain('四国めたん')
+    expect(prompt.turns[0]!.content).toContain('前回のセリフ')
+    expect(prompt.turns[0]!.content).toContain('## 作り直しの要件(最優先で満たす)\nもっと短く')
+    expect(prompt.system).toContain('作り直しの要件」を必ず満たす')
+    const reroll = buildExplainerPrompt(project, request({ narrators: [metan, tsumugi], revision: { ...revision, requirement: ' ' } }), false)
+    expect(reroll.system).toContain('違う構成・言い回しの案')
+    expect(reroll.turns[0]!.content).not.toContain('作り直しの要件')
+  })
+
+  it('作り直すと、前回の解説を消して同じ場所に置き直し、後ろの素材は新しい長さに合わせてずれる', () => {
+    const { project: base, metan, tsumugi } = cast()
+    const project = apply(base, [
+      { op: 'media.placeText', text: '前', atMs: 0, durationMs: 1000 },
+      { op: 'media.placeText', text: '本編', atMs: 2000, durationMs: 2000 }
+    ])
+    // 2秒の位置に、場所を空けて置く(3.2秒)。本編は 5.2 秒へ。
+    const first = applyCommands(
+      project,
+      explainerCommands(project, { atMs: 2000, title: 't', lines: [placed(metan, '一', 2000, true), placed(tsumugi, '二', 1000)], images: [IMAGE, null], ripple: true, showTitle: true, gapMs: 200 }),
+      ctx
+    )
+    const groupId = first.resolvedIds[EXPLAINER_GROUP_TEMP_ID]!
+    const placedNow = findPlacedExplainer(first.project, groupId)!
+    // セリフ2・画像・出典・見出し・めたんの立ち絵の区間(解説のあいだに足したもの)。
+    expect([placedNow.startMs, placedNow.endMs, placedNow.itemIds.length, placedNow.locked]).toEqual([2000, 5200, 6, false])
+    const text = (after: Project, value: string) => after.items.find((item) => item.type === 'text' && item.text === value)!
+    expect(text(first.project, '本編').startMs).toBe(5200)
+
+    // 作り直す(新しい解説は 1.5 秒)。前回の素材は消え、本編は 2 + 1.5 = 3.5 秒へ。前は動かない。
+    const removal = removeExplainerCommands(first.project, placedNow, true)
+    const cleared = apply(first.project, removal)
+    expect(cleared.items.some((item) => item.groupId === groupId)).toBe(false)
+    expect(text(cleared, '本編').startMs).toBe(2000)
+    const redone = apply(first.project, [
+      ...removal,
+      ...explainerCommands(cleared, { atMs: placedNow.startMs, title: 't2', lines: [placed(metan, '三', 1500)], images: [null], ripple: true, showTitle: false, gapMs: 200 })
+    ])
+    expect(redone.items.filter((item) => item.type === 'voice').map((item) => [item.startMs, (item as VoiceItem).text])).toEqual([[2000, '三']])
+    expect(text(redone, '本編').startMs).toBe(3500)
+    expect(text(redone, '前').startMs).toBe(0)
+    expect(redone.items.filter((item) => item.type === 'image')).toHaveLength(0)
+    // 場所を空けずに置いたものは、後ろを戻さない。
+    expect(removeExplainerCommands(first.project, placedNow, false).every((command) => command.op === 'item.delete')).toBe(true)
   })
 
   it('セリフを足すと後ろをずらす設定でも、並べた場所から動かさず、設定は元に戻す', () => {
