@@ -2,8 +2,21 @@ import { existsSync, readFileSync } from 'node:fs'
 
 import { describe, expect, it } from 'vitest'
 
+import { createCanvas, loadImage } from '@napi-rs/canvas'
+
 import { CommonsImageService, stripHtml } from '@main/services/media/commons-images'
-import { buildExplainerPrompt, citationText, explainerCommands, interpretExplainer, type ExplainerRequest, type FoundImage, type PlacedLine } from '@shared/ai/explainer'
+import { isLocalHost, readPageInfo, sniffImageMime, WebImageService } from '@main/services/media/web-images'
+import {
+  buildExplainerPrompt,
+  citationText,
+  explainerCommands,
+  interpretExplainer,
+  isUntrustedImageUrl,
+  type ExplainerImageSource,
+  type ExplainerRequest,
+  type FoundImage,
+  type PlacedLine
+} from '@shared/ai/explainer'
 import { applyCommands } from '@shared/commands/apply'
 import type { Command } from '@shared/commands/types'
 import { generateCredits } from '@shared/project/credits'
@@ -60,8 +73,8 @@ describe('解説の台本の依頼と応答', () => {
     const script = interpretExplainer(project, req, {
       title: 'カイザーライヒとは',
       lines: [
-        { speaker: metan, text: '四国めたん:今日はカイザーライヒの話ですわ', expression: '笑顔', image: { query: 'ドイツ帝国', queryEn: 'German Empire', caption: '地図' } },
-        { speaker: 'ずんだもん', text: 'へぇ〜なのだ', expression: null, image: { query: '無視される', queryEn: 'x', caption: '' } },
+        { speaker: metan, text: '四国めたん:今日はカイザーライヒの話ですわ', expression: '笑顔', image: { query: 'ドイツ帝国', queryEn: 'German Empire', caption: '地図', sources: [] } },
+        { speaker: 'ずんだもん', text: 'へぇ〜なのだ', expression: null, image: { query: '無視される', queryEn: 'x', caption: '', sources: [] } },
         { speaker: 'だれか', text: 'まとめると…', expression: '怒り', image: null }
       ]
     })
@@ -70,10 +83,63 @@ describe('解説の台本の依頼と応答', () => {
       [zunda, 'へぇ〜なのだ', null],
       [metan, 'まとめると…', null]
     ])
-    expect(script.lines[0]!.image).toEqual({ query: 'ドイツ帝国', queryEn: 'German Empire', caption: '地図' })
+    expect(script.lines[0]!.image).toEqual({ query: 'ドイツ帝国', queryEn: 'German Empire', caption: '地図', sources: [] })
     expect(script.warnings[0]).toContain('1 行')
     // 画像を使わない設定なら、画像の指定は捨てる。
-    expect(interpretExplainer(project, { ...req, images: false }, { title: 't', lines: [{ speaker: metan, text: 'a', expression: null, image: { query: 'q', queryEn: 'q', caption: '' } }, { speaker: metan, text: 'b', expression: null, image: null }] }).lines[0]!.image).toBeNull()
+    expect(interpretExplainer(project, { ...req, images: false }, { title: 't', lines: [{ speaker: metan, text: 'a', expression: null, image: { query: 'q', queryEn: 'q', caption: '', sources: [] } }, { speaker: metan, text: 'b', expression: null, image: null }] }).lines[0]!.image).toBeNull()
+  })
+
+  it('一次ソース・信頼できるサイトの画像も使うときは、ウェブで探すよう頼み、候補は確かめて一次ソースを先にする', () => {
+    const { project, metan, tsumugi } = cast()
+    const req = request({ narrators: [metan, tsumugi], imageSources: 'web' })
+    const web = buildExplainerPrompt(project, req, true)
+    expect(web.system).toContain('一次ソース(primary)')
+    expect(web.system).toContain('まとめサイト')
+    expect(web.system).toContain('推測で URL を作らない')
+    // ウェブで調べられない・Commons だけのときは、候補を出させない。
+    expect(buildExplainerPrompt(project, req, false).system).toContain('ウェブで調べられないので、image.sources は空')
+    expect(buildExplainerPrompt(project, { ...req, imageSources: 'free' }, true).system).toContain('Wikimedia Commons だけで探す')
+
+    const source = (pageUrl: string, kind: 'primary' | 'reliable', imageUrl: string | null = null) => ({ pageUrl, imageUrl, site: 's', title: 't', kind, reason: 'r' })
+    const response = {
+      title: 't',
+      lines: [
+        {
+          speaker: metan,
+          text: 'a',
+          expression: null,
+          image: {
+            query: 'q',
+            queryEn: 'q',
+            caption: '',
+            sources: [
+              source('https://news.example/article', 'reliable'),
+              source('https://www.pinterest.com/pin/1', 'reliable'),
+              source('https://official.example/', 'primary', 'https://cdn.example/key.png'),
+              source('javascript:alert(1)', 'primary')
+            ]
+          }
+        },
+        { speaker: tsumugi, text: 'b', expression: null, image: null }
+      ]
+    }
+    const script = interpretExplainer(project, req, response, true)
+    expect(script.lines[0]!.image!.sources.map((item) => [item.pageUrl, item.kind])).toEqual([
+      ['https://official.example/', 'primary'],
+      ['https://news.example/article', 'reliable']
+    ])
+    expect(script.warnings.some((warning) => warning.includes('2 件'))).toBe(true)
+    // ウェブで調べていない(URL を確かめていない)なら、候補は使わない。
+    expect(interpretExplainer(project, req, response, false).lines[0]!.image!.sources).toEqual([])
+    expect(interpretExplainer(project, { ...req, imageSources: 'free' }, response, true).lines[0]!.image!.sources).toEqual([])
+  })
+
+  it('転載・まとめのサイトと、http(s) でない URL は使わない', () => {
+    expect(isUntrustedImageUrl('https://i.pinimg.com/x.jpg')).toBe(true)
+    expect(isUntrustedImageUrl('https://example.blog.jp/archives/1.html')).toBe(true)
+    expect(isUntrustedImageUrl('ftp://example.com/a.png')).toBe(true)
+    expect(isUntrustedImageUrl('not a url')).toBe(true)
+    expect(isUntrustedImageUrl('https://www.nintendo.co.jp/')).toBe(false)
   })
 })
 
@@ -86,11 +152,12 @@ const IMAGE: FoundImage = {
   license: 'CC BY-SA 4.0',
   licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0',
   pageUrl: 'https://commons.wikimedia.org/wiki/File:Map.jpg',
-  site: 'Wikimedia Commons'
+  site: 'Wikimedia Commons',
+  kind: 'free'
 }
 
 function placed(characterId: string, text: string, ms: number, image = false): PlacedLine {
-  return { characterId, text, expressionId: null, image: image ? { query: 'q', queryEn: 'q', caption: '' } : null, synthesis: { cacheKey: `k-${text}`, audioDurationMs: ms, lipSync: [], accentPhrases: [] } }
+  return { characterId, text, expressionId: null, image: image ? { query: 'q', queryEn: 'q', caption: '', sources: [] } : null, synthesis: { cacheKey: `k-${text}`, audioDurationMs: ms, lipSync: [], accentPhrases: [] } }
 }
 
 describe('解説をタイムラインに並べる', () => {
@@ -233,6 +300,98 @@ describe('参考画像を探す(Wikimedia Commons)', () => {
     })
     await expect(service.find(['a'])).rejects.toMatchObject({ code: 'NETWORK' })
     expect(stripHtml('<span>A&nbsp;B</span>')).toBe('A B')
+  })
+})
+
+/** 指定の大きさの PNG。 */
+function png(width: number, height: number): Buffer {
+  const canvas = createCanvas(width, height)
+  canvas.getContext('2d').fillRect(0, 0, width, height)
+  return canvas.toBuffer('image/png')
+}
+
+/** 模擬のウェブ(URL ごとの応答)。 */
+function fakeWeb(routes: Record<string, () => Response>): { fetch: (input: string) => Promise<Response>; calls: string[] } {
+  const calls: string[] = []
+  return {
+    calls,
+    fetch: async (input: string) => {
+      calls.push(input)
+      const route = routes[input]
+      return route ? route() : new Response('', { status: 404 })
+    }
+  }
+}
+
+const html = (body: string): Response => new Response(body, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } })
+const image = (data: Buffer, type = 'image/png'): Response => new Response(new Uint8Array(data), { status: 200, headers: { 'content-type': type } })
+const webSource = (pageUrl: string, imageUrl: string | null, extra: Partial<ExplainerImageSource> = {}): ExplainerImageSource => ({
+  pageUrl,
+  imageUrl,
+  site: '',
+  title: '',
+  kind: 'primary',
+  reason: '公式',
+  ...extra
+})
+
+describe('参考画像を落とす(一次ソース・信頼できるサイト)', () => {
+  it('画像の URL から落とし、サイトの名前・題・出どころを返す。出典にライセンスは出さない', async () => {
+    const allowed: string[] = []
+    const web = fakeWeb({ 'https://official.example/img/key.png': () => image(png(400, 300)) })
+    const service = new WebImageService(await tempDir('zs-web-'), (path) => allowed.push(path), 'test', { fetch: web.fetch })
+    const found = await service.find([webSource('https://official.example/news/1', 'https://official.example/img/key.png', { site: '公式サイト', title: 'キービジュアル' })])
+    expect(found).toMatchObject({ width: 400, height: 300, site: '公式サイト', title: 'キービジュアル', pageUrl: 'https://official.example/news/1', kind: 'primary', license: '' })
+    expect(allowed).toEqual([found!.path])
+    expect(citationText(found!)).toBe('出典: 公式サイト「キービジュアル」')
+  })
+
+  it('画像の URL が無い・読めないときは、ページの代表の画像(og:image)を使い、サイトの名前と題もページから読む', async () => {
+    const web = fakeWeb({
+      'https://museum.example/works/7': () =>
+        html('<html><head><title>作品7 | 博物館</title><meta property="og:site_name" content="国立&amp;博物館"><meta content="/media/7.jpg?w=1200&amp;h=800" property="og:image"></head></html>'),
+      'https://museum.example/media/7.jpg?w=1200&h=800': () => image(png(320, 200), 'application/octet-stream')
+    })
+    const service = new WebImageService(await tempDir('zs-web-'), () => undefined, 'test', { fetch: web.fetch })
+    const found = await service.find([webSource('https://museum.example/works/7', 'https://museum.example/missing.png', { kind: 'reliable' })])
+    expect(found).toMatchObject({ width: 320, height: 200, site: '国立&博物館', title: '作品7 | 博物館', kind: 'reliable' })
+    expect(web.calls).toEqual(['https://museum.example/missing.png', 'https://museum.example/works/7', 'https://museum.example/media/7.jpg?w=1200&h=800'])
+  })
+
+  it('大きすぎる画像は縮めて保存し、画像でないものは使わず次の候補へ。どれも駄目なら null', async () => {
+    const web = fakeWeb({
+      'https://a.example/fake.png': () => image(Buffer.from('<html>not image</html>'), 'image/png'),
+      'https://b.example/huge.png': () => image(png(5120, 1280))
+    })
+    const service = new WebImageService(await tempDir('zs-web-'), () => undefined, 'test', { fetch: web.fetch })
+    const found = await service.find([webSource('https://a.example/', 'https://a.example/fake.png'), webSource('https://b.example/', 'https://b.example/huge.png')])
+    expect(found).toMatchObject({ width: 2560, height: 640 })
+    expect((await loadImage(readFileSync(found!.path))).width).toBe(2560)
+    expect(await service.find([webSource('https://a.example/', 'https://a.example/fake.png')])).toBeNull()
+  })
+
+  it('転載のサイトや、手元の機械・家の中のネットワークの URL は読みに行かない', async () => {
+    const web = fakeWeb({})
+    const service = new WebImageService(await tempDir('zs-web-'), () => undefined, 'test', { fetch: web.fetch })
+    expect(
+      await service.find([
+        webSource('https://www.pinterest.com/pin/1', null),
+        webSource('http://127.0.0.1:8080/', 'http://127.0.0.1:8080/a.png'),
+        webSource('http://192.168.0.1/', null),
+        webSource('https://ok.example/', 'http://localhost/a.png')
+      ])
+    ).toBeNull()
+    // 外のサイトのページは読むが、手元の機械の画像の URL は読まない。
+    expect(web.calls).toEqual(['https://ok.example/'])
+    expect(isLocalHost('[::1]')).toBe(true)
+    expect(isLocalHost('172.20.1.1')).toBe(true)
+    expect(isLocalHost('172.40.1.1')).toBe(false)
+    expect(sniffImageMime(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]))).toBe('image/jpeg')
+  })
+
+  it('ページの代表の画像・題・サイトの名前を読む(属性の順や引用符によらない)', () => {
+    const info = readPageInfo(`<title>T</title><meta name='twitter:image' content='https://x.example/t.png'><meta property=og:image content=/o.png>`, 'https://x.example/a/b')
+    expect(info).toEqual({ images: ['https://x.example/o.png', 'https://x.example/t.png'], title: 'T', site: '' })
   })
 })
 

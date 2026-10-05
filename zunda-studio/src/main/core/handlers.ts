@@ -18,7 +18,7 @@ import {
 } from '@shared/ai/briefing'
 import { buildDraftPrompt, liveMomentsFor, wrapDraftCommands } from '@shared/ai/draft'
 import { buildEditorPrompt } from '@shared/ai/editor'
-import { buildExplainerPrompt, explainerResponseSchema, interpretExplainer } from '@shared/ai/explainer'
+import { buildExplainerPrompt, explainerResponseSchema, interpretExplainer, MAX_IMAGE_SOURCES } from '@shared/ai/explainer'
 import { buildPortraitPrompt, filterPortraitCommands, portraitResponseSchema } from '@shared/ai/portraits'
 import { candidateSegments } from '@shared/media/analysis'
 import { buildPublishPrompt, interpretPublishResponse, publishResponseSchema } from '@shared/ai/publish'
@@ -188,11 +188,28 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
       interjector: z.object({ characterId: z.string().min(1).max(100), frequency: z.enum(['few', 'normal', 'many']) }).nullable(),
       audience: z.string().max(1000).optional(),
       instruction: z.string().max(4000).optional(),
-      images: z.boolean()
+      images: z.boolean(),
+      imageSources: z.enum(['web', 'free']).optional()
     }),
     z.object({ model: z.object({ providerId: z.enum(PROVIDER_IDS), model: z.string().min(1).max(200) }).nullable(), webSearch: z.boolean() })
   ]) as unknown as z.ZodType<ChannelArgs<'ai:explainer'>>,
-  'images:findCommons': z.tuple([z.array(z.string().min(1).max(200)).min(1).max(4)]),
+  'images:find': z.tuple([
+    z.object({
+      sources: z
+        .array(
+          z.object({
+            pageUrl: z.string().min(1).max(2000),
+            imageUrl: z.string().min(1).max(2000).nullable(),
+            site: z.string().max(80),
+            title: z.string().max(120),
+            kind: z.enum(['primary', 'reliable']),
+            reason: z.string().max(200)
+          })
+        )
+        .max(MAX_IMAGE_SOURCES),
+      queries: z.array(z.string().min(1).max(200)).max(4)
+    })
+  ]),
   'ai:briefing': z.tuple([projectArg]) as unknown as z.ZodType<ChannelArgs<'ai:briefing'>>,
   'ai:visionFrame': z.tuple([projectArg, z.number().min(0)]) as unknown as z.ZodType<ChannelArgs<'ai:visionFrame'>>,
   'ai:briefingCheck': z.tuple([projectArg, z.object({}).loose(), z.array(z.string().max(100)).max(100).nullable()]) as unknown as z.ZodType<
@@ -480,11 +497,12 @@ export function createHandlers(services: Services): HandlerTable {
         explainerResponseSchema,
         resolveOptions
       )
-      const script = interpretExplainer(project, request, value)
+      const webSearched = canSearch && result.webSearch === true
+      const script = interpretExplainer(project, request, value, webSearched)
       if (script.lines.length === 0) throw new AppError('AI_OUTPUT_INVALID', 'AIの台本にセリフがありませんでした。お題を具体的にしてやり直してください')
-      return { script, generatedBy: result.generatedBy, webSearched: canSearch && result.webSearch === true }
+      return { script, generatedBy: result.generatedBy, webSearched }
     },
-    'images:findCommons': (queries) => services.commonsImages.find(queries),
+    'images:find': async ({ sources, queries }) => (await services.webImages.find(sources)) ?? (queries.length > 0 ? await services.commonsImages.find(queries) : null),
     'ai:publish': async (project) => {
       const { value, result } = await services.ai.generateStructured(
         'editor',

@@ -51,6 +51,7 @@ export async function startDevHost(options: DevHostOptions): Promise<DevHost> {
     ...(options.env ? { env: options.env } : {}),
     // E2E で解説の参考画像を探すときは、Wikimedia Commons の代わりに模擬サーバーを使う。
     ...(process.env['ZS_COMMONS_API'] ? { commonsApi: process.env['ZS_COMMONS_API'] } : {}),
+    ...(process.env['ZS_WEB_IMAGES_ALLOW_LOCAL'] === '1' ? { allowLocalImageHosts: true } : {}),
     // E2E で VOICEVOX の自動インストールを試すときは、配布元を模擬サーバーに向ける。
     ...(process.env['ZS_ENGINE_RELEASE_BASE']
       ? {

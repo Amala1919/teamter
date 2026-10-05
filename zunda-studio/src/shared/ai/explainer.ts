@@ -10,7 +10,8 @@ import type { GenerateRequest } from './types'
 /**
  * 動画の中に入れる解説パートを AI に作らせる(お題と目安の長さから、セリフ・表情・参考画像の探し方まで)。
  * 依頼文と応答の検証、セリフと画像をタイムラインに並べるコマンドの組み立てはここ(テストしやすいよう純粋な関数にしてある)。
- * 画像の検索・ダウンロードは main 側(Wikimedia Commons)、音声の合成はレンダラが行い、結果をここへ渡す。
+ * 画像の検索・ダウンロードは main 側(AI がウェブで見つけた一次ソース・信頼できるサイトと、Wikimedia Commons)、
+ * 音声の合成はレンダラが行い、結果をここへ渡す。
  */
 
 /** 語り方。solo: 1人で語る / dialogue: AI のキャラクター同士の掛け合い。 */
@@ -31,6 +32,76 @@ const INTERJECTION_TEXT: Record<InterjectionFrequency, string> = {
   many: 'こまめに(およそ2〜3行に1回)'
 }
 
+/** 参考画像の探し先。web: 一次ソース・信頼できるサイトの画像も使う(AI がウェブで探す) / free: 自由に使える画像(Wikimedia Commons)だけ。 */
+export type ExplainerImagePolicy = 'web' | 'free'
+
+export const IMAGE_POLICY_LABELS: Record<ExplainerImagePolicy, string> = {
+  web: '一次ソース・信頼できるサイトの画像も使う',
+  free: '自由に使える画像だけ(Wikimedia Commons)'
+}
+
+/** 画像の出どころ。primary: 一次ソース(公式・当事者・公的機関・所蔵館) / reliable: ある程度信頼できるサイト / free: Wikimedia Commons。 */
+export type ImageSourceKind = 'primary' | 'reliable' | 'free'
+
+export const IMAGE_KIND_LABELS: Record<ImageSourceKind, string> = {
+  primary: '一次ソース',
+  reliable: '信頼できるサイト',
+  free: 'Wikimedia Commons'
+}
+
+/**
+ * 画像を使わないサイト(転載・まとめ・掲示板・画像の置き場など、出どころの確かめられないもの)。
+ * AI が「信頼できる」と言っても、ここに当たれば候補から外す。
+ */
+const UNTRUSTED_IMAGE_HOSTS = [
+  'pinterest.com',
+  'pinterest.jp',
+  'pinimg.com',
+  'imgur.com',
+  'togetter.com',
+  'matome.naver.jp',
+  '5ch.net',
+  '2ch.net',
+  '2chan.net',
+  'livedoor.blog',
+  'livedoor.jp',
+  'blog.jp',
+  'fc2.com',
+  'tumblr.com',
+  'reddit.com',
+  'redd.it'
+]
+
+/** 画像の候補に使えない URL か(http(s) でない・転載やまとめのサイト)。 */
+export function isUntrustedImageUrl(url: string): boolean {
+  let host: string
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return true
+    host = parsed.hostname.toLowerCase()
+  } catch {
+    return true
+  }
+  return UNTRUSTED_IMAGE_HOSTS.some((blocked) => host === blocked || host.endsWith(`.${blocked}`))
+}
+
+/** AI がウェブで見つけた、画像の載っているページ。 */
+export interface ExplainerImageSource {
+  /** 画像の載っているページ(出典として出す)。 */
+  pageUrl: string
+  /** 画像そのものの URL。分からなければ null(ページの代表の画像を使う)。 */
+  imageUrl: string | null
+  /** サイトの名前(画面に出す)。 */
+  site: string
+  /** 画像やページの題。 */
+  title: string
+  kind: 'primary' | 'reliable'
+  /** 信頼できると判断した理由(記録用)。 */
+  reason: string
+}
+
+export const MAX_IMAGE_SOURCES = 3
+
 export interface ExplainerRequest {
   /** お題。 */
   topic: string
@@ -47,6 +118,8 @@ export interface ExplainerRequest {
   instruction?: string
   /** 参考画像を探すための言葉も作らせるか。 */
   images: boolean
+  /** 参考画像の探し先(無ければ Commons だけ)。 */
+  imageSources?: ExplainerImagePolicy
 }
 
 /** 1秒あたりに読み上げるおおよその文字数(合成音声の標準の速さ)。 */
@@ -67,7 +140,22 @@ export const explainerResponseSchema = z.object({
           .object({
             query: z.string().min(1).max(120).describe('Wikimedia Commons で探す言葉(日本語。英語で見つからないときに使う)'),
             queryEn: z.string().min(1).max(120).describe('同じものを英語で(先にこちらで探す。Commons は英語の説明が多い)'),
-            caption: z.string().max(60).describe('画像が何か(短く)')
+            caption: z.string().max(60).describe('画像が何か(短く)'),
+            sources: z
+              .array(
+                z.object({
+                  pageUrl: z.string().min(1).max(2000).describe('画像の載っているページの URL(実際に開いて確かめたもの)'),
+                  imageUrl: z.string().max(2000).nullable().describe('画像そのものの URL(ページの中で確かめたもの)。分からなければ null'),
+                  site: z.string().min(1).max(80).describe('サイトの名前(例: 任天堂公式サイト、国立国会図書館、NHK)'),
+                  title: z.string().max(120).describe('画像やページの題'),
+                  kind: z
+                    .enum(['primary', 'reliable'])
+                    .describe('primary: 一次ソース(公式・当事者・公的機関・所蔵館) / reliable: ある程度信頼できるサイト(大手の報道・学術機関・専門の出版社など)'),
+                  reason: z.string().max(200).describe('そう判断した理由(短く)')
+                })
+              )
+              .max(MAX_IMAGE_SOURCES)
+              .describe('ウェブで見つけた、この画像の候補(よい順。信頼できるものが無い・ウェブで調べられないときは空)')
           })
           .nullable()
           .describe('このセリフから画面の真ん中に出す参考画像。前の画像のままでよいなら null')
@@ -83,6 +171,8 @@ export interface ExplainerImageQuery {
   query: string
   queryEn: string
   caption: string
+  /** ウェブで見つけた候補(先に試す。一次ソースが先)。どれも使えなければ Commons で探す。 */
+  sources: ExplainerImageSource[]
 }
 
 export interface ExplainerLine {
@@ -132,8 +222,9 @@ export function buildExplainerPrompt(project: Project, request: ExplainerRequest
     '- 確かでないことは断定しない。数字や年号は確かなものだけ使う',
     canSearch ? '- 事実はウェブで確かめてから書く(読むだけの検索が使える)' : '- ウェブでは調べられない。一般的に知られていることの範囲で書く',
     request.images
-      ? '- 説明に合う参考画像を、話題が変わるところで image に指定する(画面の真ん中に出る)。Wikimedia Commons で見つかりそうな具体的な言葉(人物名・地名・物の名前・地図など)にする。同じ画像のままでよいセリフは null。画像は4〜8行に1枚くらい'
+      ? '- 説明に合う参考画像を、話題が変わるところで image に指定する(画面の真ん中に出る)。query / queryEn は Wikimedia Commons で見つかりそうな具体的な言葉(人物名・地名・物の名前・地図など)にする。同じ画像のままでよいセリフは null。画像は4〜8行に1枚くらい'
       : '- 参考画像は使わない(image はすべて null)',
+    ...(request.images ? imageSourceRules(request.imageSources ?? 'free', canSearch) : []),
     '- expression は、そのキャラクターの表情の一覧にある名前だけ。合うものが無ければ null'
   ]
     .filter((line): line is string => line !== null)
@@ -153,8 +244,51 @@ export function buildExplainerPrompt(project: Project, request: ExplainerRequest
   return { system, turns: [{ role: 'user', content }] }
 }
 
-/** AI の応答を、使えるセリフの並びにする(話す人・表情を確かめ、余計な飾りを外す)。 */
-export function interpretExplainer(project: Project, request: ExplainerRequest, response: ExplainerResponse): ExplainerScript {
+/** 画像の探し先についての決まりごと。 */
+function imageSourceRules(policy: ExplainerImagePolicy, canSearch: boolean): string[] {
+  if (policy === 'free') return ['- image.sources は空にする(画像は Wikimedia Commons だけで探す)']
+  if (!canSearch) return ['- ウェブで調べられないので、image.sources は空にする(画像は Wikimedia Commons で探す)']
+  return [
+    '- image.sources には、ウェブで探した画像の候補を、よい順に3つまで入れる。使ってよいのは次の2種類だけ:',
+    '  - 一次ソース(primary): その物事の公式サイト・当事者・メーカーや開発元・公的機関・博物館や図書館などの所蔵館',
+    '  - ある程度信頼できるサイト(reliable): 大手の報道機関・学術機関・専門の出版社や専門メディア・百科事典',
+    '- まとめサイト・個人のブログ・掲示板・SNS の転載・画像の置き場・出どころの分からない画像は使わない。迷ったら入れない(そのときは Wikimedia Commons で探す)',
+    '- pageUrl と imageUrl は、実際に開いて確かめたものだけ。推測で URL を作らない。画像の URL が分からなければ imageUrl は null(ページの代表の画像を使う)',
+    '- 画像は、解説に必要な範囲で出典を示して使う(引用)。話の中身と関係の薄い飾りの画像は選ばない'
+  ]
+}
+
+type ResponseImageSource = NonNullable<ExplainerResponse['lines'][number]['image']>['sources'][number]
+
+/** AI が返した画像の候補を、使えるものだけにする(URL の形・使わないサイトを確かめ、一次ソースを先に)。 */
+function cleanImageSources(sources: readonly ResponseImageSource[]): { sources: ExplainerImageSource[]; dropped: number } {
+  const seen = new Set<string>()
+  const kept: ExplainerImageSource[] = []
+  let dropped = 0
+  for (const source of sources) {
+    const pageUrl = source.pageUrl.trim()
+    const imageUrl = source.imageUrl?.trim() || null
+    if (isUntrustedImageUrl(pageUrl) || (imageUrl !== null && isUntrustedImageUrl(imageUrl))) {
+      dropped++
+      continue
+    }
+    const key = imageUrl ?? pageUrl
+    if (seen.has(key)) continue
+    seen.add(key)
+    kept.push({ pageUrl, imageUrl, site: source.site.trim(), title: source.title.trim(), kind: source.kind, reason: source.reason.trim() })
+  }
+  // 一次ソースを先に(同じ種類なら AI の並べた順。sort は安定)。
+  kept.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'primary' ? -1 : 1))
+  return { sources: kept.slice(0, MAX_IMAGE_SOURCES), dropped }
+}
+
+/**
+ * AI の応答を、使えるセリフの並びにする(話す人・表情を確かめ、余計な飾りを外す)。
+ * ウェブで調べていない(webSearched が false)ときの画像の URL は、確かめていない推測なので使わない。
+ */
+export function interpretExplainer(project: Project, request: ExplainerRequest, response: ExplainerResponse, webSearched = false): ExplainerScript {
+  const useSources = request.images && request.imageSources === 'web' && webSearched
+  let droppedSources = 0
   const allowed = new Set([...request.narrators, ...(request.interjector ? [request.interjector.characterId] : [])])
   const byName = new Map(Object.values(project.characters).map((character) => [character.name, character.id]))
   const warnings: string[] = []
@@ -171,14 +305,20 @@ export function interpretExplainer(project: Project, request: ExplainerRequest, 
     const text = cleanLine(line.text, character.name)
     if (text === '') return
     const expression = line.expression ? Object.values(character.portrait?.expressions ?? {}).find((candidate) => candidate.name === line.expression) : undefined
+    const sources = useSources && line.image ? cleanImageSources(line.image.sources) : { sources: [], dropped: 0 }
+    droppedSources += sources.dropped
     lines.push({
       characterId,
       text,
       expressionId: expression?.id ?? null,
-      image: request.images && line.image ? { query: line.image.query.trim(), queryEn: line.image.queryEn.trim(), caption: line.image.caption.trim() } : null
+      image:
+        request.images && line.image
+          ? { query: line.image.query.trim(), queryEn: line.image.queryEn.trim(), caption: line.image.caption.trim(), sources: sources.sources }
+          : null
     })
   })
   if (misattributed > 0) warnings.push(`話す人が指定と違ったセリフ ${misattributed} 行を、解説役に振り直しました`)
+  if (droppedSources > 0) warnings.push(`転載・まとめなど、出どころの確かめられないサイトの画像の候補 ${droppedSources} 件は使いませんでした`)
   return { title: response.title.trim(), lines, warnings }
 }
 
@@ -192,12 +332,15 @@ export interface FoundImage {
   /** 画像の題(ファイルの名前など)。 */
   title: string
   author: string
+  /** ライセンス(Commons の画像)。ウェブのサイトの画像は空(出典を示して引用として使う)。 */
   license: string
   licenseUrl: string | null
-  /** 画像の説明ページ(出典)。 */
+  /** 画像の説明ページ・載っているページ(出典)。 */
   pageUrl: string
   /** どこの画像か(画面に出す名前)。 */
   site: string
+  /** 出どころの種類。 */
+  kind: ImageSourceKind
 }
 
 export interface PlacedLine extends ExplainerLine {
@@ -223,12 +366,13 @@ export interface ExplainerPlan {
 export function citationText(image: FoundImage): string {
   const title = image.title.length > 40 ? `${image.title.slice(0, 39)}…` : image.title
   const author = image.author.length > 30 ? `${image.author.slice(0, 29)}…` : image.author
-  return `出典: ${image.site}「${title}」${author ? ` ${author}` : ''} / ${image.license}`
+  return `出典: ${image.site}${title ? `「${title}」` : ''}${author ? ` ${author}` : ''}${image.license ? ` / ${image.license}` : ''}`
 }
 
 /** 概要欄のクレジットに載せる文。 */
 export function creditText(image: FoundImage): string {
-  return `画像: 「${image.title}」${image.author ? ` ${image.author}` : ''} / ${image.license}${image.licenseUrl ? ` (${image.licenseUrl})` : ''} / ${image.site}: ${image.pageUrl}`
+  const license = image.license ? ` / ${image.license}${image.licenseUrl ? ` (${image.licenseUrl})` : ''}` : ''
+  return `画像: ${image.title ? `「${image.title}」` : ''}${image.author ? ` ${image.author}` : ''}${license} / ${image.site}: ${image.pageUrl}`
 }
 
 /** 解説の画像を置くレイヤー・出典のレイヤー・見出しのレイヤーの名前(下からこの順に、立ち絵より下に作る)。 */

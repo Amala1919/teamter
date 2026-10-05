@@ -54,7 +54,9 @@ export default defineConfig({
         FAKE_REPLY: '接続できたのだ',
         FAKE_RESPONSE_DIR: AI_RESPONSE_DIR,
         ZS_ENGINE_RELEASE_BASE: `http://127.0.0.1:${ENGINE_RELEASE_PORT}`,
-        ZS_COMMONS_API: `http://127.0.0.1:${MOCK_COMMONS_PORT}/w/api.php`
+        ZS_COMMONS_API: `http://127.0.0.1:${MOCK_COMMONS_PORT}/w/api.php`,
+        // 解説の参考画像の「公式サイト」も模擬のサーバーで配る。
+        ZS_WEB_IMAGES_ALLOW_LOCAL: '1'
       }
     }
   ]

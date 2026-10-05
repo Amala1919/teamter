@@ -1,6 +1,6 @@
 import type { CohostCandidate, CohostRequest } from '../ai/cohost'
 import type { DraftRequest } from '../ai/draft'
-import type { ExplainerRequest, ExplainerScript, FoundImage } from '../ai/explainer'
+import type { ExplainerImageSource, ExplainerRequest, ExplainerScript, FoundImage } from '../ai/explainer'
 import type { PortraitRequest } from '../ai/portraits'
 import type { EditorRequest } from '../ai/editor'
 import type { Command } from '../commands/types'
@@ -126,8 +126,11 @@ export interface IpcContract {
     args: [project: Project, request: ExplainerRequest, options: { model: ModelRef | null; webSearch: boolean }]
     result: { script: ExplainerScript; generatedBy: GeneratedBy; webSearched: boolean }
   }
-  /** 解説の参考画像を Wikimedia Commons で探して落とす。言葉を順に試し、見つからなければ null。 */
-  'images:findCommons': { args: [queries: string[]]; result: FoundImage | null }
+  /**
+   * 解説の参考画像を探して落とす。AI がウェブで見つけた候補(一次ソース・信頼できるサイト)を順に試し、
+   * どれも使えなければ Wikimedia Commons を言葉で探す。見つからなければ null。
+   */
+  'images:find': { args: [request: { sources: ExplainerImageSource[]; queries: string[] }]; result: FoundImage | null }
   /** 編集の指示をコマンド列の提案にする。適用は利用者が差分を確かめてから行う。 */
   'ai:edit': { args: [project: Project, request: EditorRequest]; result: { reply: string; commands: Command[]; generatedBy: GeneratedBy } }
 

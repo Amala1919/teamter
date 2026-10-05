@@ -28,6 +28,7 @@ import { SettingsStore } from './settings-store'
 import { CharacterLibraryStore } from './character-library-store'
 import { TemplateStore } from './template-store'
 import { CommonsImageService } from '../services/media/commons-images'
+import { WebImageService } from '../services/media/web-images'
 import { sevenZipPath } from './seven-zip'
 
 export interface ServicesOptions {
@@ -49,6 +50,8 @@ export interface ServicesOptions {
   fetch?: (input: string, init?: RequestInit) => Promise<Response>
   /** 画像の検索の API(テストで模擬の配布元を指すため)。 */
   commonsApi?: string
+  /** 解説の参考画像で、手元の機械の URL も読む(E2E の模擬のサイト用)。 */
+  allowLocalImageHosts?: boolean
 }
 
 /** ライブ用ウィンドウとホットキー。テスト用ホストでは用意しない。 */
@@ -76,6 +79,7 @@ export interface Services {
   characters: CharacterLibraryStore
   templates: TemplateStore
   commonsImages: CommonsImageService
+  webImages: WebImageService
   secrets: SecretStore
   media: MediaAccess
   picker: FilePicker
@@ -132,11 +136,16 @@ export async function createServices(options: ServicesOptions): Promise<Services
   // ひな形で使う素材も、どのプロジェクトに入れても読めるようにしておく。
   const templates = new TemplateStore(paths.templatesFile, (path) => media.allowFile(path))
   await templates.load()
-  // 解説の参考画像(Wikimedia Commons)。落とした画像は前の起動の分も読めるようにしておく。
+  // 解説の参考画像(AI がウェブで見つけたサイトと、Wikimedia Commons)。落とした画像は前の起動の分も読めるようにしておく。
   media.allowRoot(paths.downloadedImages)
-  const commonsImages = new CommonsImageService(paths.downloadedImages, (path) => media.allowFile(path), `zunda-studio/${options.appVersion} (https://github.com/Amala1919/teamter)`, {
+  const imageAgent = `zunda-studio/${options.appVersion} (https://github.com/Amala1919/teamter)`
+  const commonsImages = new CommonsImageService(paths.downloadedImages, (path) => media.allowFile(path), imageAgent, {
     ...(options.fetch ? { fetch: options.fetch } : {}),
     ...(options.commonsApi ? { apiBase: options.commonsApi } : {})
+  })
+  const webImages = new WebImageService(paths.downloadedImages, (path) => media.allowFile(path), imageAgent, {
+    ...(options.fetch ? { fetch: options.fetch } : {}),
+    allowLocal: options.allowLocalImageHosts === true
   })
 
   const getSettings = (): ReturnType<SettingsStore['get']> => settings.get()
@@ -180,6 +189,7 @@ export async function createServices(options: ServicesOptions): Promise<Services
     characters,
     templates,
     commonsImages,
+    webImages,
     secrets,
     media,
     picker: options.picker,

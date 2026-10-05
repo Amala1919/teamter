@@ -15,9 +15,9 @@ export const COMMONS_API = 'https://commons.wikimedia.org/w/api.php'
 /** 画面に貼る画像の幅(これより大きい画像は縮めたものを落とす)。 */
 const THUMB_WIDTH = 1280
 /** 1枚の画像の大きさの上限。 */
-const MAX_BYTES = 15 * 1024 * 1024
+export const MAX_IMAGE_BYTES = 15 * 1024 * 1024
 /** 貼れる画像の形式。 */
-const MIME_EXTENSIONS: Record<string, string> = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' }
+export const IMAGE_MIME_EXTENSIONS: Record<string, string> = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' }
 
 interface CommonsPage {
   title?: string
@@ -113,7 +113,7 @@ export class CommonsImageService {
   private async download(page: CommonsPage): Promise<FoundImage | null> {
     const info = page.imageinfo?.[0]
     if (!info) return null
-    const extension = info.mime ? MIME_EXTENSIONS[info.mime] : undefined
+    const extension = info.mime ? IMAGE_MIME_EXTENSIONS[info.mime] : undefined
     const url = info.thumburl ?? info.url
     if (!extension || !url) return null
     const meta = info.extmetadata ?? {}
@@ -129,7 +129,7 @@ export class CommonsImageService {
       const response = await this.fetchImpl(url, { headers: { 'User-Agent': this.userAgent } })
       if (!response.ok) return null
       const data = Buffer.from(await response.arrayBuffer())
-      if (data.length === 0 || data.length > MAX_BYTES) return null
+      if (data.length === 0 || data.length > MAX_IMAGE_BYTES) return null
       await writeFile(path, data)
     }
     this.allow(path)
@@ -143,7 +143,8 @@ export class CommonsImageService {
       license,
       licenseUrl: meta['LicenseUrl']?.value ? stripHtml(meta['LicenseUrl'].value) : null,
       pageUrl: info.descriptionurl ?? `https://commons.wikimedia.org/wiki/${encodeURIComponent(page.title ?? '')}`,
-      site: 'Wikimedia Commons'
+      site: 'Wikimedia Commons',
+      kind: 'free'
     }
   }
 }

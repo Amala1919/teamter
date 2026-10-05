@@ -1,6 +1,14 @@
 import { useState } from 'react'
 
-import { INTERJECTION_LABELS, type ExplainerStyle, type InterjectionFrequency } from '@shared/ai/explainer'
+import {
+  IMAGE_KIND_LABELS,
+  IMAGE_POLICY_LABELS,
+  INTERJECTION_LABELS,
+  type ExplainerImagePolicy,
+  type ExplainerStyle,
+  type ImageSourceKind,
+  type InterjectionFrequency
+} from '@shared/ai/explainer'
 import { formatModelRef, type ModelRef } from '@shared/ai/types'
 import type { Character } from '@shared/project/types'
 
@@ -50,12 +58,15 @@ export function ExplainerDialog({ onClose }: { onClose: () => void }): React.JSX
   const [audience, setAudience] = useState('')
   const [instruction, setInstruction] = useState('')
   const [images, setImages] = useState(true)
+  const [imageSources, setImageSources] = useState<ExplainerImagePolicy>('web')
   const [webSearch, setWebSearch] = useState(true)
   const [showTitle, setShowTitle] = useState(true)
   const [place, setPlace] = useState<'playhead' | 'end'>('playhead')
   const [ripple, setRipple] = useState(true)
   const [model, setModel] = useState<ModelRef | null>(null)
 
+  // 一次ソースなどの画像はウェブで探すので、そのときはウェブを使う。
+  const webImages = images && imageSources === 'web'
   const narrators = style === 'solo' ? [solo].filter(Boolean) : group
   const usedModel = model ?? editorModel
   const running = phase.kind === 'writing' || phase.kind === 'voicing' || phase.kind === 'images'
@@ -83,9 +94,10 @@ export function ExplainerDialog({ onClose }: { onClose: () => void }): React.JSX
         interjector: interject ? { characterId: interjector, frequency } : null,
         ...(audience.trim() ? { audience: audience.trim() } : {}),
         ...(instruction.trim() ? { instruction: instruction.trim() } : {}),
-        images
+        images,
+        imageSources
       },
-      { model, webSearch, place, ripple, showTitle }
+      { model, webSearch: webSearch || webImages, place, ripple, showTitle }
     )
   }
 
@@ -216,8 +228,35 @@ export function ExplainerDialog({ onClose }: { onClose: () => void }): React.JSX
             <h3>画面</h3>
             <label className="field__row">
               <input type="checkbox" checked={images} onChange={(event) => setImages(event.target.checked)} data-testid="explainer-images" />
-              話に合う参考画像を Wikimedia Commons で探して、画面の真ん中に出す(出典を画面の右上に出し、概要欄のクレジットにも入れる)
+              話に合う参考画像を探して、画面の真ん中に出す(出典を画面の右上に出し、概要欄のクレジットにも入れる)
             </label>
+            {images && (
+              <>
+                <div className="segmented" role="radiogroup" aria-label="画像の探し先">
+                  {(Object.keys(IMAGE_POLICY_LABELS) as ExplainerImagePolicy[]).map((value) => (
+                    <label key={value}>
+                      <input
+                        type="radio"
+                        name="explainer-image-sources"
+                        checked={imageSources === value}
+                        onChange={() => setImageSources(value)}
+                        data-testid={`explainer-image-sources-${value}`}
+                      />
+                      {IMAGE_POLICY_LABELS[value]}
+                    </label>
+                  ))}
+                </div>
+                {imageSources === 'web' ? (
+                  <p className="note">
+                    AI がウェブで、公式サイト・公的機関・博物館などの一次ソースや、大手の報道・学術機関などある程度信頼できるサイトの画像を探します
+                    (まとめ・転載・掲示板のサイトは使いません)。見つからなければ Wikimedia Commons で探します。ウェブで調べられるのは Claude のときだけです。
+                    公式サイトなどの画像は著作物なので、解説に必要な範囲で、出典を出して使います(引用)。投稿先の決まりも確かめてください。
+                  </p>
+                ) : (
+                  <p className="note">Wikimedia Commons の、自由なライセンスの画像だけを使います(作者とライセンスも出します)。</p>
+                )}
+              </>
+            )}
             <label className="field__row">
               <input type="checkbox" checked={showTitle} onChange={(event) => setShowTitle(event.target.checked)} />
               最初に見出しを出す
@@ -245,8 +284,9 @@ export function ExplainerDialog({ onClose }: { onClose: () => void }): React.JSX
             <h3>AI</h3>
             <ModelPicker value={model} onChange={setModel} inheritLabel={`編集AIを使う${editorModel ? `(${formatModelRef(editorModel)})` : '(未設定)'}`} testId="explainer-model" />
             <label className="field__row">
-              <input type="checkbox" checked={webSearch} onChange={(event) => setWebSearch(event.target.checked)} />
+              <input type="checkbox" checked={webSearch || webImages} disabled={webImages} onChange={(event) => setWebSearch(event.target.checked)} />
               事実をウェブで確かめながら書く(Claude のときだけ。時間がかかります)
+              {webImages ? '。一次ソースなどの画像を探すので、ウェブを使います' : ''}
             </label>
             <label className="field field--stacked">
               <span className="field__label">指示(任意)</span>
@@ -260,6 +300,14 @@ export function ExplainerDialog({ onClose }: { onClose: () => void }): React.JSX
       </div>
     </Modal>
   )
+}
+
+/** 出どころごとの画像の数(「一次ソース 2・Wikimedia Commons 1」)。 */
+function describeKinds(kinds: Record<ImageSourceKind, number>): string {
+  return (Object.keys(IMAGE_KIND_LABELS) as ImageSourceKind[])
+    .filter((kind) => kinds[kind] > 0)
+    .map((kind) => `${IMAGE_KIND_LABELS[kind]} ${kinds[kind]}`)
+    .join('・')
 }
 
 function ExplainerStatus(): React.JSX.Element | null {
@@ -290,6 +338,7 @@ function ExplainerStatus(): React.JSX.Element | null {
         <div className="status status--ok" data-testid="explainer-done">
           <p>
             {phase.lines}行のセリフ(約{formatMs(phase.durationMs).replace(/\.\d+$/, '')})と、参考画像 {phase.images}枚を並べました。
+            {phase.images > 0 ? `(${describeKinds(phase.imageKinds)})` : ''}
             {phase.missingImages > 0 ? ` 見つからなかった画像が ${phase.missingImages}枚あります(その間は前の画像のまま)。` : ''}
             {phase.webSearched ? ' 事実はウェブで確かめています。' : ''}
           </p>

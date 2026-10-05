@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-import { explainerCommands, type ExplainerRequest, type ExplainerScript, type FoundImage, type PlacedLine } from '@shared/ai/explainer'
+import { explainerCommands, type ExplainerRequest, type ExplainerScript, type FoundImage, type ImageSourceKind, type PlacedLine } from '@shared/ai/explainer'
 import type { GeneratedBy, ModelRef } from '@shared/ai/types'
 import { projectDurationMs } from '@shared/project/queries'
 import type { Ms, SubtitleStyle, TextLook } from '@shared/project/types'
@@ -20,7 +20,18 @@ export type ExplainerPhase =
   | { kind: 'writing' }
   | { kind: 'voicing'; done: number; total: number }
   | { kind: 'images'; done: number; total: number }
-  | { kind: 'done'; lines: number; images: number; missingImages: number; durationMs: Ms; webSearched: boolean; generatedBy: GeneratedBy; warnings: string[] }
+  | {
+      kind: 'done'
+      lines: number
+      images: number
+      /** 出どころごとの画像の数。 */
+      imageKinds: Record<ImageSourceKind, number>
+      missingImages: number
+      durationMs: Ms
+      webSearched: boolean
+      generatedBy: GeneratedBy
+      warnings: string[]
+    }
   | { kind: 'error'; message: string }
 
 interface ExplainerState {
@@ -73,7 +84,10 @@ async function voiceLines(script: ExplainerScript): Promise<PlacedLine[]> {
   return placed
 }
 
-/** 画像を探す。同じ言葉は1回だけ探し、見つからなければその画像は出さない。 */
+/**
+ * 画像を探す。AI がウェブで見つけた候補(一次ソースが先)を試し、使えなければ Commons を言葉で探す。
+ * 同じ候補・言葉は1回だけ探し、見つからなければその画像は出さない。
+ */
 async function findImages(lines: PlacedLine[]): Promise<(FoundImage | null)[]> {
   const total = lines.filter((line) => line.image).length
   const cache = new Map<string, FoundImage | null>()
@@ -86,9 +100,11 @@ async function findImages(lines: PlacedLine[]): Promise<(FoundImage | null)[]> {
     }
     checkCancelled()
     setPhase({ kind: 'images', done, total })
-    const key = `${line.image.query}|${line.image.queryEn}`
+    const { sources } = line.image
     // Commons は英語の説明が多いので、英語の言葉から探し、無ければ日本語で探す。
-    if (!cache.has(key)) cache.set(key, await api.invoke('images:findCommons', [line.image.queryEn, line.image.query].filter((query) => query.trim() !== '')))
+    const queries = [line.image.queryEn, line.image.query].filter((query) => query.trim() !== '')
+    const key = JSON.stringify([sources.map((source) => source.imageUrl ?? source.pageUrl), queries])
+    if (!cache.has(key)) cache.set(key, await api.invoke('images:find', { sources, queries }))
     result.push(cache.get(key) ?? null)
     done++
   }
@@ -138,10 +154,13 @@ export async function createExplainer(request: ExplainerRequest, options: Explai
     useEditorStore.getState().setPlayhead(atMs)
     const wanted = lines.filter((line) => line.image).length
     const found = images.filter((image) => image !== null).length
+    const imageKinds: Record<ImageSourceKind, number> = { primary: 0, reliable: 0, free: 0 }
+    for (const image of images) if (image) imageKinds[image.kind]++
     setPhase({
       kind: 'done',
       lines: lines.length,
       images: found,
+      imageKinds,
       missingImages: wanted - found,
       durationMs: lines.reduce((sum, line) => sum + line.synthesis.audioDurationMs, 0) + project.editing.defaultGapMs * Math.max(0, lines.length - 1),
       webSearched,
