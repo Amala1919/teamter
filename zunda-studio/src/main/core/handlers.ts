@@ -18,6 +18,7 @@ import {
 } from '@shared/ai/briefing'
 import { buildDraftPrompt, liveMomentsFor, wrapDraftCommands } from '@shared/ai/draft'
 import { buildEditorPrompt } from '@shared/ai/editor'
+import { buildExplainerPrompt, explainerResponseSchema, interpretExplainer } from '@shared/ai/explainer'
 import { buildPortraitPrompt, filterPortraitCommands, portraitResponseSchema } from '@shared/ai/portraits'
 import { candidateSegments } from '@shared/media/analysis'
 import { buildPublishPrompt, interpretPublishResponse, publishResponseSchema } from '@shared/ai/publish'
@@ -177,6 +178,21 @@ const ARG_SCHEMAS: { [C in Channel]: z.ZodType<ChannelArgs<C>> } = {
     })
   ]) as unknown as z.ZodType<ChannelArgs<'ai:edit'>>,
   'ai:publish': z.tuple([projectArg]) as unknown as z.ZodType<ChannelArgs<'ai:publish'>>,
+  'ai:explainer': z.tuple([
+    projectArg,
+    z.object({
+      topic: z.string().min(1).max(4000),
+      targetSeconds: z.number().min(10).max(30 * 60),
+      style: z.enum(['solo', 'dialogue']),
+      narrators: z.array(z.string().min(1).max(100)).min(1).max(8),
+      interjector: z.object({ characterId: z.string().min(1).max(100), frequency: z.enum(['few', 'normal', 'many']) }).nullable(),
+      audience: z.string().max(1000).optional(),
+      instruction: z.string().max(4000).optional(),
+      images: z.boolean()
+    }),
+    z.object({ model: z.object({ providerId: z.enum(PROVIDER_IDS), model: z.string().min(1).max(200) }).nullable(), webSearch: z.boolean() })
+  ]) as unknown as z.ZodType<ChannelArgs<'ai:explainer'>>,
+  'images:findCommons': z.tuple([z.array(z.string().min(1).max(200)).min(1).max(4)]),
   'ai:briefing': z.tuple([projectArg]) as unknown as z.ZodType<ChannelArgs<'ai:briefing'>>,
   'ai:visionFrame': z.tuple([projectArg, z.number().min(0)]) as unknown as z.ZodType<ChannelArgs<'ai:visionFrame'>>,
   'ai:briefingCheck': z.tuple([projectArg, z.object({}).loose(), z.array(z.string().max(100)).max(100).nullable()]) as unknown as z.ZodType<
@@ -445,6 +461,30 @@ export function createHandlers(services: Services): HandlerTable {
       const webSearched = canSearch && result.webSearch === true
       return { briefing: applyCheckResults(briefing, mapCheckIds(facts, value), webSearched, new Date()), webSearched, checked: facts.length }
     },
+    'ai:explainer': async (project, request, options) => {
+      for (const id of [...request.narrators, ...(request.interjector ? [request.interjector.characterId] : [])]) {
+        if (!project.characters[id]) throw new AppError('INVALID_ARGUMENT', `キャラクターが見つかりません: ${id}`)
+      }
+      if (request.style === 'dialogue' && request.narrators.length < 2) throw new AppError('INVALID_ARGUMENT', '掛け合いには、解説するキャラクターを2人以上選んでください')
+      const resolveOptions = options.model ? { explicit: options.model } : {}
+      // ウェブ検索は Claude Code のときだけ使える(使えないなら、調べられないと伝えた依頼にする)。
+      const canSearch = options.webSearch && services.ai.resolve('editor', resolveOptions).providerId === 'claude-code'
+      const { value, result } = await services.ai.generateStructured(
+        'editor',
+        {
+          ...buildExplainerPrompt(project, request, canSearch),
+          webSearch: canSearch,
+          timeoutMs: canSearch ? 10 * 60_000 : 5 * 60_000,
+          session: projectSession(project.meta, 'explainer')
+        },
+        explainerResponseSchema,
+        resolveOptions
+      )
+      const script = interpretExplainer(project, request, value)
+      if (script.lines.length === 0) throw new AppError('AI_OUTPUT_INVALID', 'AIの台本にセリフがありませんでした。お題を具体的にしてやり直してください')
+      return { script, generatedBy: result.generatedBy, webSearched: canSearch && result.webSearch === true }
+    },
+    'images:findCommons': (queries) => services.commonsImages.find(queries),
     'ai:publish': async (project) => {
       const { value, result } = await services.ai.generateStructured(
         'editor',

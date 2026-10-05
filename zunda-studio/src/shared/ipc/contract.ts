@@ -1,12 +1,13 @@
 import type { CohostCandidate, CohostRequest } from '../ai/cohost'
 import type { DraftRequest } from '../ai/draft'
+import type { ExplainerRequest, ExplainerScript, FoundImage } from '../ai/explainer'
 import type { PortraitRequest } from '../ai/portraits'
 import type { EditorRequest } from '../ai/editor'
 import type { Command } from '../commands/types'
 import type { ExportProgress, ExportRequest } from '../export/types'
 import type { MediaActivity } from '../media/activity'
 import type { MediaProbe, ProxyFormat, WaveformPeaks } from '../media/types'
-import type { GeneratedBy, ModelInfo, ProviderId, ProviderStatus } from '../ai/types'
+import type { GeneratedBy, ModelInfo, ModelRef, ProviderId, ProviderStatus } from '../ai/types'
 import type { AppErrorShape } from '../errors'
 import type { LiveProfile, LiveSessionSummary, LiveState } from '../live/types'
 import type { AiPersona, LiveEntry, LiveSession, Project, ProjectBriefing, PublishInfo } from '../project/types'
@@ -117,6 +118,16 @@ export interface IpcContract {
   'ai:briefingCheck': { args: [project: Project, briefing: ProjectBriefing, factIds: string[] | null]; result: { briefing: ProjectBriefing; webSearched: boolean; checked: number } }
   /** 投稿用の文(タイトル案・概要欄・チャプター)の下書きを作る。 */
   'ai:publish': { args: [project: Project]; result: PublishInfo }
+  /**
+   * 解説パートの台本を作る(お題・長さ・語り方から、セリフ・表情・参考画像の探し方まで)。並べるのは利用者の操作で。
+   * model を渡すとそのAIで、無ければ編集AIで作る。webSearch は使える接続方法(Claude Code)だけで効く。
+   */
+  'ai:explainer': {
+    args: [project: Project, request: ExplainerRequest, options: { model: ModelRef | null; webSearch: boolean }]
+    result: { script: ExplainerScript; generatedBy: GeneratedBy; webSearched: boolean }
+  }
+  /** 解説の参考画像を Wikimedia Commons で探して落とす。言葉を順に試し、見つからなければ null。 */
+  'images:findCommons': { args: [queries: string[]]; result: FoundImage | null }
   /** 編集の指示をコマンド列の提案にする。適用は利用者が差分を確かめてから行う。 */
   'ai:edit': { args: [project: Project, request: EditorRequest]; result: { reply: string; commands: Command[]; generatedBy: GeneratedBy } }
 

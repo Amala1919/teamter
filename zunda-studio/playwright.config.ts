@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { defineConfig } from '@playwright/test'
 
-import { AI_RESPONSE_DIR, DEVHOST_PORT, ENGINE_RELEASE_PORT, MOCK_VOICEVOX_PORT } from './e2e/ports'
+import { AI_RESPONSE_DIR, DEVHOST_PORT, ENGINE_RELEASE_PORT, MOCK_COMMONS_PORT, MOCK_VOICEVOX_PORT } from './e2e/ports'
 
 /**
  * E2E テスト。ビルド済みのレンダラをテスト用ホスト(src/devhost)で配信し、Chromium で操作する。
@@ -40,6 +40,11 @@ export default defineConfig({
       reuseExistingServer: false
     },
     {
+      command: `node tests/fixtures/mock-commons.mjs --port ${MOCK_COMMONS_PORT}`,
+      url: `http://127.0.0.1:${MOCK_COMMONS_PORT}/health`,
+      reuseExistingServer: false
+    },
+    {
       command: `node out/devhost/main.js --port ${DEVHOST_PORT} --user-data ${userData}`,
       url: `http://127.0.0.1:${DEVHOST_PORT}`,
       reuseExistingServer: false,
@@ -48,7 +53,8 @@ export default defineConfig({
         FAKE_MODE: 'text',
         FAKE_REPLY: '接続できたのだ',
         FAKE_RESPONSE_DIR: AI_RESPONSE_DIR,
-        ZS_ENGINE_RELEASE_BASE: `http://127.0.0.1:${ENGINE_RELEASE_PORT}`
+        ZS_ENGINE_RELEASE_BASE: `http://127.0.0.1:${ENGINE_RELEASE_PORT}`,
+        ZS_COMMONS_API: `http://127.0.0.1:${MOCK_COMMONS_PORT}/w/api.php`
       }
     }
   ]

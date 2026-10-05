@@ -1,0 +1,103 @@
+import { expect, test, type Locator } from '@playwright/test'
+
+import { aiCalls, clearAiCalls, openFresh, queueAiResponses, updateSettings, useFakeAi } from './helpers'
+import { MOCK_VOICEVOX_URL } from './ports'
+
+/** canvas の中の、指定した色(許容差つき)の画素の数(4画素に1つ調べる)。 */
+async function countColor(canvas: Locator, color: readonly number[], tolerance = 40): Promise<number> {
+  return canvas.evaluate(
+    (element, [target, limit]) => {
+      const canvasElement = element as unknown as {
+        width: number
+        height: number
+        getContext(type: '2d'): { getImageData(x: number, y: number, w: number, h: number): { data: Uint8ClampedArray } } | null
+      }
+      const context = canvasElement.getContext('2d')
+      if (!context) return 0
+      const { data } = context.getImageData(0, 0, canvasElement.width, canvasElement.height)
+      let count = 0
+      for (let index = 0; index < data.length; index += 16) {
+        if (Math.abs(data[index]! - target[0]!) <= limit && Math.abs(data[index + 1]! - target[1]!) <= limit && Math.abs(data[index + 2]! - target[2]!) <= limit) count++
+      }
+      return count
+    },
+    [color, tolerance] as const
+  )
+}
+
+test.describe('解説パートを作る', () => {
+  test.beforeEach(async ({ request }) => {
+    clearAiCalls()
+    await updateSettings(request, {
+      voice: { engines: [{ id: 'voicevox', label: 'VOICEVOX', url: MOCK_VOICEVOX_URL, executablePath: null, autoLaunch: false }] }
+    })
+    await useFakeAi(request)
+  })
+
+  test('お題と長さから、AI の台本でセリフ・合いの手・参考画像・出典・見出しが並び、1回で取り消せる', async ({ page }) => {
+    await openFresh(page)
+    await page.getByRole('button', { name: /ずんだもん\(あなた\)/ }).click()
+    queueAiResponses([
+      {
+        title: 'カイザーライヒとは',
+        lines: [
+          { speaker: '四国めたん', text: '今日はカイザーライヒの世界を解説しますわ', expression: null, image: { query: 'ドイツ帝国 地図', queryEn: 'German Empire map', caption: '地図' } },
+          { speaker: 'ずんだもん', text: 'へぇ〜なのだ', expression: null, image: null },
+          { speaker: '四国めたん', text: '第一次世界大戦でドイツが勝った世界ですの', expression: null, image: null }
+        ]
+      }
+    ])
+
+    await page.getByTestId('side-tab-chat').click()
+    await page.getByTestId('open-explainer').click()
+    await page.getByTestId('explainer-topic').fill('カイザーライヒの世界観')
+    await page.getByTestId('explainer-length').selectOption('60')
+    // 相方が1人なので「ひとりで語る」、あなた(ずんだもん)の合いの手が入る。
+    await expect(page.getByTestId('explainer-style-solo')).toBeChecked()
+    await expect(page.getByTestId('explainer-interject')).toBeChecked()
+    await page.getByTestId('explainer-start').click()
+    await expect(page.getByTestId('explainer-done')).toContainText('3行のセリフ', { timeout: 30_000 })
+    await expect(page.getByTestId('explainer-done')).toContainText('参考画像 1枚')
+
+    // AI への依頼に、お題・長さ・語り方・合いの手が入っている。
+    const call = aiCalls().at(-1)!
+    expect(call.stdin).toContain('カイザーライヒの世界観')
+    expect(call.system).toContain('約60秒')
+    expect(call.system).toContain('1人で語る')
+    expect(call.system).toContain('合いの手')
+
+    await page.getByRole('button', { name: '閉じる' }).last().click()
+    await expect(page.locator('[data-item-type="voice"]')).toHaveCount(3)
+    await expect(page.locator('[data-item-type="image"]')).toHaveCount(1)
+    await expect(page.locator('[data-item-type="text"][title*="出典: Wikimedia Commons"]')).toHaveCount(1)
+    await expect(page.locator('[data-item-type="text"][title*="カイザーライヒとは"]')).toHaveCount(1)
+    // 画像・出典・見出しは、それぞれ専用のレイヤーに1つずつ入る。
+    for (const name of ['解説の画像', '出典', '解説の見出し']) await expect(page.locator('.timeline__layerName').getByText(name, { exact: true })).toHaveCount(1)
+    await expect(page.locator('.timeline__layerName', { hasText: '解説の画像 2' })).toHaveCount(0)
+    // セリフは合成済みで並ぶ(字幕も出る)。
+    await expect(page.getByTestId('synthesis-status').filter({ hasText: '合成済み' })).toHaveCount(3)
+
+    // 参考画像(模擬の Commons はマゼンタの画像)が画面に出る。
+    await page.keyboard.press('Shift+ArrowRight')
+    await expect.poll(() => countColor(page.getByTestId('preview-canvas'), [255, 0, 255], 30), { timeout: 10_000 }).toBeGreaterThan(1000)
+
+    // 1回の「元に戻す」で全部消える。
+    await page.getByRole('button', { name: '元に戻す' }).click()
+    await expect(page.locator('[data-item-type="voice"]')).toHaveCount(0)
+    await expect(page.locator('[data-item-type="image"]')).toHaveCount(0)
+  })
+
+  test('AI 同士の掛け合いでは、解説するキャラクターを2人以上選ぶ', async ({ page }) => {
+    await openFresh(page)
+    await page.getByRole('button', { name: /ずんだもん\(あなた\)/ }).click()
+    await page.getByTestId('side-tab-chat').click()
+    await page.getByTestId('open-explainer').click()
+    await page.getByTestId('explainer-topic').fill('お題')
+    await page.getByTestId('explainer-style-dialogue').check()
+    // 相方は1人だけなので、そのままでは作れない。
+    await expect(page.getByTestId('explainer-start')).toBeDisabled()
+    await page.getByTestId('explainer-interject').uncheck()
+    await page.getByTestId('explainer-group').getByText('ずんだもん').click()
+    await expect(page.getByTestId('explainer-start')).toBeEnabled()
+  })
+})
